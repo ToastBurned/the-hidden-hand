@@ -23,7 +23,7 @@ export const LAYERS: { id: MapLayer; label: string; desc: string }[] = [
 export type PastSnapshot = ReturnType<typeof yearSnapshot>;
 const PX = 8; // terrain texture pixels per tile
 const PO = 4; // territory overlay pixels per tile
-const ZMIN = 2, ZMAX = 110;
+const ZMIN = 2, ZMAX = 64;
 const CITY_Z = 22; // zoom (px per tile) at which settlements are drawn as towns
 
 interface View { x: number; y: number; z: number }
@@ -81,6 +81,13 @@ export function MapView(props: {
     target.current = { z, x: props.focus.x + 0.5 - size.w / 2 / z, y: props.focus.y + 0.5 - size.h / 2 / z };
   }, [props.focus?.seq, size, map]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // looking at the past shows the whole world
+  const wasPast = useRef(false);
+  useEffect(() => {
+    if (props.past && !wasPast.current && map && size.w > 50) target.current = fitView(map, size.w, size.h);
+    wasPast.current = !!props.past;
+  }, [props.past]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // new events ripple across the map
   useEffect(() => {
     if (!frame) return;
@@ -130,7 +137,7 @@ export function MapView(props: {
       g.fillRect(0, 0, Z.w, Z.h);
       g.imageSmoothingEnabled = true;
       g.imageSmoothingQuality = 'high';
-      if (past) g.filter = 'sepia(0.75) saturate(0.8) brightness(0.92)';
+      if (past) g.filter = 'sepia(0.6) saturate(0.9) brightness(1.08)';
       g.drawImage(T, -x * z, -y * z, M.w * z, M.h * z);
       if (L && !past) g.drawImage(L, -x * z, -y * z, M.w * z, M.h * z);
       g.filter = 'none';
@@ -674,7 +681,7 @@ function drawTown(
   if (!plan) { plan = planCity(inp); plans.set(pkey, plan); if (plans.size > 300) plans.delete(plans.keys().next().value!); }
   // towns are drawn larger than life: a tile is a whole district
   const extent = Math.max(plan.radius, (bld[2] ?? 0) >= 0.5 ? plan.wallR : 0) + 6;
-  const want = z * (0.32 + Math.min(0.5, Math.sqrt(s.pop) / 90));
+  const want = z * (0.42 + Math.min(0.55, Math.sqrt(s.pop) / 70));
   const scale = want / extent;
   const bucket = Math.round(Math.log(want) / Math.log(1.25));
   const ckey = `${pkey}|${bucket}|${Math.round((s.dmg ?? 0) * 5)}|${s.sieged}|${Math.floor((F.tick % 12) / 3)}`;

@@ -475,3 +475,8 @@ button.on:not(.primary):not(.chip) { border-color: var(--gold); color: var(--gol
 .tl-chapter { position: absolute; top: 0; bottom: 0; border-left: 1px solid var(--line-2); overflow: hidden; pointer-events: none; }
 .tl-chapter.odd { background: color-mix(in srgb, var(--gold) 9%, transparent); }
 .tl-chapter span { position: absolute; left: 4px; bottom: 1px; font-family: var(--serif); font-size: 10.5px; font-style: italic; color: var(--text-2); white-space: nowrap; }
+
+.alert.chapter-alert { border-left-color: var(--gold); background: color-mix(in srgb, var(--gold) 10%, var(--bg-1)); }
+.alert.chapter-alert .alert-text { font-size: 18px; }
+.alerts { top: 96px; right: 60px; }
+.popover label { white-space: normal; align-items: flex-start; }

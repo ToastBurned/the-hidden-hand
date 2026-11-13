@@ -380,9 +380,10 @@ export function drawCity(g: CanvasRenderingContext2D, plan: CityPlan, inp: CityI
     for (let i = 0; i < n; i++) { const a = (i / n) * Math.PI * 2; const rr = plan.wallR * (1 + (hash(inp.id, i) - 0.5) * 0.08); pts.push(warp(Math.cos(a) * rr, Math.sin(a) * rr, inp.id)); }
     g.lineJoin = 'round';
     g.strokeStyle = stone ? '#8a8378' : '#6e5232'; g.lineWidth = stone ? 4.2 : 2.6;
-    g.beginPath(); pts.forEach(([x, y], i) => (i ? g.lineTo(x, y) : g.moveTo(x, y))); g.closePath();
+    const ring = () => { g.beginPath(); pts.forEach(([x, y], i) => (i ? g.lineTo(x, y) : g.moveTo(x, y))); g.closePath(); };
     const c = site.coast;
-    if (c) { g.save(); clipLand(g, c, plan.coastD - 2, R); g.stroke(); } else g.stroke();
+    if (c) { g.save(); clipLand(g, c, plan.coastD - 2, R); }
+    ring(); g.stroke();
     g.strokeStyle = stone ? '#c2bcae' : '#9c7a4c'; g.lineWidth = stone ? 2.2 : 1.2; g.stroke();
     if (stone) for (const [x, y] of pts) { g.fillStyle = '#9d968a'; g.beginPath(); g.arc(x, y, 3.6, 0, Math.PI * 2); g.fill(); g.fillStyle = '#c9c3b5'; g.beginPath(); g.arc(x - 0.6, y - 0.6, 2.4, 0, Math.PI * 2); g.fill(); }
     if (c) g.restore();

@@ -8,7 +8,7 @@ export const TOUR: Step[] = [
   { target: '[data-tour="tab-story"]', tab: 'story', title: 'The story so far', body: 'The front page tells you what matters right now: the headlines, the figures of the age and the realms. Click any of them to dig in.' },
   { target: '[data-tour="tab-world"]', tab: 'world', title: 'The living map', body: 'Forests thin, fields spread, caravans move and armies march. Scroll to zoom in until settlements become towns, then double-click one to walk its streets.' },
   { target: '[data-tour="timeline"]', tab: 'world', title: 'Travel back through the record', body: 'This strip is the whole history: population, wars and major events. Drag along it to see the world as it was in any past year.' },
-  { target: '[data-tour="alerts"]', title: 'Never miss the big moments', body: 'Wars, plagues, prophets and falls of kingdoms pop up as alerts and pause the world so you can read why. Follow a person or a dynasty to hear about them too.' },
+  { target: '[data-tour="alerts"]', title: 'Never miss the big moments', body: 'Wars, plagues, prophets and falls of kingdoms pop up as alerts. The world pauses for the turning points: a new chapter of history, the first event of its kind, or news of someone you follow.' },
   { title: 'Every face is someone', body: 'Click a person to see their portrait, family tree, memories and deeds. Every event has a "why": follow its causes back through history. Press ? at any time for help.' },
 ];
 

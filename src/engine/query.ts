@@ -625,7 +625,7 @@ export interface Chapter {
   popStart: number; popEnd: number; wars: number; era: number; polity: { id: number; name: string; hue: number } | null;
 }
 const MIN_CHAPTER = 30;
-const ERA_WORD = ['Stone', 'Stone', 'Bronze', 'Iron', 'Classical', 'Lettered'];
+const ERA_WORD = ['Stone', 'Stone', 'Bronze', 'Iron', 'Classical', 'Learned'];
 const chapterCache = new WeakMap<object, { year: number; out: Chapter[] }>();
 
 function rulerWord(title: string): string {
@@ -763,7 +763,7 @@ export function chapters(sim: Simulation): Chapter[] {
     if (top && top.settlements >= 3 && share > 0.5 && topGrew > 1.25) names.push(`The ${P} Ascendancy`);
     if (firsts.length >= 5) names.push('The Age of Discovery', 'The Age of Invention');
     if (faiths.length >= 5) names.push('The Age of Prophets', 'The Age of Many Faiths');
-    else if (faiths.length) names.push(`The Coming of ${(/proclaimed (?:the )?(.+?)\.?$/.exec(faiths[0].text)?.[1] ?? 'New Faiths')}`);
+    else if (faiths.length) names.push(`The Coming of ${(/proclaimed (.+?)\.?$/.exec(faiths[0].text)?.[1] ?? 'New Faiths')}`);
     if (settle0 > 0 && settle1 >= settle0 * 1.5) names.push('The Founding Years', 'The Age of Settlers');
     if (wars.length === 0 && growth > 0.2) names.push('The Long Peace');
     if (growth > 0.5) names.push('The Great Growth', 'The Years of Plenty');

@@ -2,8 +2,10 @@ import { useState } from 'react';
 import type { Selection } from '../App';
 import { useQuery } from '../hooks';
 import { Empty, Link } from '../components/common';
+import { Portrait } from '../art/Portrait';
+import type { Look } from '../../engine/query';
 
-type P = { id: number; name: string; alive: boolean; title: string; age: number; sex: number; settlement?: string; occ?: string };
+type P = { id: number; name: string; alive: boolean; title: string; age: number; sex: number; settlement?: string; occ?: string; look?: Look | null };
 
 export function PeopleView({ onOpen }: { onOpen: (s: Selection) => void }) {
   const [text, setText] = useState('');
@@ -26,7 +28,7 @@ export function PeopleView({ onOpen }: { onOpen: (s: Selection) => void }) {
         <thead><tr><th>Name</th><th>Age</th><th>Occupation</th><th>Home</th></tr></thead>
         <tbody>{data?.map((p) => (
           <tr key={p.id}>
-            <td><Link to={{ kind: 'person', id: p.id }} onOpen={onOpen} className={p.alive ? '' : 'dead'}>{p.title ? `${p.title} ` : ''}{p.name}{p.alive ? '' : ' †'}</Link></td>
+            <td><span className="face-link"><Portrait look={p.look} size={30} framed={false} /><Link to={{ kind: 'person', id: p.id }} onOpen={onOpen} className={p.alive ? '' : 'dead'}>{p.title ? `${p.title} ` : ''}{p.name}{p.alive ? '' : ' †'}</Link></span></td>
             <td>{p.age}</td><td>{p.occ}</td><td>{p.settlement ?? ''}</td>
           </tr>
         ))}</tbody>
