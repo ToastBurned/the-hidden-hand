@@ -3,11 +3,11 @@
  * They act through the same state variables the simulation uses, so their effects
  * propagate through the normal causal machinery rather than being scripted.
  */
-import { NV, isWater } from '../constants';
+import { NV, VALUE_POLES, isWater } from '../constants';
 import { clamp, type Ctx } from '../context';
 import { createCulture, createReligion, createSettlement, createPolity } from '../entities';
 import { logEvent } from '../history';
-import { TECH_BY_KEY } from '../techs';
+import { TECHS, TECH_BY_KEY } from '../techs';
 import { newDisease, seedInfection } from './disease';
 import { populateBand } from '../gen/population';
 import { succession } from './governance';
@@ -76,7 +76,7 @@ export function applyOne(c: Ctx, iv: Intervention): void {
       const id = TECH_BY_KEY[iv.tech ?? 'agriculture'];
       if (id === undefined) break;
       for (const s of ts) { s.techs[id] = 1; c.invalidateFx(s.id); }
-      logEvent(w, { ...base, text: `Knowledge of ${iv.tech} was granted to ${ts.length === 1 ? ts[0].name : `${ts.length} settlements`}.`, settlements: ts.map((s) => s.id) });
+      logEvent(w, { ...base, text: `Knowledge of ${TECHS[id].name.toLowerCase()} was granted to ${ts.length === 1 ? ts[0].name : `${ts.length} settlements`}.`, settlements: ts.map((s) => s.id) });
       break;
     }
     case 'bounty': {
@@ -110,7 +110,7 @@ export function applyOne(c: Ctx, iv: Intervention): void {
     case 'cultural_shock': {
       const axis = iv.axis ?? 0;
       for (const s of ts) for (const p of c.residents(s)) p.values[axis] = clamp(p.values[axis] + iv.magnitude, -1, 1);
-      logEvent(w, { ...base, text: `A cultural upheaval shifted values (axis ${axis}) by ${iv.magnitude}.`, settlements: ts.map((s) => s.id) });
+      logEvent(w, { ...base, text: `A cultural upheaval pushed ${ts.length === 1 ? ts[0].name : 'the world'} towards ${iv.magnitude >= 0 ? VALUE_POLES[axis][1] : VALUE_POLES[axis][0]} values.`, settlements: ts.map((s) => s.id) });
       break;
     }
   }
