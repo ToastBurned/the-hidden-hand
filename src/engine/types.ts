@@ -249,6 +249,8 @@ export interface Polity {
   spending: number;
   lastRevenue?: number; // previous year's totals, for display
   lastSpending?: number;
+  /** Warships. */
+  fleet?: number;
 }
 
 export interface Culture {
@@ -305,6 +307,10 @@ export interface War {
   score: number; // positive = attackers winning
   outcome: string;
   active: boolean;
+  /** Event id of the first amphibious landing, for wars fought across the sea. */
+  ctxLanding?: number;
+  /** True when the attackers must cross the sea to reach the target. */
+  naval?: boolean;
 }
 
 export interface HistEvent {

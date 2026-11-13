@@ -27,6 +27,7 @@ import { diffusionYear, technologyYear } from './systems/technology';
 import { computeYearStats, emptyAcc } from './systems/stats';
 import { applyInterventions } from './systems/interventions';
 import { consolidateYear } from './systems/scale';
+import { navalYear } from './systems/naval';
 import { householdSize } from './entities';
 
 export const ENGINE_VERSION = 1;
@@ -357,6 +358,7 @@ export class Simulation implements Ctx {
     }
     for (const s of alive) if (s.alive) fissionYear(this, s);
     for (const p of [...w.polities.values()]) politicsYear(this, p);
+    for (const p of [...w.polities.values()]) navalYear(this, p);
     unionsYear(this);
     diplomacyYear(this);
     warDecisionsYear(this);

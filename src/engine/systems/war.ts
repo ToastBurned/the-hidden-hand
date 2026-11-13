@@ -10,6 +10,7 @@ import {
   BLD_HOUSING, BLD_WALLS, D_WAR, G_FOOD, M_WAR_FOUGHT, M_WAR_LOSS, NBLD, NG, O_SOLDIER, ORE_COPPER, ORE_IRON, V_MILIT, V_PIETY,
 } from '../constants';
 import { ageOf, clamp, type Ctx } from '../context';
+import { blockadeMonth, fleetClash, fleetPower, isCoastal, liftShare, overseas, seaPhase } from './naval';
 import { agentDeaths, createPolity, headcount, householdSize, killPerson, meanValues, remember, splitHousehold } from '../entities';
 import { logEvent } from '../history';
 import { NTECH } from '../techs';
@@ -180,7 +181,15 @@ export function warDecisionsYear(c: Ctx): void {
       }
       if (!target) continue;
       const strB = militaryStrength(c, b) + allyStrength(c, b, a);
-      const odds = strA / (strA + strB + 1);
+      // a target across the water needs ships: no fleet, no invasion; a weak fleet carries few and may be sunk
+      let lift = 1;
+      if (overseas(c, a, target)) {
+        if ((a.fleet ?? 0) < 2) continue;
+        const Na = fleetPower(c, a);
+        const Nb = fleetPower(c, b) * 1.15;
+        lift = liftShare(c, a, soldiersOf(c, a)) * (Na ** 1.5 / (Na ** 1.5 + Nb ** 1.5 + 1e-9));
+      }
+      const odds = (strA * lift) / (strA * lift + strB + 1);
       const reasons: string[] = [];
       const causes: number[] = [];
       let motive = 0;
@@ -287,6 +296,30 @@ export function warMonth(c: Ctx): void {
     const reach = Math.exp(-travel / 70);
     let Sa = 0;
     for (const p of att) Sa += militaryStrength(c, p) * (p === attacker ? reach : reach * 0.6);
+    blockadeMonth(c, war, att, def);
+    // across the sea the fleets decide whether, and how much of, the army gets ashore
+    let seaNote = '';
+    war.naval = overseas(c, attacker, target);
+    if (war.naval) {
+      const sea = seaPhase(c, war, attacker, defender, target, soldiersOf(c, attacker));
+      if (sea.landing <= 0) {
+        attacker.warWeariness += 0.02;
+        if (attacker.warWeariness > 0.55 + Math.max(0, meanMil(c, attacker)) * 0.3 || months > 12 * 12) endWar(c, war, 'white', sea.note);
+        continue;
+      }
+      Sa *= sea.landing;
+      seaNote = `; ${sea.note}`;
+    } else if (isCoastal(c, target)) {
+      // on the same shore, command of the sea supplies and supports the army that has it
+      if ((attacker.fleet ?? 0) >= 2 && (defender.fleet ?? 0) >= 2 && c.rng.chance(0.35)) war.score += fleetClash(c, war, attacker, defender, target) ? 0.5 : -0.5;
+      const Na = fleetPower(c, attacker);
+      const Nd = fleetPower(c, defender);
+      if (Na + Nd >= 2) {
+        const edge = (Na - Nd) / (Na + Nd + 2);
+        Sa *= 1 + 0.25 * edge;
+        if (Math.abs(edge) > 0.2) seaNote = `; ${edge > 0 ? attacker.name : defender.name} held the sea`;
+      }
+    }
     let Sd = militaryStrength(c, defender, target.id) + militaryStrength(c, defender) * 0.3;
     for (const p of def) if (p !== defender) Sd += militaryStrength(c, p) * 0.3;
     const walls = 1 + Math.min(1.2, target.buildings[BLD_WALLS] * 0.3);
@@ -301,7 +334,7 @@ export function warMonth(c: Ctx): void {
       type: 'battle', imp: 2,
       text: `Battle at ${target.name}: ${attackerWins ? attacker.name : defender.name} prevailed.`,
       x: target.x, y: target.y, polities: [attacker.id, defender.id], settlements: [target.id], causes: [war.causes[0] ?? -1],
-      why: `Strength ${Sa.toFixed(0)} vs ${Sd.toFixed(0)}${walls > 1 ? ` (walls ×${walls.toFixed(1)})` : ''}; distance from home ${travel.toFixed(0)}.`,
+      why: `Strength ${Sa.toFixed(0)} vs ${Sd.toFixed(0)}${walls > 1 ? ` (walls ×${walls.toFixed(1)})` : ''}; distance from home ${travel.toFixed(0)}${seaNote}.`,
       data: { war: war.id },
     });
     const ka = casualties(c, attacker, lossA, defender, battleEv, -1);
@@ -333,6 +366,16 @@ export function warMonth(c: Ctx): void {
     if (wa > tolA || months > 12 * 12) endWar(c, war, war.score > 2 ? 'attackers' : 'white', 'the attackers were exhausted');
     else if (wd > tolD) endWar(c, war, 'attackers', 'the defenders sued for peace');
   }
+}
+
+/** Fighting men a polity could put in the field (soldiers plus a levy), for sizing a sea crossing. */
+function soldiersOf(c: Ctx, p: Polity): number {
+  let n = 0;
+  for (const sid of p.settlements) {
+    const s = c.w.settlements.get(sid);
+    if (s && s.alive) n += s.workers[O_SOLDIER] + s.pop * 0.03;
+  }
+  return n;
 }
 
 function meanMil(c: Ctx, p: Polity): number {
