@@ -3,6 +3,7 @@ import type { Selection } from '../App';
 import { useQuery } from '../hooks';
 import type { queryEvents } from '../../engine/query';
 import { Empty, EventRow, eventLabel } from '../components/common';
+import { ChapterList, useChapters, chapterNo } from '../components/Chapters';
 
 type R = ReturnType<typeof queryEvents>;
 const PAGE = 150;
@@ -16,6 +17,9 @@ export function Chronicle({ onOpen }: { onOpen: (s: Selection) => void }) {
   const [to, setTo] = useState('');
   const [page, setPage] = useState(0);
   const [why, setWhy] = useState(true);
+  const [chap, setChap] = useState<number | null>(null);
+  const chapters = useChapters();
+  const cur = chapters.find((c) => c.n === chap) ?? null;
   const q = { text: text || undefined, types, minImp, fromYear: from ? +from : undefined, toYear: to ? +to : undefined, limit: PAGE, offset: page * PAGE };
   const { data } = useQuery<R>('events', q, 12);
   const toggle = (t: string) => { setPage(0); setTypes((ts) => (ts.includes(t) ? ts.filter((x) => x !== t) : [...ts, t])); };
@@ -23,8 +27,10 @@ export function Chronicle({ onOpen }: { onOpen: (s: Selection) => void }) {
     <div className="page chronicle">
       <div className="page-head">
         <h1>Chronicle</h1>
-        <p className="muted">Every event records who and where it involved, why it happened (from the state of the world at the time), and links to the earlier events that caused it. Click any event to follow its causes and consequences.</p>
+        <p className="muted">History is divided into chapters at its real turning points: a new technological era, the fall of a great realm, the start of a collapse. Pick a chapter to read its events. Every event records who and where it involved, why it happened (from the state of the world at the time), and links to the earlier events that caused it. Click any event to follow its causes and consequences.</p>
       </div>
+      <ChapterList chapters={chapters} selected={chap} onOpen={onOpen} onSelect={(c) => { setChap(c ? c.n : null); setFrom(c ? String(c.from) : ''); setTo(c && !c.open ? String(c.to) : ''); setPage(0); }} />
+      <h2 className="story-h">{cur ? `Events of chapter ${chapterNo(cur.n)}: ${cur.name}` : 'All events'}</h2>
       <div className="filters">
         <input type="search" placeholder="Search text and explanations…" value={text} onChange={(e) => { setText(e.target.value); setPage(0); }} />
         <label>From year <input type="number" value={from} onChange={(e) => { setFrom(e.target.value); setPage(0); }} style={{ width: 70 }} /></label>

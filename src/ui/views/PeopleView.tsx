@@ -1,9 +1,11 @@
 import { useState } from 'react';
 import type { Selection } from '../App';
-import { useQuery } from '../hooks';
+import { useQuery, fmtCount } from '../hooks';
 import { Empty, Link } from '../components/common';
+import { Portrait } from '../art/Portrait';
+import type { Look } from '../../engine/query';
 
-type P = { id: number; name: string; alive: boolean; title: string; age: number; sex: number; settlement?: string; occ?: string };
+type P = { id: number; name: string; alive: boolean; title: string; age: number; sex: number; settlement?: string; occ?: string; look?: Look | null };
 
 export function PeopleView({ onOpen }: { onOpen: (s: Selection) => void }) {
   const [text, setText] = useState('');
@@ -14,7 +16,7 @@ export function PeopleView({ onOpen }: { onOpen: (s: Selection) => void }) {
     <div className="page people">
       <div className="page-head">
         <h1>People</h1>
-        <p className="muted">Every person is simulated individually. Notable people are rulers, founders, inventors, prophets and others whose deeds entered the chronicle. Their records are kept after death; ordinary people are eventually forgotten.</p>
+        <p className="muted">Notable people are rulers, founders, inventors, prophets and others whose deeds entered the chronicle, and each is simulated as an individual with their own family and memories. In large worlds, ordinary people are simulated in groups: one figure stands for many who share a home, a trade and a way of life. Records of the notable are kept after death; ordinary people are eventually forgotten.</p>
       </div>
       <div className="filters">
         <input type="search" placeholder="Search by name…" value={text} onChange={(e) => setText(e.target.value)} />
@@ -23,11 +25,11 @@ export function PeopleView({ onOpen }: { onOpen: (s: Selection) => void }) {
       </div>
       {data && data.length === 0 && <Empty>No one matches.</Empty>}
       <table className="grid-table">
-        <thead><tr><th>Name</th><th>Age</th><th>Occupation</th><th>Home</th></tr></thead>
+        <thead><tr><th>Name</th><th>Age</th><th>Occupation</th><th>Home</th><th>Stands for</th></tr></thead>
         <tbody>{data?.map((p) => (
           <tr key={p.id}>
-            <td><Link to={{ kind: 'person', id: p.id }} onOpen={onOpen} className={p.alive ? '' : 'dead'}>{p.title ? `${p.title} ` : ''}{p.name}{p.alive ? '' : ' †'}</Link></td>
-            <td>{p.age}</td><td>{p.occ}</td><td>{p.settlement ?? ''}</td>
+            <td><span className="face-link"><Portrait look={p.look} size={30} framed={false} /><Link to={{ kind: 'person', id: p.id }} onOpen={onOpen} className={p.alive ? '' : 'dead'}>{p.title ? `${p.title} ` : ''}{p.name}{p.alive ? '' : ' †'}</Link></span></td>
+            <td>{p.age}</td><td>{p.occ}</td><td>{p.settlement ?? ''}</td><td className="muted">{p.look && p.look.n > 1 ? `${fmtCount(p.look.n)} people` : p.alive ? 'one person' : ''}</td>
           </tr>
         ))}</tbody>
       </table>

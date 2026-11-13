@@ -1,5 +1,5 @@
 import type { Selection } from '../App';
-import { useQuery, fmtNum, fmtPct } from '../hooks';
+import { useQuery, fmtNum, fmtCount, fmtPct } from '../hooks';
 import type {
   settlementDetail, polityDetail, personDetail, eventDetail, tileDetail, cultureDetail, religionDetail, warSummary,
 } from '../../engine/query';
@@ -8,6 +8,11 @@ import { Bars, LineChart } from '../components/LineChart';
 import { VALUE_POLES } from '../../engine/constants';
 import { hueCss, SERIES } from '../colors';
 import type { HistEvent } from '../../engine/types';
+import type { Look } from '../../engine/query';
+import { Portrait } from '../art/Portrait';
+import { TownThumb } from '../city/TownThumb';
+import { toggleFollowFamily, toggleFollowPerson, usePrefs } from '../prefs';
+import { ERA_LABELS } from '../era';
 
 type Open = (s: Selection) => void;
 type SD = NonNullable<ReturnType<typeof settlementDetail>>;
@@ -18,14 +23,15 @@ type TD = NonNullable<ReturnType<typeof tileDetail>>;
 type CD = NonNullable<ReturnType<typeof cultureDetail>>;
 type RD = NonNullable<ReturnType<typeof religionDetail>>;
 type WD = NonNullable<ReturnType<typeof warSummary>>;
-type PRef = { id: number; name: string; alive: boolean; title: string; age: number } | null | undefined;
+type PRef = { id: number; name: string; alive: boolean; title: string; age: number; look?: Look | null } | null | undefined;
+type Extra = { onCity: (id: number) => void; onFamily: (id: number) => void; onLocate: (x: number, y: number) => void };
 
 const yr = (t: number) => Math.floor(t / 12);
 const KIND_LABEL: Record<Selection['kind'], string> = {
   settlement: 'Settlement', polity: 'Polity', person: 'Person', event: 'Event', culture: 'Culture', religion: 'Religion', tile: 'Land', war: 'War',
 };
 
-export function Inspector(props: { sel: Selection; onOpen: Open; onBack?: () => void; onClose: () => void }) {
+export function Inspector(props: { sel: Selection; onOpen: Open; onBack?: () => void; onClose: () => void } & Extra) {
   const { sel, onOpen } = props;
   return (
     <div className="insp">
@@ -36,9 +42,9 @@ export function Inspector(props: { sel: Selection; onOpen: Open; onBack?: () => 
         <button className="icon" onClick={props.onClose} title="Close">×</button>
       </div>
       <div className="insp-body">
-        {sel.kind === 'settlement' && <SettlementPanel id={sel.id} onOpen={onOpen} />}
+        {sel.kind === 'settlement' && <SettlementPanel id={sel.id} onOpen={onOpen} x={props} />}
         {sel.kind === 'polity' && <PolityPanel id={sel.id} onOpen={onOpen} />}
-        {sel.kind === 'person' && <PersonPanel id={sel.id} onOpen={onOpen} />}
+        {sel.kind === 'person' && <PersonPanel id={sel.id} onOpen={onOpen} x={props} />}
         {sel.kind === 'event' && <EventPanel id={sel.id} onOpen={onOpen} />}
         {sel.kind === 'tile' && <TilePanel id={sel.id} onOpen={onOpen} />}
         {sel.kind === 'culture' && <CulturePanel id={sel.id} onOpen={onOpen} />}
@@ -49,8 +55,9 @@ export function Inspector(props: { sel: Selection; onOpen: Open; onBack?: () => 
   );
 }
 
-function PersonLink({ p, onOpen }: { p: PRef; onOpen: Open }) {
+function PersonLink({ p, onOpen, face }: { p: PRef; onOpen: Open; face?: boolean }) {
   if (!p) return <span className="muted">—</span>;
+  if (face) return <span className="face-link"><Portrait look={p.look} size={26} framed={false} /><Link to={{ kind: 'person', id: p.id }} onOpen={onOpen} className={p.alive ? '' : 'dead'}>{p.title ? `${p.title} ` : ''}{p.name}{p.alive ? '' : ' †'}</Link></span>;
   return <Link to={{ kind: 'person', id: p.id }} onOpen={onOpen} className={p.alive ? '' : 'dead'}>{p.title ? `${p.title} ` : ''}{p.name}{p.alive ? '' : ' †'}</Link>;
 }
 
@@ -61,23 +68,32 @@ function Events({ events, onOpen, empty }: { events: HistEvent[]; onOpen: Open; 
 
 // ------------------------------------------------------------------ settlement
 
-function SettlementPanel({ id, onOpen }: { id: number; onOpen: Open }) {
+function SettlementPanel({ id, onOpen, x }: { id: number; onOpen: Open; x: Extra }) {
   const { data: d } = useQuery<SD | null>('settlement', id, 2);
   if (!d) return <Empty>Loading…</Empty>;
   const hist = d.history;
   return (
     <>
+      {d.alive && <button className="town-hero" onClick={() => x.onCity(d.id)} title="Walk its streets">
+        <TownThumb d={d} />
+        <span className="town-hero-cta">Walk its streets →</span>
+        <span className="town-hero-era">{ERA_LABELS[d.era]}</span>
+      </button>}
       <h2>{d.name}</h2>
       <div className="sub">
-        {d.alive ? (d.nomadic ? 'Nomadic band' : d.pop > 500 ? 'Town' : d.pop > 120 ? 'Village' : 'Hamlet') : `Abandoned in ${yr(d.abandoned)}`}
+        {d.alive ? (d.nomadic ? 'Nomadic band' : d.pop > 3000 ? 'City' : d.pop > 500 ? 'Town' : d.pop > 120 ? 'Village' : 'Hamlet') : `Abandoned in ${yr(d.abandoned)}`}
         {' · '}founded {yr(d.founded)}
         {d.polity && <> · <Link to={{ kind: 'polity', id: d.polity.id }} onOpen={onOpen}>{d.polity.name}</Link>{d.polity.capital ? ' (capital)' : ''}</>}
       </div>
       <div className="stat-row">
-        <div><b>{d.pop}</b><span>people</span></div>
-        <div><b>{d.households}</b><span>households</span></div>
+        <div><b>{fmtCount(d.pop)}</b><span>people</span></div>
+        <div><b>{fmtCount(d.households)}</b><span>households</span></div>
         <div title="Food available relative to need"><b className={d.foodRatio < 0.85 ? 'bad' : ''}>{fmtPct(d.foodRatio)}</b><span>food</span></div>
         <div title="Probability-weighted unrest"><b className={d.unrest > 0.5 ? 'bad' : ''}>{fmtPct(d.unrest)}</b><span>unrest</span></div>
+      </div>
+      <div className="row" style={{ gap: 6, marginBottom: 4 }}>
+        {d.alive && <button onClick={() => x.onCity(d.id)}>View town</button>}
+        <button onClick={() => x.onLocate(d.x, d.y)}>Show on map</button>
       </div>
       {hist.length > 2 && (
         <LineChart height={130} x={hist.map((h) => h.y)} series={[{ name: 'Population', values: hist.map((h) => h.pop) }]} title="Population" />
@@ -128,7 +144,7 @@ function SettlementPanel({ id, onOpen }: { id: number; onOpen: Open }) {
         )) : <Empty>No regular contacts.</Empty>}
       </Section>
       <Section title="Notable residents" open={false}>
-        {d.notable.length ? d.notable.map((p) => <div key={p.id} className="row"><PersonLink p={p} onOpen={onOpen} /><span className="grow" /><span className="muted small">{p.age}</span></div>) : <Empty>No notable residents.</Empty>}
+        {d.notable.length ? d.notable.map((p) => <div key={p.id} className="row"><PersonLink p={p} onOpen={onOpen} face /><span className="grow" /><span className="muted small">{p.age}</span></div>) : <Empty>No notable residents.</Empty>}
       </Section>
       <Section title="History"><Events events={d.events} onOpen={onOpen} /></Section>
     </>
@@ -162,14 +178,14 @@ function PolityPanel({ id, onOpen }: { id: number; onOpen: Open }) {
       <h2><i className="swatch" style={{ background: hueCss(d.hue) }} />{d.name}</h2>
       <div className="sub">{d.label} · {d.alive ? `since ${yr(d.founded)}` : `${yr(d.founded)}–${yr(d.ended)}`}</div>
       <div className="stat-row">
-        <div><b>{d.pop}</b><span>people</span></div>
+        <div><b>{fmtCount(d.pop)}</b><span>people</span></div>
         <div><b>{d.settlements.length}</b><span>settlements</span></div>
         <div><b>{fmtNum(d.treasury)}</b><span>treasury</span></div>
         <div title="Legitimacy of the ruler"><b className={d.legitimacy < 0.3 ? 'bad' : ''}>{fmtPct(d.legitimacy)}</b><span>legitimacy</span></div>
       </div>
       {h.length > 2 && <LineChart height={130} x={h.map((x) => x.y)} series={[{ name: 'Population', values: h.map((x) => x.pop) }, { name: 'Army', values: h.map((x) => x.army) }]} />}
       <KV rows={[
-        ['Ruler', d.leader ? <PersonLink p={d.leader} onOpen={onOpen} /> : '—'],
+        ['Ruler', d.leader ? <PersonLink p={d.leader} onOpen={onOpen} face /> : '—'],
         ['Dynasty', d.dynasty || '—'],
         ['Capital', <Link to={{ kind: 'settlement', id: d.capital.id }} onOpen={onOpen}>{d.capital.name}</Link>],
         ['Culture', d.culture], ['State faith', d.religion], ['Revenue last year', fmtNum(d.revenue), 'Taxes collected, in shells'], ['Spending last year', fmtNum(d.spending), 'Wages, welfare and payments to the elite'], ['War weariness', <Meter value={d.warWeariness} />],
@@ -213,17 +229,31 @@ function PolityPanel({ id, onOpen }: { id: number; onOpen: Open }) {
 
 // ------------------------------------------------------------------ person
 
-function PersonPanel({ id, onOpen }: { id: number; onOpen: Open }) {
+function PersonPanel({ id, onOpen, x }: { id: number; onOpen: Open; x: Extra }) {
   const { data: d } = useQuery<PeD | null>('person', id, 6);
+  const prefs = usePrefs();
   if (!d) return <Empty>Loading… (people who died long ago and left no mark are eventually forgotten)</Empty>;
+  const followP = prefs.follow.persons.some((p) => p.id === d.id);
+  const followF = prefs.follow.families.includes(d.family);
   return (
     <>
-      <h2>{d.title ? `${d.title} ` : ''}{d.name} {d.family}{d.alive ? '' : ' †'}</h2>
-      <div className="sub">
-        {d.sex === 0 ? 'Woman' : 'Man'}, {d.age} · {d.occupation}
-        {d.settlement && <> · <Link to={{ kind: 'settlement', id: d.settlement.id }} onOpen={onOpen}>{d.settlement.name}</Link></>}
+      <div className="person-head">
+        <Portrait look={d.look} size={104} title={`${d.name} ${d.family}`} />
+        <div className="person-id">
+          <h2>{d.title ? `${d.title} ` : ''}{d.name} {d.family}{d.alive ? '' : ' †'}</h2>
+          <div className="sub">
+            {d.sex === 0 ? 'Woman' : 'Man'}, {d.age} · {d.occupation}
+            {d.settlement && <> · <Link to={{ kind: 'settlement', id: d.settlement.id }} onOpen={onOpen}>{d.settlement.name}</Link></>}
+          </div>
+          <div className="sub small">Born {yr(d.born)}{d.alive ? '' : `, died ${yr(d.died)} (${d.cause})`} · {d.culture} · {d.religion}</div>
+          {d.represents > 1 && <div className="pill represents" title="Ordinary people are simulated in groups: this person stands for others like them">Represents {fmtNum(d.represents)} people</div>}
+        </div>
       </div>
-      <div className="sub small">Born {yr(d.born)}{d.alive ? '' : `, died ${yr(d.died)} (${d.cause})`} · {d.culture} · {d.religion}</div>
+      <div className="row person-actions">
+        <button onClick={() => x.onFamily(d.id)}>Family tree</button>
+        <button className={followP ? 'on' : ''} onClick={() => toggleFollowPerson(d.id, `${d.name} ${d.family}`)} title="Get an alert when they make history">{followP ? '★ Following' : '☆ Follow'}</button>
+        <button className={followF ? 'on' : ''} onClick={() => toggleFollowFamily(d.family)} title="Get an alert when anyone of this family makes history">{followF ? `★ House ${d.family}` : `☆ Follow House ${d.family}`}</button>
+      </div>
       {d.condition && (
         <div className="stat-row">
           <div><Meter value={d.condition.health} color={d.condition.health < 0.4 ? 'var(--bad)' : undefined} /><span>health</span></div>
@@ -235,10 +265,10 @@ function PersonPanel({ id, onOpen }: { id: number; onOpen: Open }) {
       {d.condition?.infected && <div className="pill bad">Ill with {d.condition.infected}</div>}
       <Section title="Family">
         <KV rows={[
-          ['Mother', <PersonLink p={d.mother} onOpen={onOpen} />], ['Father', <PersonLink p={d.father} onOpen={onOpen} />],
-          ['Spouse', <PersonLink p={d.spouse} onOpen={onOpen} />],
+          ['Mother', <PersonLink p={d.mother} onOpen={onOpen} face />], ['Father', <PersonLink p={d.father} onOpen={onOpen} face />],
+          ['Spouse', <PersonLink p={d.spouse} onOpen={onOpen} face />],
         ]} />
-        {d.children.length > 0 && <><div className="mini-h">Children ({d.children.length})</div>{d.children.map((c) => c && <div key={c.id} className="row"><PersonLink p={c} onOpen={onOpen} /><span className="grow" /><span className="small muted">{c.age}</span></div>)}</>}
+        {d.children.length > 0 && <><div className="mini-h">Children ({d.children.length})</div>{d.children.map((c) => c && <div key={c.id} className="row"><PersonLink p={c} onOpen={onOpen} face /><span className="grow" /><span className="small muted">{c.age}</span></div>)}</>}
         {d.household && <KV rows={[['Household', `${d.household.members} people`], ['Money', fmtNum(d.household.money)], ['Food', fmtNum(d.household.food)], ['Land', `${d.household.land.toFixed(2)} tiles`], ['Tools', fmtNum(d.household.tools)]]} />}
       </Section>
       {d.traits && (
@@ -297,7 +327,7 @@ function EventPanel({ id, onOpen }: { id: number; onOpen: Open }) {
         <Events events={d.consequences} onOpen={onOpen} empty="No later recorded event cites this one (yet)." />
       </Section>
       <Section title="Involved">
-        {d.persons.map((p) => p && <div key={p.id} className="row"><PersonLink p={p} onOpen={onOpen} /></div>)}
+        {d.persons.map((p) => p && <div key={p.id} className="row"><PersonLink p={p} onOpen={onOpen} face /></div>)}
         {d.settlements.map((s) => <div key={s.id} className="row"><Link to={{ kind: 'settlement', id: s.id }} onOpen={onOpen}>{s.name}</Link></div>)}
         {d.polities.map((s) => <div key={s.id} className="row"><Link to={{ kind: 'polity', id: s.id }} onOpen={onOpen}>{s.name}</Link></div>)}
       </Section>

@@ -1,6 +1,6 @@
 import { Modal } from '../components/Modal';
 
-export function HelpDialog({ onClose }: { onClose: () => void }) {
+export function HelpDialog({ onClose, onTour }: { onClose: () => void; onTour?: () => void }) {
   return (
     <Modal title="How to use the Noosphere" onClose={onClose} wide>
       <div className="help">
@@ -14,11 +14,18 @@ export function HelpDialog({ onClose }: { onClose: () => void }) {
             <tr><td><kbd>Space</kbd></td><td>Play or pause</td></tr>
             <tr><td><kbd>.</kbd> / <kbd>&gt;</kbd></td><td>Advance one month / one year while paused</td></tr>
             <tr><td><kbd>+</kbd> / <kbd>-</kbd></td><td>Faster / slower</td></tr>
-            <tr><td><kbd>1</kbd>–<kbd>6</kbd></td><td>Switch between World, Chronicle, Statistics, Societies, People, Experiments</td></tr>
+            <tr><td><kbd>1</kbd>–<kbd>7</kbd></td><td>Switch between Story, World, Chronicle, Statistics, Societies, People, Experiments</td></tr>
             <tr><td><kbd>Ctrl</kbd>+<kbd>S</kbd></td><td>Save to the library</td></tr>
             <tr><td><kbd>Esc</kbd></td><td>Back in the inspector / close a dialog</td></tr>
-            <tr><td>Mouse</td><td>Drag to pan the map, scroll to zoom, click a settlement or a patch of land to inspect it</td></tr>
+            <tr><td>Mouse</td><td>Drag to pan the map, scroll to zoom, click a settlement or a patch of land to inspect it. Zoom in close and settlements become towns; double-click one to open its streets.</td></tr>
+            <tr><td>Timeline</td><td>Drag along the strip under the map to see the world as recorded in a past year (<kbd>←</kbd>/<kbd>→</kbd> step a year when it has focus). Playing returns to the present.</td></tr>
           </tbody></table>
+        </section>
+        <section>
+          <h3>Story, alerts and following</h3>
+          <p>The Story page is the front page of the world: headlines, the figures of the age with their portraits, and the realms. Major events pop up as alerts and, if you like, pause the world (the bell in the top bar sets this). On anyone's page you can follow them or their dynasty, or open their family tree; you will then be alerted when they make history.</p>
+          <p>Portraits and town views are drawn from the simulation: age, sex, culture (skin tone follows the climate of a culture's homeland), occupation, rank and the technology of their home decide the face and dress; population, buildings, era, sieges and war damage decide the town. Exact features and street layouts are decoration generated from a fixed seed, so they stay the same as long as the person or town exists.</p>
+          {onTour && <button onClick={onTour}>Replay the guided tour</button>}
         </section>
         <section>
           <h3>Following causes</h3>

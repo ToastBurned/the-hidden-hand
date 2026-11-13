@@ -15,7 +15,7 @@ export type ToSim =
   | { type: 'save'; id: number }
   | { type: 'layers' };
 
-export type QueryKind = 'settlement' | 'polity' | 'person' | 'event' | 'events' | 'people' | 'tile' | 'culture' | 'religion' | 'overview' | 'stats' | 'war';
+export type QueryKind = 'settlement' | 'polity' | 'person' | 'event' | 'events' | 'people' | 'tile' | 'culture' | 'religion' | 'overview' | 'stats' | 'war' | 'family' | 'story' | 'timeline' | 'year' | 'chapters';
 
 /** Messages from the simulation worker to the UI. */
 export type FromSim =

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { sim } from './client';
-import { fmtNum, useSim } from './hooks';
+import { fmtCount, fmtNum, useSim } from './hooks';
 import { MapView, LAYERS, type MapLayer } from './map/MapView';
 import { Inspector } from './views/Inspector';
 import { Chronicle } from './views/Chronicle';
@@ -12,18 +12,28 @@ import { NewWorldDialog } from './views/NewWorld';
 import { SavesDialog } from './views/Saves';
 import { InterveneDialog } from './views/Intervene';
 import { HelpDialog } from './views/Help';
+import { Story } from './views/Story';
+import { CityView } from './city/CityView';
+import { FamilyTreeDialog } from './views/FamilyTree';
+import { Alerts, AlertSettings } from './components/Alerts';
+import { TimelineBar } from './components/Timeline';
+import { Onboarding } from './components/Onboarding';
+import { useQuery } from './hooks';
+import { getPrefs } from './prefs';
+import type { PastSnapshot } from './map/MapView';
 
 export type Selection =
   | { kind: 'settlement' | 'polity' | 'person' | 'event' | 'culture' | 'religion' | 'tile' | 'war'; id: number };
 
-type Tab = 'world' | 'chronicle' | 'stats' | 'societies' | 'people' | 'experiments';
+type Tab = 'story' | 'world' | 'chronicle' | 'stats' | 'societies' | 'people' | 'experiments';
 const TABS: { id: Tab; label: string; key: string }[] = [
-  { id: 'world', label: 'World', key: '1' },
-  { id: 'chronicle', label: 'Chronicle', key: '2' },
-  { id: 'stats', label: 'Statistics', key: '3' },
-  { id: 'societies', label: 'Societies', key: '4' },
-  { id: 'people', label: 'People', key: '5' },
-  { id: 'experiments', label: 'Experiments', key: '6' },
+  { id: 'story', label: 'Story', key: '1' },
+  { id: 'world', label: 'World', key: '2' },
+  { id: 'chronicle', label: 'Chronicle', key: '3' },
+  { id: 'stats', label: 'Statistics', key: '4' },
+  { id: 'societies', label: 'Societies', key: '5' },
+  { id: 'people', label: 'People', key: '6' },
+  { id: 'experiments', label: 'Experiments', key: '7' },
 ];
 export const SPEEDS = [
   { mps: 2, label: '1×', title: '2 months per second' },
@@ -35,10 +45,16 @@ export const SPEEDS = [
 
 export function App() {
   const st = useSim();
-  const [tab, setTab] = useState<Tab>('world');
+  const [tab, setTab] = useState<Tab>('story');
+  const [city, setCity] = useState<number | null>(null);
+  const [family, setFamily] = useState<number | null>(null);
+  const [past, setPast] = useState<number | null>(null);
+  const [focus, setFocus] = useState<{ x: number; y: number; seq: number } | null>(null);
+  const [tour, setTour] = useState(false);
   const [layer, setLayer] = useState<MapLayer>('political');
   const [showTrade, setShowTrade] = useState(true);
   const [showLabels, setShowLabels] = useState(true);
+  const [weather, setWeather] = useState(true);
   const [stack, setStack] = useState<Selection[]>([]);
   const [speed, setSpeed] = useState(1);
   const [dialog, setDialog] = useState<'new' | 'saves' | 'intervene' | 'help' | null>(null);
@@ -54,7 +70,16 @@ export function App() {
   const sel = stack.length ? stack[stack.length - 1] : null;
 
   useEffect(() => { sim.speed(SPEEDS[speed].mps); }, [speed]);
-  useEffect(() => { setStack([]); }, [st.version]);
+  useEffect(() => { setStack([]); setCity(null); setPast(null); setFamily(null); }, [st.version]);
+  useEffect(() => { if (st.ready && !getPrefs().toured) setTour(true); }, [st.ready]);
+  useEffect(() => { if (st.running) setPast(null); }, [st.running]);
+  const { data: snapData } = useQuery<PastSnapshot>('year', past ?? -1, 0);
+  const snap = past !== null && snapData && snapData.year === past ? snapData : null;
+  const locate = useCallback((x?: number, y?: number) => {
+    setTab('world');
+    if (x !== undefined && y !== undefined) setFocus((f) => ({ x, y, seq: (f?.seq ?? 0) + 1 }));
+  }, []);
+  const openCity = useCallback((id: number) => { setTab('world'); setCity(id); }, []);
   useEffect(() => { if (toast) { const t = setTimeout(() => setToast(null), 3500); return () => clearTimeout(t); } }, [toast]);
 
   const quickSave = async () => {
@@ -73,7 +98,7 @@ export function App() {
       else if (e.key === '>' ) sim.step(12);
       else if (e.key === '+' || e.key === '=') setSpeed((s) => Math.min(SPEEDS.length - 1, s + 1));
       else if (e.key === '-') setSpeed((s) => Math.max(0, s - 1));
-      else if (e.key === 'Escape') { if (dialog) setDialog(null); else back(); }
+      else if (e.key === 'Escape') { if (dialog) setDialog(null); else if (family !== null) setFamily(null); else if (city !== null) setCity(null); else if (past !== null) setPast(null); else back(); }
       else if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); quickSave(); }
       else { const tb = TABS.find((x) => x.key === e.key); if (tb && !e.ctrlKey && !e.metaKey && !e.altKey) setTab(tb.id); }
     };
@@ -93,7 +118,7 @@ export function App() {
         <div className="world-name" title={f ? `Seed ${f.seed}` : ''}>{f?.name ?? '…'}</div>
         <div className="date">{f ? f.date : 'Generating…'}</div>
         <div className="controls">
-          <button className={`primary play ${st.running ? 'on' : ''}`} onClick={() => (st.running ? sim.pause() : sim.play())} disabled={!st.ready || f?.extinct} title="Play or pause (Space)">
+          <button data-tour="play" className={`primary play ${st.running ? 'on' : ''}`} onClick={() => (st.running ? sim.pause() : sim.play())} disabled={!st.ready || f?.extinct} title="Play or pause (Space)">
             {st.running ? '❚❚ Pause' : '▶ Play'}
           </button>
           <button onClick={() => sim.step(1)} disabled={!st.ready || st.running} title="Advance one month (.)">+1 mo</button>
@@ -115,11 +140,12 @@ export function App() {
           <button onClick={quickSave} disabled={!st.ready} title="Save to the library (Ctrl+S)">Save</button>
           <button onClick={() => setDialog('saves')} title="Saved worlds, import and export">Library</button>
           <button onClick={() => setDialog('new')} title="Create a new world">New world</button>
+          <AlertSettings />
           <button className="icon" onClick={() => setDialog('help')} title="Help and keyboard shortcuts">?</button>
         </div>
       </header>
       <nav className="tabs">
-        {TABS.map((t) => <button key={t.id} className={tab === t.id ? 'on' : ''} onClick={() => setTab(t.id)} title={`Shortcut: ${t.key}`}>{t.label}</button>)}
+        {TABS.map((t) => <button key={t.id} data-tour={`tab-${t.id}`} className={tab === t.id ? 'on' : ''} onClick={() => setTab(t.id)} title={`Shortcut: ${t.key}`}>{t.label}</button>)}
         {tab === 'world' && (
           <div className="layer-bar">
             <select value={layer} onChange={(e) => setLayer(e.target.value as MapLayer)} title={LAYERS.find((l) => l.id === layer)?.desc}>
@@ -127,6 +153,7 @@ export function App() {
             </select>
             <label><input type="checkbox" checked={showTrade} onChange={(e) => setShowTrade(e.target.checked)} /> Trade links</label>
             <label><input type="checkbox" checked={showLabels} onChange={(e) => setShowLabels(e.target.checked)} /> Names</label>
+            <label><input type="checkbox" checked={weather} onChange={(e) => setWeather(e.target.checked)} /> Clouds</label>
           </div>
         )}
       </nav>
@@ -135,9 +162,25 @@ export function App() {
       <main className={`main ${sel ? 'with-inspector' : ''}`}>
         <section className="content">
           {!st.ready && <div className="loading"><div className="spinner" />Generating world…</div>}
-          {st.ready && tab === 'world' && <MapView layer={layer} selection={sel} onSelect={select} showTrade={showTrade} showLabels={showLabels} />}
-          {st.ready && tab === 'world' && <MapLegend layer={layer} />}
-          {st.ready && tab === 'world' && <LiveFeed onOpen={open} />}
+          {st.ready && tab === 'story' && <Story onOpen={open} onShowMap={locate} />}
+          {st.ready && tab === 'world' && (
+            <div className="world-stage">
+              <div className="world-map">
+                <MapView layer={layer} selection={sel} onSelect={select} showTrade={showTrade} showLabels={showLabels} onOpenCity={openCity} past={snap} focus={focus} weather={weather} />
+                {!snap && <MapLegend layer={layer} />}
+                {!snap && <LiveFeed onOpen={open} />}
+                {past !== null && (
+                  <div className="past-banner">
+                    <div className="past-year">Year {past}</div>
+                    <div className="small">{snap ? `${snap.settlements.length} settlements · ${fmtCount(snap.stats?.pop ?? snap.settlements.reduce((a, s) => a + s.pop, 0))} people${snap.polities[0] ? ` · largest realm ${snap.polities[0].name}` : ''}` : 'Reading the record…'}</div>
+                    {snap && snap.events.slice(0, 3).map((e) => <button key={e.id} className="link small past-ev" onClick={() => open({ kind: 'event', id: e.id })}>{e.text}</button>)}
+                  </div>
+                )}
+                {city !== null && <CityView id={city} onClose={() => setCity(null)} onOpen={open} />}
+              </div>
+              <TimelineBar past={past} onScrub={(y) => { if (y !== null && st.running) sim.pause(); setPast(y); setCity(null); }} onOpen={open} />
+            </div>
+          )}
           {st.ready && tab === 'chronicle' && <Chronicle onOpen={open} />}
           {st.ready && tab === 'stats' && <StatsView />}
           {st.ready && tab === 'societies' && <Societies onOpen={open} />}
@@ -146,14 +189,17 @@ export function App() {
         </section>
         {sel && (
           <aside className="inspector">
-            <Inspector sel={sel} onOpen={select} onBack={stack.length > 1 ? back : undefined} onClose={close} />
+            <Inspector sel={sel} onOpen={select} onBack={stack.length > 1 ? back : undefined} onClose={close} onCity={openCity} onFamily={setFamily} onLocate={locate} />
           </aside>
         )}
       </main>
       {dialog === 'new' && <NewWorldDialog onClose={() => setDialog(null)} />}
       {dialog === 'saves' && <SavesDialog onClose={() => setDialog(null)} onToast={setToast} />}
       {dialog === 'intervene' && <InterveneDialog onClose={() => setDialog(null)} onToast={setToast} />}
-      {dialog === 'help' && <HelpDialog onClose={() => setDialog(null)} />}
+      {dialog === 'help' && <HelpDialog onClose={() => setDialog(null)} onTour={() => { setDialog(null); setTour(true); }} />}
+      {family !== null && <FamilyTreeDialog id={family} onClose={() => setFamily(null)} onOpen={open} />}
+      {st.ready && <Alerts onOpen={open} onLocate={locate} />}
+      {tour && st.ready && <Onboarding onClose={() => setTour(false)} onTab={(t) => setTab(t as Tab)} />}
       {toast && <div className="toast">{toast}</div>}
     </div>
   );

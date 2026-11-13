@@ -192,6 +192,35 @@ The event inspector shows the cause tree several levels deep and every later eve
 **Simplification:** links are recorded where the code knows the causal pathway; diffuse causes (long-run cultural
 drift, gradual soil exhaustion) are explained in the *why* text rather than as links.
 
+## Presentation: what is simulated and what is drawn
+
+The interface adds a layer of procedural art and narration on top of the engine. None of it feeds back into the
+simulation (a test checks that querying it leaves the world's random state untouched). The line between the two:
+
+- **Portraits** (`src/ui/art/Portrait.tsx`) take a descriptor from `lookOf` in the query layer: person id, sex, age,
+  culture, occupation, status, title, health and the era of their home. Culture fixes hair styles, beards, face paint
+  and a skin tone derived from the mean temperature of the culture's settlements when first seen. Everything else
+  (the shape of a nose, the exact hairstyle) is a deterministic function of the person's id.
+- **Towns** (`src/ui/art/city.ts`) are planned from the settlement id, so a town keeps its layout as it grows: more
+  households fill the next plots outward. The number of houses, walls, temple, granary, school, market, workshops,
+  harbour, aqueduct, irrigation, paved roads, fields, hunger, siege camps and burnt houses come from engine state;
+  the coast and river come from the settlement's map tile. Streets and house shapes are decoration. The "through the
+  years" slider uses the recorded population only; buildings are shown as they stand today.
+- **Eras** (`eraOf`) are a six-step summary of a settlement's technology (foragers, first farmers, bronze, iron,
+  classical, letters) keyed on a few well-known techs, with a fallback to the share of techs known.
+- **Chapters** (`chapters`) divide the record at turning points: the first arrival of a new era, the fall of a realm
+  that once held a quarter of the world, the peak before the population falls by a fifth within 15 years, and (at
+  wider spacing) great conquests, new faiths, revolutions and succession crises. Chapters are at least 30 years long.
+  Names are chosen by rules from what happened inside the span (largest realm and its ruler's title, wars relative to
+  this world's usual rate, share of deaths from disease and hunger, new faiths, discoveries, growth), and summaries
+  are assembled from the same numbers. They are descriptions of the record, not a model of historiography: two
+  different spans can be similar enough to earn similar names, and the most recent boundary can still shift for up
+  to 30 years if a bigger turning point follows closely.
+- **The timeline's view of the past** shows settlements at their recorded size in that year. The engine does not
+  store past borders, so territory is not drawn for past years.
+- **The map** draws forests and fields from the live ecology layers, so deforestation and the spread of farming are
+  visible; clouds, caravan dots along trade links and marching lines for wars are indicative animations of real links.
+
 ## Experiments and statistics
 
 See [EXPERIMENTS.md](EXPERIMENTS.md). In short: conditions × seeds, run in parallel, fully reproducible; means and

@@ -8,6 +8,7 @@ import { deserializeWorld, serializeWorld } from '../engine/serialize';
 import {
   cultureDetail, dynamicLayers, eventDetail, frame, overview, personDetail, polityDetail, queryEvents, religionDetail,
   searchPeople, settlementDetail, staticMap, tileDetail, warSummary, type EventQuery,
+  familyTree, storyDigest, timeline, yearSnapshot, chapters,
 } from '../engine/query';
 import { applyOne } from '../engine/systems/interventions';
 import type { FromSim, ToSim } from './protocol';
@@ -107,6 +108,11 @@ function answer(kind: string, arg: unknown): unknown {
     case 'war': return warSummary(sim, arg as number);
     case 'overview': return overview(sim);
     case 'stats': return sim.w.stats;
+    case 'family': return familyTree(sim, arg as number);
+    case 'story': return storyDigest(sim);
+    case 'timeline': return timeline(sim);
+    case 'chapters': return chapters(sim);
+    case 'year': return yearSnapshot(sim, arg as number);
   }
   return null;
 }
