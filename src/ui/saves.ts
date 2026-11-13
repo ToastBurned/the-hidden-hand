@@ -1,7 +1,10 @@
 /**
  * Saved worlds live in the browser's IndexedDB (they survive closing the app) and can
  * also be exported to and imported from files for backup and sharing.
+ * In the desktop app (desktop/) every call is routed to real files in a folder on disk instead.
  */
+import { desktop } from '../platform/desktop';
+
 export interface SaveMeta { id: string; name: string; tick: number; savedAt: number; size: number; note?: string }
 
 const DB = 'noosphere';
@@ -32,22 +35,27 @@ function tx<T>(stores: string[], mode: IDBTransactionMode, fn: (t: IDBTransactio
 }
 
 export async function listSaves(): Promise<SaveMeta[]> {
+  const d = desktop(); if (d) return d.listSaves();
   const all = await tx<SaveMeta[]>([META], 'readonly', (t) => t.objectStore(META).getAll());
   return (all ?? []).sort((a, b) => b.savedAt - a.savedAt);
 }
 export async function putSave(name: string, tick: number, data: string, note?: string): Promise<SaveMeta> {
+  const d = desktop(); if (d) return d.putSave(name, tick, data, note);
   const meta: SaveMeta = { id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, name, tick, savedAt: Date.now(), size: data.length, note };
   await tx([META, DATA], 'readwrite', (t) => { t.objectStore(META).put(meta); t.objectStore(DATA).put(data, meta.id); });
   return meta;
 }
 export async function getSave(id: string): Promise<string | undefined> {
+  const d = desktop(); if (d) return d.getSave(id);
   return tx<string>([DATA], 'readonly', (t) => t.objectStore(DATA).get(id));
 }
 export async function deleteSave(id: string): Promise<void> {
+  const d = desktop(); if (d) return d.deleteSave(id);
   await tx([META, DATA], 'readwrite', (t) => { t.objectStore(META).delete(id); t.objectStore(DATA).delete(id); });
 }
 
 export function downloadText(filename: string, text: string, type = 'application/json') {
+  const d = desktop(); if (d) { void d.exportFile(filename, text); return; }
   const blob = new Blob([text], { type });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
@@ -58,6 +66,7 @@ export function downloadText(filename: string, text: string, type = 'application
 }
 
 export function pickFile(accept = '.json,.noosphere'): Promise<string | null> {
+  const d = desktop(); if (d) return d.importFile();
   return new Promise((res) => {
     const i = document.createElement('input');
     i.type = 'file';
