@@ -248,15 +248,21 @@ export function MapView(props: {
         }
         // polity names across their lands
         if (P.showLabels && O && (P.layer === 'political') && z < CITY_Z * 1.4) {
-          for (const lb of O.labels) {
+          // largest realms first; a name that would run into one already drawn is left out
+          const placed: [number, number, number, number][] = [];
+          for (const lb of [...O.labels].sort((a, b) => b.tiles - a.tiles)) {
             const [lx, ly] = toS(lb.x, lb.y);
             const fs = Math.max(10, Math.min(30, Math.sqrt(lb.tiles) * z * 0.22));
             if (fs < 10.5 && lb.tiles < 30) continue;
             g.font = `600 ${fs}px 'Palatino Linotype', Palatino, 'Book Antiqua', Georgia, serif`;
             g.textAlign = 'center';
-            const text = lb.name.toUpperCase().split('').join(' ');
-            g.lineWidth = 3; g.strokeStyle = 'rgba(0,0,0,0.35)'; g.strokeText(text, lx, ly - fs * 0.9);
-            g.fillStyle = 'rgba(255,248,230,0.62)'; g.fillText(text, lx, ly - fs * 0.9);
+            const text = lb.name.toUpperCase().split('').join(' ');
+            const tw = g.measureText(text).width / 2 + 6, ty = ly - fs * 0.9;
+            const box: [number, number, number, number] = [lx - tw, ty - fs, lx + tw, ty + fs * 0.35];
+            if (placed.some((b) => box[0] < b[2] && box[2] > b[0] && box[1] < b[3] && box[3] > b[1])) continue;
+            placed.push(box);
+            g.lineWidth = 3; g.strokeStyle = 'rgba(0,0,0,0.35)'; g.strokeText(text, lx, ty);
+            g.fillStyle = 'rgba(255,248,230,0.62)'; g.fillText(text, lx, ty);
           }
         }
       }

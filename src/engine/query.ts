@@ -84,7 +84,7 @@ export function frame(sim: Simulation, sinceEvent: number): Frame {
   return {
     tick: w.tick,
     date: dateLabel(w.tick),
-    pop: w.persons.size,
+    pop: [...w.persons.values()].reduce((a, x) => a + repN(x), 0),
     stats: w.stats.length ? w.stats[w.stats.length - 1] : null,
     settlements,
     polities,

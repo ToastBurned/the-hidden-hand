@@ -1,5 +1,5 @@
 import type { Selection } from '../App';
-import { useQuery, fmtNum, fmtPct } from '../hooks';
+import { useQuery, fmtNum, fmtCount, fmtPct } from '../hooks';
 import type {
   settlementDetail, polityDetail, personDetail, eventDetail, tileDetail, cultureDetail, religionDetail, warSummary,
 } from '../../engine/query';
@@ -81,13 +81,13 @@ function SettlementPanel({ id, onOpen, x }: { id: number; onOpen: Open; x: Extra
       </button>}
       <h2>{d.name}</h2>
       <div className="sub">
-        {d.alive ? (d.nomadic ? 'Nomadic band' : d.pop > 500 ? 'Town' : d.pop > 120 ? 'Village' : 'Hamlet') : `Abandoned in ${yr(d.abandoned)}`}
+        {d.alive ? (d.nomadic ? 'Nomadic band' : d.pop > 3000 ? 'City' : d.pop > 500 ? 'Town' : d.pop > 120 ? 'Village' : 'Hamlet') : `Abandoned in ${yr(d.abandoned)}`}
         {' · '}founded {yr(d.founded)}
         {d.polity && <> · <Link to={{ kind: 'polity', id: d.polity.id }} onOpen={onOpen}>{d.polity.name}</Link>{d.polity.capital ? ' (capital)' : ''}</>}
       </div>
       <div className="stat-row">
-        <div><b>{d.pop}</b><span>people</span></div>
-        <div><b>{d.households}</b><span>households</span></div>
+        <div><b>{fmtCount(d.pop)}</b><span>people</span></div>
+        <div><b>{fmtCount(d.households)}</b><span>households</span></div>
         <div title="Food available relative to need"><b className={d.foodRatio < 0.85 ? 'bad' : ''}>{fmtPct(d.foodRatio)}</b><span>food</span></div>
         <div title="Probability-weighted unrest"><b className={d.unrest > 0.5 ? 'bad' : ''}>{fmtPct(d.unrest)}</b><span>unrest</span></div>
       </div>
@@ -178,7 +178,7 @@ function PolityPanel({ id, onOpen }: { id: number; onOpen: Open }) {
       <h2><i className="swatch" style={{ background: hueCss(d.hue) }} />{d.name}</h2>
       <div className="sub">{d.label} · {d.alive ? `since ${yr(d.founded)}` : `${yr(d.founded)}–${yr(d.ended)}`}</div>
       <div className="stat-row">
-        <div><b>{d.pop}</b><span>people</span></div>
+        <div><b>{fmtCount(d.pop)}</b><span>people</span></div>
         <div><b>{d.settlements.length}</b><span>settlements</span></div>
         <div><b>{fmtNum(d.treasury)}</b><span>treasury</span></div>
         <div title="Legitimacy of the ruler"><b className={d.legitimacy < 0.3 ? 'bad' : ''}>{fmtPct(d.legitimacy)}</b><span>legitimacy</span></div>
