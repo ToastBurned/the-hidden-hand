@@ -2,16 +2,17 @@
   "name": "noosphere",
   "version": "0.1.0",
   "private": true,
-  "description": "The Noosphere: an autonomous, agent-based civilisation simulation with experiment tooling",
+  "description": "An autonomous civilisation simulation with built-in experiment tooling.",
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc --noEmit && vite build",
+    "build": "tsc --noEmit && vite build && node -e \"require('fs').mkdirSync('app',{recursive:true});require('fs').copyFileSync('dist/index.html','app/Noosphere.html')\"",
     "start": "node launcher/serve.mjs",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "sim": "tsx tools/cli.ts",
-    "validate": "tsx tools/validate.ts"
+    "validate": "tsx tools/validate.ts",
+    "experiment": "tsx tools/experiment.ts"
   },
   "devDependencies": {
     "@types/node": "22.10.2",
@@ -21,6 +22,7 @@
     "tsx": "4.19.2",
     "typescript": "5.6.3",
     "vite": "6.0.3",
+    "vite-plugin-singlefile": "2.1.0",
     "vitest": "2.1.8"
   },
   "dependencies": {

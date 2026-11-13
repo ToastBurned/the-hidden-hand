@@ -127,7 +127,7 @@ export function ecologyMonth(c: Ctx, field: ClimateField): void {
     const capF = t.forestCap[i] * (1 - fl) * (1 - 0.5 * t.burned[i]);
     if (capF > 0) {
       const f = t.forest[i];
-      t.forest[i] = Math.max(0, f + rF * f * (1 - f / capF) + 0.0004 * capF);
+      t.forest[i] = Math.min(Math.max(f, capF), Math.max(0, f + rF * f * (1 - f / capF) + 0.0004 * capF));
       if (t.forest[i] > capF) t.forest[i] -= (t.forest[i] - capF) * 0.1;
     } else t.forest[i] *= 0.95;
     // game depends on habitat

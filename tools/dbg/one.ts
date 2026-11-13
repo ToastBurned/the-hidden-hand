@@ -1,0 +1,12 @@
+import { Simulation } from '../../src/engine/sim';
+import { DEATH_NAMES } from '../../src/engine/constants';
+const seed = Number(process.argv[2]), years = Number(process.argv[3] ?? 250);
+const sim = Simulation.create({ seed });
+const t0 = performance.now();
+const tot: Record<string, number> = {};
+const types: Record<string, number> = {};
+sim.runYears(years, (s) => { const st = s.w.stats[s.w.stats.length - 1]; for (const [k, v] of Object.entries(st.deathsBy)) tot[DEATH_NAMES[+k]] = (tot[DEATH_NAMES[+k]] ?? 0) + v; });
+for (const e of sim.w.events) types[e.type] = (types[e.type] ?? 0) + 1;
+const st = sim.w.stats[sim.w.stats.length - 1] ?? ({} as any);
+const pops = sim.w.stats.filter((_, i) => i % 50 === 49).map((s) => s.pop).join(',');
+console.log(JSON.stringify({ seed, secs: ((performance.now() - t0) / 1000).toFixed(0), pops, pop: st.pop, sett: st.settlements, pol: st.polities, techs: st.techs, gini: st.gini?.toFixed(2), largest: st.largest, cultures: st.cultures, religions: st.religions, deaths: tot, ev: { war: types.war_declared, conq: types.conquest, rev: types.revolution, seces: types.secession, famine: types.famine, epi: types.epidemic, rel: types.religion_founded, eth: types.ethnogenesis, lost: types.tech_lost, aband: types.abandoned } }));

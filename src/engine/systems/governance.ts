@@ -98,7 +98,7 @@ export function succession(c: Ctx, pol: Polity, causeEvent = -1): void {
   pol.leaderSince = w.tick;
   if (!hereditary) pol.dynasty = leader.family;
   leader.notable = true;
-  leader.title = titleFor(pol);
+  leader.title = titleFor(pol, leader.sex);
   pol.leaders.push({ id: leader.id, from: w.tick, to: -1, name: `${leader.name} ${leader.family}` });
   remember(leader, w.tick, M_OFFICE, 0.8, pol.id);
   pol.legitimacy = clamp(pol.legitimacy * 0.6 + (hereditary ? 0.3 : 0.15) + (pol.gov.consent > 0.5 ? 0.1 : 0));
@@ -128,7 +128,7 @@ export function succession(c: Ctx, pol: Polity, causeEvent = -1): void {
           for (const id of h.members) { const m = w.persons.get(id); if (m) m.sid = seat.id; }
         }
         rebel.leader = rival.id;
-        rival.title = titleFor(rebel);
+        rival.title = titleFor(rebel, rival.sex);
         rival.notable = true;
         rebel.leaders.push({ id: rival.id, from: w.tick, to: -1, name: `${rival.name} ${rival.family}` });
         logEvent(w, {
@@ -142,7 +142,14 @@ export function succession(c: Ctx, pol: Polity, causeEvent = -1): void {
   }
 }
 
-export function titleFor(pol: Polity): string {
+const FEMININE: Record<string, string> = {
+  'High Priest-King': 'High Priestess-Queen', 'High Priest': 'High Priestess', Emperor: 'Empress', King: 'Queen', Lord: 'Lady', Headman: 'Headwoman',
+};
+export function titleFor(pol: Polity, sex: 0 | 1 = 1): string {
+  const t = baseTitle(pol);
+  return sex === 0 ? FEMININE[t] ?? t : t;
+}
+function baseTitle(pol: Polity): string {
   const g = pol.gov;
   const size = pol.settlements.length;
   if (g.sacral > 0.55 && g.sacral >= g.heredity) return size > 3 ? 'High Priest-King' : 'High Priest';
@@ -312,6 +319,8 @@ export function politicsYear(c: Ctx, pol: Polity): void {
     s.quota[O_SCHOLAR] = s.pop >= 60 ? Math.min(Math.round(s.pop * 0.03), Math.round((s.pop / 150) * (1 + Math.max(0, sMean[V_INNOV])) + (budget * g.spendLearning * share) / wage)) : 0;
     s.quota[O_BUILDER] = s.project >= 0 ? Math.max(1, Math.min(Math.round(s.pop / 12), Math.round(2 + (budget * g.spendBuild * share) / wage))) : 0;
   }
+  pol.lastRevenue = pol.revenue;
+  pol.lastSpending = pol.spending;
   pol.revenue = 0;
   pol.spending = 0;
 
@@ -324,7 +333,7 @@ export function politicsYear(c: Ctx, pol: Polity): void {
     pol.name = newName;
     if (old !== newName) logEvent(w, { type: 'rename', imp: 2, text: `${old} became the ${newName} (${pol.govLabel.toLowerCase()}).`, polities: [pol.id] });
   }
-  if (L) L.title = titleFor(pol);
+  if (L) L.title = titleFor(pol, L.sex);
   pol.warWeariness = Math.max(0, pol.warWeariness * 0.8 - 0.02);
   pol.history.push({ y: Math.floor(w.tick / 12), pop, settlements: pol.settlements.length, treasury: pol.treasury, army: people.filter((p) => p.occ === O_SOLDIER).length });
   if (pol.history.length > 600) pol.history.shift();
@@ -494,7 +503,7 @@ export function revolution(c: Ctx, pol: Polity, s: Settlement): void {
   pol.leader = leader.id;
   pol.dynasty = leader.family;
   leader.notable = true;
-  leader.title = titleFor(pol);
+  leader.title = titleFor(pol, leader.sex);
   pol.leaders.push({ id: leader.id, from: w.tick, to: -1, name: `${leader.name} ${leader.family}` });
   pol.legitimacy = 0.5;
   pol.ctx.revolution = ev;

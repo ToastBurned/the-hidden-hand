@@ -17,6 +17,13 @@ import type { DiploRel, Polity, Settlement, War } from '../types';
 import { militaryStrength, polityPeople, polityPop, succession } from './governance';
 import { moveHousehold, newRel } from './settlements';
 
+const TITLE_WORDS = new Set(['empire', 'league', 'holy', 'republic', 'of', 'kingdom', 'the', 'confederation', 'realm', 'chiefdom', 'state', 'free', 'city', 'tribe', 'band', 'theocracy', 'commonwealth', 'union', 'clans', 'lands', 'dominion']);
+/** The distinctive part of a polity name ("Ki Empire" → "Ki", "Republic of Qou" → "Qou"). */
+function coreName(n: string): string {
+  const core = n.split(' ').filter((w) => !TITLE_WORDS.has(w.toLowerCase()));
+  return core.length ? core.join(' ') : n;
+}
+
 function rel(a: Polity, b: Polity): DiploRel {
   let r = a.relations[b.id];
   if (!r) { r = newRel(0); a.relations[b.id] = r; }
@@ -212,7 +219,7 @@ export function declareWar(c: Ctx, a: Polity, b: Polity, target: Settlement, goa
   const w = c.w;
   const id = w.nextId++;
   const war: War = {
-    id, name: `${goal === 'holy' ? 'Holy War' : goal === 'raid' ? 'Raids' : 'War'} of ${a.name.split(' ').pop()} and ${b.name.split(' ').pop()}`,
+    id, name: `${goal === 'holy' ? 'Holy War' : goal === 'raid' ? 'Raids' : 'War'} of ${coreName(a.name)} and ${coreName(b.name)}`,
     started: w.tick, ended: -1, attackers: [a.id], defenders: [b.id], goal, target: target.id,
     casusBelli: reasons.length ? reasons.join('; ') : 'the ambition of its ruler', causes, battles: 0, casualties: [0, 0], score: 0, outcome: '', active: true,
   };
