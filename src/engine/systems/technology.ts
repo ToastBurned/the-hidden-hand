@@ -137,6 +137,8 @@ function coreAllowed(T: TechDef, env: EnvProfile): boolean {
 export const TECH_TUNING = {
   /** Research effort on generated techs, relative to the effort on the original milestones. */
   genShare: 1,
+  /** Exponent on research effort for the generated tree (1 = linear in population). */
+  genExp: 0.72,
   /** Strength of cultural values (−1..1) on relevance: weight × exp(k·value). */
   culture: 1.2,
   /** Path dependence: each known tech in the domain adds this much, up to `momentumMax` techs. */
@@ -146,7 +148,9 @@ export const TECH_TUNING = {
   exclusive: 0.15,
   /** Research throughput rises with the number of open problems (many people tinkering in parallel). */
   breadthRef: 8,
-  breadthMax: 3,
+  breadthMax: 2,
+  /** Generated techs whose relevance to a settlement is below this are not adopted from neighbours. */
+  adoptMin: 0.4,
 };
 
 interface SettlementView {
@@ -175,14 +179,14 @@ function genAllowed(T: TechDef, env: EnvProfile): boolean {
   return true;
 }
 
-function genRelevance(T: TechDef, v: SettlementView): number {
+function genRelevance(T: TechDef, v: SettlementView, momentum = true): number {
   const g = T.gen!;
   let w = 1;
   for (const e of g.like) w *= 0.35 + 2.2 * v.env.share[ENV_INDEX[e]];
   for (const e of g.need) w *= 0.6 + v.env.share[ENV_INDEX[e]];
   for (const [axis, sign] of g.culture) w *= Math.exp(TECH_TUNING.culture * sign * v.mean[axis]);
   for (const n of g.drivers) w *= 0.6 + 2 * v.needs[NEEDS.indexOf(n)];
-  w *= 1 + TECH_TUNING.momentum * Math.min(TECH_TUNING.momentumMax, v.domainKnown[DOMAIN_INDEX[T.domain]]);
+  if (momentum) w *= 1 + TECH_TUNING.momentum * Math.min(TECH_TUNING.momentumMax, v.domainKnown[DOMAIN_INDEX[T.domain]]);
   if (g.group && v.groups.has(g.group)) w *= TECH_TUNING.exclusive;
   return w;
 }
@@ -240,7 +244,8 @@ export function technologyYear(c: Ctx, s: Settlement): void {
   let coreTotal = 0, genTotal = 0, genN = 0;
   for (const cd of cands) if (cd.id < NCORE) coreTotal += cd.wgt; else { genTotal += cd.wgt; genN++; }
   const breadth = Math.min(TECH_TUNING.breadthMax, Math.max(1, Math.sqrt(genN / TECH_TUNING.breadthRef)));
-  const genPts = pts * TECH_TUNING.genShare * breadth;
+  // effort duplicates in large populations: returns to more researchers diminish
+  const genPts = TECH_TUNING.genShare * breadth * Math.pow(pts, TECH_TUNING.genExp);
   for (const cd of cands) {
     const share = cd.id < NCORE ? (pts * cd.wgt) / Math.max(1, coreTotal) : (genPts * cd.wgt) / Math.max(1, genTotal);
     // rounded to keep saved worlds compact (deterministic either way)
@@ -351,7 +356,7 @@ export function diffusionYear(c: Ctx): void {
     let heads = 0;
     for (const p of people) { open += p.values[V_INNOV] * p.n; heads += p.n; }
     open = heads ? open / heads : 0;
-    let env: EnvProfile | null = null;
+    let v: SettlementView | null = null;
     for (const key in s.contacts) {
       const o = w.settlements.get(+key);
       if (!o || !o.alive) continue;
@@ -359,9 +364,19 @@ export function diffusionYear(c: Ctx): void {
       const p = Math.min(0.6, 0.12 * k * (1 + open));
       for (let t = 0; t < NTECH; t++) {
         if (s.techs[t] || !o.techs[t]) continue;
-        env ??= envProfile(c, s);
-        if (!canLearn(s, TECHS[t], env)) continue;
-        if (c.rng.chance(p)) learned.push({ s, t, from: o });
+        v ??= view(c, s, meanValues(people));
+        const T = TECHS[t];
+        if (!canLearn(s, T, v.env)) continue;
+        // people adopt what fits their land, values and existing practice; ill-fitting
+        // techniques (and rivals to ones already held) spread far less readily
+        let fit = 1;
+        if (T.gen) {
+          fit = genRelevance(T, v, false);
+          // a technique that does not suit them is known of but not taken up
+          if (fit < TECH_TUNING.adoptMin) continue;
+          fit = Math.min(1, fit);
+        }
+        if (c.rng.chance(p * fit)) learned.push({ s, t, from: o });
       }
     }
   }

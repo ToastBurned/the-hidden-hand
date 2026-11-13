@@ -214,6 +214,14 @@ for (const t of TECHS) for (const p of t.prereq) DEPENDENTS[p].push(t.id);
 }
 
 const NCH = CHANNEL_KEYS.length;
+/**
+ * Global strength of generated tech effects. Authored points are relative weights; this
+ * keeps pre-industrial gains modest (so populations stay near the v1 calibration) while
+ * hundreds of industrial techs still approach each channel's cap.
+ */
+export const GEN_EFFECT_SCALE = 0.5;
+/** Mortality, disease, fertility and schooling are not scaled down: they drive the demographic transition. */
+const DEMOGRAPHIC_CHANNELS = new Set(['im', 'am', 'di', 'fe', 'sc']);
 const CH = CHANNEL_KEYS.map((k) => CHANNELS[k]);
 
 export function computeEffects(known: ArrayLike<number>): TechEffects {
@@ -231,7 +239,7 @@ export function computeEffects(known: ArrayLike<number>): TechEffects {
   for (let k = 0; k < NCH; k++) {
     if (!pts[k]) continue;
     const c = CH[k];
-    const x = pts[k] * c.unit;
+    const x = pts[k] * c.unit * (DEMOGRAPHIC_CHANNELS.has(CHANNEL_KEYS[k]) ? 1 : GEN_EFFECT_SCALE);
     if (c.mode === 'up') e[c.field] *= 1 + c.cap * (1 - Math.exp(-x / c.cap));
     else if (c.mode === 'down') e[c.field] *= c.cap + (1 - c.cap) * Math.exp(-x / (1 - c.cap));
     else e[c.field] += c.cap * (1 - Math.exp(-x / c.cap));

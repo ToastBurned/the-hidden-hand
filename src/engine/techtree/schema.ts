@@ -25,7 +25,7 @@
 import type { TechEffects } from '../techs';
 
 export const ERAS = ['Foraging', 'Neolithic', 'Bronze Age', 'Iron Age', 'Medieval', 'Renaissance', 'Enlightenment', 'Industrial', 'Electrical'];
-export const ERA_COST = [40, 75, 130, 210, 330, 500, 760, 1100, 1600];
+export const ERA_COST = [40, 75, 140, 260, 480, 900, 1700, 3200, 6000];
 export const ERA_MINPOP = [0, 0, 60, 140, 220, 320, 420, 550, 700];
 export const ERA_KEEPPOP = [6, 12, 30, 60, 100, 150, 220, 320, 450];
 
