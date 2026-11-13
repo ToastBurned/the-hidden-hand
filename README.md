@@ -33,23 +33,35 @@ Press **Space** to start. The top bar shows the date, controls and headline numb
 
 | Tab | What it shows |
 | --- | --- |
-| **World** | The map. Choose a layer (polities, cultures, religions, terrain, forest, wild game, soil, farmland, rainfall, temperature). Drag to pan, scroll to zoom, click a settlement or patch of land to inspect it. Recent major events appear in the corner. |
-| **Chronicle** | Every recorded event, searchable and filterable by type, importance and date. Each has a *why* written from the state of the world at the time, and links to the events that caused it. |
+| **Story** | The front page. The current chapter of history, a plain-language summary of the state of the world, headlines, the realms with their rulers' portraits, the figures of the age, the chapters so far and the people you follow. |
+| **World** | The living map. Forests thin and fields spread as people use the land, snow comes and goes with the seasons, caravans move along trade routes, armies march and fresh events ripple outward. Zoom in until settlements become towns; double-click one to open its streets. The strip under the map is the whole history: drag along it to see the world as recorded in any past year.  Choose a layer (polities, cultures, religions, terrain, forest, wild game, soil, farmland, rainfall, temperature). Drag to pan, scroll to zoom, click a settlement or patch of land to inspect it. Recent major events appear in the corner. |
+| **Chronicle** | History divided into named chapters ("The Rise of Ki Empire", "The Plague Years"), each with a summary, then every recorded event, searchable and filterable by type, importance and date. Each has a *why* written from the state of the world at the time, and links to the events that caused it. |
 | **Statistics** | Time series of population, births and deaths, fertility, food, hunger, inequality, wealth, trade, money, technology, literacy, unrest, wars, forests, game, soils, climate, occupations and causes of death. Export as CSV. |
 | **Societies** | Timelines of polities, descent trees of cultures and faiths, technology discovery and diffusion, wars and epidemics. |
-| **People** | Search the living and the notable dead. |
+| **People** | Search the living and the notable dead, each with a portrait. |
 | **Experiments** | Design and run batches of worlds in the background, then analyse them. |
 
 The **inspector** on the right links everything together: a settlement → its polity, residents, prices, buildings,
 knowledge and history; a person → their family, character, values, memories, friends, rivals and deeds; an event →
 its causes (as a tree) and its consequences. **Back** (or Esc) retraces your steps.
 
+**Portraits, towns and family trees.** Every person has a portrait that is stable for life and ages with them. It is
+drawn from the simulation: sex, age, culture (skin tone follows the climate of a culture's homeland), occupation, rank,
+health and the technology of their home. A person's page opens their **family tree** and lets you **follow** them or
+their dynasty. Every settlement has a **town view** drawn from its population, buildings, era, coast and river,
+season, sieges and war damage; a slider replays its recorded growth. Street layouts and facial features are generated
+from a fixed seed: they are decoration, not simulated detail.
+
+**Alerts.** Major events pop up as cards. The world pauses itself for turning points: a new chapter, the first event of
+its kind, or news of someone you follow. The bell in the top bar changes this. A short **guided tour** runs on first
+launch and can be replayed from Help.
+
 **Intervene** applies a drought, plague, volcanic winter, climate shift, technology grant, bountiful years, migration
 wave or cultural shock to the running world. **Save** (Ctrl+S) and **Library** keep worlds in the browser and export
 or import them as files. A save resumes exactly: the same future unfolds as if you had never saved.
 **New world** exposes every parameter of geography, environment, human nature and culture.
 
-Keyboard: Space play/pause · `.` one month · `>` one year · `+`/`-` speed · `1`–`6` tabs · Ctrl+S save · Esc back.
+Keyboard: Space play/pause · `.` one month · `>` one year · `+`/`-` speed · `1`–`7` tabs · Ctrl+S save · Esc back.
 
 ## Experiments
 

@@ -33,5 +33,7 @@ export const fmtNum = (v: number, d = 1) => {
   if (a >= 10) return v.toFixed(d);
   return v.toFixed(Math.max(d, 2));
 };
+/** Whole-number counts (people, places): never shows a decimal point below 10,000. */
+export const fmtCount = (v: number) => (!isFinite(v) ? '—' : Math.abs(v) >= 1e4 ? fmtNum(v) : Math.round(v).toLocaleString('en-US'));
 export const fmtPct = (v: number) => (isFinite(v) ? `${(v * 100).toFixed(0)}%` : '—');
 export const yearOf = (t: number) => Math.floor(t / 12);
