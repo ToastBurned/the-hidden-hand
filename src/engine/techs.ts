@@ -5,6 +5,8 @@
  * so societies follow different trajectories and can also *lose* knowledge.
  */
 import { V_INNOV, V_MILIT, V_PIETY } from './constants';
+import { CHANNELS, CHANNEL_KEYS, ERA_COST, ERA_KEEPPOP, ERA_MINPOP, type Domain, type GenTech } from './techtree/schema';
+import { GENERATED } from './techtree';
 
 export interface TechEffects {
   agriculture: number; // 0/1: farming possible
@@ -40,6 +42,8 @@ export interface TechEffects {
   luxury: number; // luxury productivity
   craft: number; // artisan productivity
   currency: number; // 0/1
+  fertility: number; // multiplier on desired family size (contraception, family planning); see transition.ts
+  schooling: number; // multiplier on how fast children gain education; see transition.ts
 }
 
 export const BASE_EFFECTS: TechEffects = {
@@ -47,6 +51,7 @@ export const BASE_EFFECTS: TechEffects = {
   seafaring: 1, woodYield: 1, mineYield: 1, copper: 0, iron: 0, toolQ: 1, weapon: 1, cavalry: 1, spoil: 1,
   buildCost: 1, masonry: 0, irrigation: 0, aqueduct: 0, transport: 1, tradeEff: 0.5, infantMort: 1, adultMort: 1,
   disease: 1, research: 1, retention: 1, admin: 1.5, lawOrder: 0, luxury: 1, craft: 1, currency: 0,
+  fertility: 1, schooling: 1,
 };
 
 export interface TechDef {
@@ -65,11 +70,30 @@ export interface TechDef {
   /** Cultural affinity: value axis that speeds discovery. */
   culture?: number;
   apply: (e: TechEffects) => void;
+  /** Era 0–8 (see techtree/schema ERAS) and domain, for display and path statistics. */
+  era: number;
+  domain: Domain;
+  /** Milestone: logged prominently when discovered or spread. */
+  big: boolean;
+  /** Generated techs carry their authoring metadata (environment, culture, needs, effects). */
+  gen?: GenTech;
 }
 
-const T = (d: Omit<TechDef, 'id'>): Omit<TechDef, 'id'> => d;
+type CoreDef = Omit<TechDef, 'id' | 'era' | 'domain' | 'big'>;
+const T = (d: CoreDef): CoreDef => d;
 
-const LIST: Omit<TechDef, 'id'>[] = [
+/** Era and domain of the 30 original techs (ids 0–29, never renumbered). */
+const CORE_META: Record<string, [number, Domain]> = {
+  agriculture: [1, 'subsistence'], husbandry: [1, 'subsistence'], pottery: [1, 'materials'], weaving: [1, 'craft'], boats: [0, 'transport'],
+  sailing: [2, 'transport'], masonry: [2, 'building'], irrigation: [2, 'subsistence'], plough: [2, 'subsistence'], copper: [2, 'materials'],
+  bronze: [2, 'materials'], iron: [3, 'materials'], wheel: [2, 'transport'], writing: [2, 'knowledge'], currency: [3, 'society'],
+  calendar: [2, 'knowledge'], herbalism: [0, 'health'], mathematics: [3, 'knowledge'], law: [2, 'society'], philosophy: [3, 'knowledge'],
+  rotation: [4, 'subsistence'], engineering: [3, 'building'], sanitation: [3, 'health'], riding: [2, 'transport'], steel: [4, 'military'],
+  navigation: [4, 'transport'], banking: [4, 'society'], mills: [4, 'energy'], medicine: [4, 'health'], printing: [5, 'knowledge'],
+};
+const CORE_BIG = new Set(['agriculture', 'writing', 'iron', 'sailing', 'currency', 'philosophy', 'printing', 'bronze']);
+
+const LIST: CoreDef[] = [
   T({ key: 'agriculture', name: 'Agriculture', desc: 'Cultivation of staple crops. Allows farming cleared land.', cost: 70, prereq: [], needs: 'farmland', keepPop: 8,
     apply: (e) => { e.agriculture = 1; } }),
   T({ key: 'husbandry', name: 'Animal husbandry', desc: 'Domesticated herds add food and traction, but bring new diseases.', cost: 55, prereq: [], keepPop: 6,
@@ -132,12 +156,86 @@ const LIST: Omit<TechDef, 'id'>[] = [
     apply: (e) => { e.research *= 1.5; e.retention *= 2; } }),
 ];
 
-export const TECHS: TechDef[] = LIST.map((t, i) => ({ ...t, id: i }));
+/** Number of original hand-tuned techs; their ids and effects are unchanged from version 1. */
+export const NCORE = LIST.length;
+
+function hash(str: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < str.length; i++) h = Math.imul(h ^ str.charCodeAt(i), 16777619);
+  return ((h >>> 0) % 10000) / 10000;
+}
+
+const CORE: TechDef[] = LIST.map((t, i) => ({ ...t, id: i, era: CORE_META[t.key][0], domain: CORE_META[t.key][1], big: CORE_BIG.has(t.key) }));
+const KEY_TO_ID: Record<string, number> = Object.fromEntries(CORE.map((t) => [t.key, t.id]));
+GENERATED.forEach((g, i) => {
+  if (KEY_TO_ID[g.key] !== undefined) throw new Error(`duplicate tech key ${g.key}`);
+  KEY_TO_ID[g.key] = NCORE + i;
+});
+const noop = () => {};
+const GEN_DEFS: TechDef[] = GENERATED.map((g, i) => ({
+  id: NCORE + i,
+  key: g.key,
+  name: g.name,
+  desc: g.desc,
+  // deterministic ±20% spread so techs of one era do not all ripen together
+  cost: Math.round(ERA_COST[g.era] * g.costMult * (0.8 + 0.4 * hash(g.key))),
+  prereq: g.prereqKeys.map((k) => {
+    const id = KEY_TO_ID[k];
+    if (id === undefined) throw new Error(`tech ${g.key}: unknown prerequisite ${k}`);
+    return id;
+  }),
+  minPop: g.minPop >= 0 ? g.minPop : ERA_MINPOP[g.era],
+  keepPop: ERA_KEEPPOP[g.era],
+  apply: noop,
+  era: g.era,
+  domain: g.domain,
+  big: g.big,
+  gen: g,
+}));
+
+export const TECHS: TechDef[] = [...CORE, ...GEN_DEFS];
 export const NTECH = TECHS.length;
-export const TECH_BY_KEY: Record<string, number> = Object.fromEntries(TECHS.map((t) => [t.key, t.id]));
+export const TECH_BY_KEY: Record<string, number> = KEY_TO_ID;
+/** For each tech, the techs that list it as a prerequisite. */
+export const DEPENDENTS: number[][] = TECHS.map(() => []);
+for (const t of TECHS) for (const p of t.prereq) DEPENDENTS[p].push(t.id);
+
+// The tree must be acyclic, or knowledge could never be acquired.
+{
+  const state = new Uint8Array(NTECH);
+  const visit = (id: number, path: number[]) => {
+    if (state[id] === 2) return;
+    if (state[id] === 1) throw new Error(`tech prerequisite cycle: ${[...path, id].map((x) => TECHS[x].key).join(' -> ')}`);
+    state[id] = 1;
+    for (const p of TECHS[id].prereq) visit(p, [...path, id]);
+    state[id] = 2;
+  };
+  for (let i = 0; i < NTECH; i++) visit(i, []);
+}
+
+const NCH = CHANNEL_KEYS.length;
+const CH = CHANNEL_KEYS.map((k) => CHANNELS[k]);
 
 export function computeEffects(known: ArrayLike<number>): TechEffects {
   const e: TechEffects = { ...BASE_EFFECTS };
-  for (let i = 0; i < NTECH; i++) if (known[i]) TECHS[i].apply(e);
+  for (let i = 0; i < NCORE; i++) if (known[i]) TECHS[i].apply(e);
+  // generated techs: points per channel, turned into bounded effects
+  const pts = new Float64Array(NCH);
+  const n = Math.min(NTECH, known.length);
+  for (let i = NCORE; i < n; i++) {
+    if (!known[i]) continue;
+    const g = TECHS[i].gen!;
+    for (const [ch, v] of g.points) pts[ch] += v;
+    for (const f of g.flags) e[f] = 1;
+  }
+  for (let k = 0; k < NCH; k++) {
+    if (!pts[k]) continue;
+    const c = CH[k];
+    const x = pts[k] * c.unit;
+    if (c.mode === 'up') e[c.field] *= 1 + c.cap * (1 - Math.exp(-x / c.cap));
+    else if (c.mode === 'down') e[c.field] *= c.cap + (1 - c.cap) * Math.exp(-x / (1 - c.cap));
+    else e[c.field] += c.cap * (1 - Math.exp(-x / c.cap));
+  }
+  e.tradeEff = Math.min(0.97, e.tradeEff);
   return e;
 }

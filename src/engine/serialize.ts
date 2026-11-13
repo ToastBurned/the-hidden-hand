@@ -3,6 +3,7 @@
  * arrays and typed arrays become base64 strings. Deterministic: saving and loading a
  * world and continuing produces exactly the same future as never saving.
  */
+import { NTECH } from './techs';
 import type { World } from './types';
 
 const TA_TYPES: Record<string, { new (buf: ArrayBuffer): ArrayBufferView }> = {
@@ -65,10 +66,23 @@ export function deserializeWorld(s: string): World {
   if (w.population === undefined) w.population = pop;
   if (w.config.agentBudget === undefined) w.config.agentBudget = 6000;
   if (w.config.density === undefined) w.config.density = 1;
+  migrateTechs(w);
   return w;
 }
 
 /** Deep clone via serialisation (used for branching experiments). */
 export function cloneWorld(w: World): World {
   return deserializeWorld(serializeWorld(w));
+}
+
+/**
+ * Worlds saved with a smaller tech tree (v1 had 30 techs) get their per-settlement tech
+ * arrays padded. Existing tech ids never change, so what a settlement knew is preserved.
+ */
+function migrateTechs(w: World): void {
+  for (const s of w.settlements.values()) {
+    for (const arr of [s.techs, s.techProgress, s.techLowPopYears]) {
+      if (Array.isArray(arr)) while (arr.length < NTECH) arr.push(0);
+    }
+  }
 }
