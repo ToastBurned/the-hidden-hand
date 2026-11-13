@@ -1,7 +1,7 @@
 import { Simulation } from '../../src/engine/sim';
 import { isProtected, householdSize } from '../../src/engine/entities';
-const sim = Simulation.create({ seed: 1, agentBudget: 1500 } as any);
-sim.runYears(450);
+const sim = Simulation.create({ seed: 2 } as any);
+sim.runYears(240);
 const w = sim.w;
 let prot = 0, notable = 0, titled = 0, deeds = 0, n1 = 0, married = 0, splitCouple = 0;
 const hist: Record<number, number> = {};

@@ -152,12 +152,26 @@ export function diseaseEmergenceYear(c: Ctx): void {
   const w = c.w;
   const k = w.config.diseaseEmergence;
   if (k <= 0) return;
+  // New diseases are rare events for the world as a whole. Their frequency rises with total
+  // population, but far less than proportionally; where one appears depends on crowding,
+  // size and contact with herd animals.
+  const cands: Settlement[] = [];
+  const wts: number[] = [];
+  let total = 0;
   for (const s of w.settlements.values()) {
     if (!s.alive || s.pop < 60) continue;
     const fx = c.fx(s.id);
     const crowd = s.nomadic ? 0.5 : Math.min(2, s.pop / Math.max(5, s.buildings[BLD_HOUSING] * 5));
-    const p = 0.004 * k * (s.pop / 400) ** 1.1 * (fx.herding ? 2 : 1) * crowd;
-    if (c.rng.chance(p)) {
+    const wt = (s.pop / 400) ** 1.1 * (fx.herding ? 2 : 1) * crowd;
+    cands.push(s); wts.push(wt); total += wt;
+  }
+  if (!cands.length || total <= 0) return;
+  const rate = Math.min(0.35, 0.004 * k * Math.min(total, 3 * Math.max(1, total) ** 0.35));
+  if (c.rng.chance(rate)) {
+    let r = c.rng.next() * total;
+    let s = cands[0];
+    for (let i = 0; i < cands.length; i++) { r -= wts[i]; if (r <= 0) { s = cands[i]; break; } }
+    {
       const d = newDisease(c, s, 1);
       seedInfection(c, s, d, 2 + c.rng.int(4));
       s.ctx.plagueFrom = undefined as unknown as number;
