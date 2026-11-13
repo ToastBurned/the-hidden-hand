@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { sim } from '../client';
 import { Modal } from '../components/Modal';
+import { desktop } from '../../platform/desktop';
 import { deleteSave, downloadText, getSave, listSaves, pickFile, putSave, type SaveMeta } from '../saves';
 
 export function SavesDialog({ onClose, onToast }: { onClose: () => void; onToast: (s: string) => void }) {
@@ -48,7 +49,8 @@ export function SavesDialog({ onClose, onToast }: { onClose: () => void; onToast
       <button className="primary" onClick={saveNow} disabled={busy}>Save current world</button>
     </>}>
       {err && <div className="error-bar">{err}</div>}
-      <p className="small muted">Saves are kept in this browser's storage on your computer. Export to a file to back a world up, move it to another computer, or share it. A saved world resumes exactly: the same future unfolds as if it had never been saved.</p>
+      {desktop() ? <p className="small muted">Saves are files in a folder on your computer. <button className="link" onClick={() => desktop()?.openSavesFolder()}>Open saves folder</button> (File menu → Change Saves Folder to move it). World files you copy into that folder appear here. A saved world resumes exactly: the same future unfolds as if it had never been saved.</p> :
+      <p className="small muted">Saves are kept in this browser's storage on your computer. Export to a file to back a world up, move it to another computer, or share it. A saved world resumes exactly: the same future unfolds as if it had never been saved.</p>}
       {saves === null && <div className="muted">Loading…</div>}
       {saves && saves.length === 0 && <div className="empty muted">No saved worlds yet.</div>}
       {saves && saves.length > 0 && (

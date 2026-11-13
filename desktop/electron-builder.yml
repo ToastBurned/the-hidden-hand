@@ -1,0 +1,31 @@
+# Builds the Windows installer (NSIS) and a portable .exe into desktop/release/.
+appId: io.github.toastburned.noosphere
+productName: The Noosphere
+copyright: The Noosphere
+directories:
+  output: release
+  buildResources: build
+files:
+  - main.cjs
+  - preload.cjs
+  - storage.cjs
+  - app/index.html
+  - package.json
+asar: true
+win:
+  icon: build/icon.png
+  target:
+    - nsis
+    - portable
+nsis:
+  artifactName: "Noosphere-Setup-${version}.${ext}"
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: always
+  createStartMenuShortcut: true
+  shortcutName: The Noosphere
+  # Saved worlds live in Documents\Noosphere\Saves, not in the app folder, so uninstalling never deletes them.
+  deleteAppDataOnUninstall: false
+portable:
+  artifactName: "Noosphere-${version}-portable.exe"

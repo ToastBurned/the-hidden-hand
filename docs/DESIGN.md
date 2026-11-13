@@ -213,4 +213,5 @@ correlations between outcomes and each world's geography and early state.
 - **No naval warfare, credit, slavery, or detailed law.** These would be natural extensions; the module structure
   is designed for it (each system is a function of the world state, called from `sim.ts`).
 - **Browser storage**: saves live in the browser's storage for the page. Opening the app from a different folder or
-  browser shows a different library. Export important worlds to files.
+  browser shows a different library. Export important worlds to files. The desktop app (`desktop/`) removes this
+  limitation: there, saves are ordinary files in a folder on disk, behind the bridge in `src/platform/desktop.ts`.

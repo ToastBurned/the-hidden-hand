@@ -15,6 +15,10 @@ unzip it, and double-click **`app\Noosphere.html`**. It opens in your browser (E
 entirely on your computer, with no server and no internet connection needed. Your saved worlds are kept in the
 browser's storage on your machine.
 
+**Desktop app (optional).** For an installed program with a Start-menu shortcut, saves as real files in
+`Documents\Noosphere\Saves`, and no slow-down when the window is in the background, see
+[`desktop/README.md`](desktop/README.md).
+
 **Option 2: local server.** If your browser blocks pages opened from disk, install [Node.js](https://nodejs.org)
 (version 18 or newer) and double-click **`Noosphere.bat`**. It serves the app at `http://localhost:5179` and opens it.
 

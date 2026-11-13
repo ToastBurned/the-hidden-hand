@@ -1,0 +1,22 @@
+{
+  "name": "noosphere-desktop",
+  "productName": "The Noosphere",
+  "version": "0.1.0",
+  "private": true,
+  "description": "The Noosphere civilisation simulation as a Windows desktop app.",
+  "author": "The Noosphere",
+  "repository": "github:ToastBurned/noosphere",
+  "main": "main.cjs",
+  "scripts": {
+    "prepare-app": "node scripts/prepare-app.cjs",
+    "start": "npm run prepare-app && electron .",
+    "dist": "npm run prepare-app && electron-builder --win nsis portable --x64",
+    "dist:dir": "npm run prepare-app && electron-builder --win dir --x64",
+    "test": "node scripts/smoke-test.cjs"
+  },
+  "devDependencies": {
+    "electron": "45.1.0",
+    "electron-builder": "26.18.0",
+    "playwright-core": "1.56.1"
+  }
+}
