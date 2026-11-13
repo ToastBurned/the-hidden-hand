@@ -9,7 +9,7 @@ import {
   V_MILIT, V_PIETY, V_HIER,
 } from '../constants';
 import { ageOf, clamp, type Ctx } from '../context';
-import { createCulture, createReligion, meanValues, remember } from '../entities';
+import { createCulture, createReligion, headcount, individuate, meanValues, partOf, remember } from '../entities';
 import { logEvent } from '../history';
 import type { Person, Settlement } from '../types';
 
@@ -27,19 +27,20 @@ export function cultureYear(c: Ctx, s: Settlement): void {
   const mean = meanValues(people);
   let priests = 0;
   let scholars = 0;
+  const heads = headcount(people);
   for (const p of people) {
-    if (p.occ === O_PRIEST) priests++;
-    if (p.occ === O_SCHOLAR) scholars++;
+    if (p.occ === O_PRIEST) priests += p.n;
+    if (p.occ === O_SCHOLAR) scholars += p.n;
   }
-  const priestShare = priests / people.length;
-  const scholarShare = scholars / people.length;
+  const priestShare = priests / heads;
+  const scholarShare = scholars / heads;
   const recentProsperity = s.foodRatio > 0.97 && s.prosperity > 0.6;
   for (const p of people) {
     const age = ageOf(w, p);
     const plastic = age < 25 ? 1 : age < 45 ? 0.5 : 0.25;
     for (let k = 0; k < NV; k++) {
       let dv = (mean[k] - p.values[k]) * 0.05 * conf * plastic;
-      dv += c.rng.normal(0, 0.025) * plastic;
+      dv += (c.rng.normal(0, 0.025) * plastic) / Math.sqrt(p.n);
       p.values[k] += dv;
     }
     // friends pull values together
@@ -63,22 +64,23 @@ export function cultureYear(c: Ctx, s: Settlement): void {
       }
     }
     if (recentProsperity) { p.values[V_INDIV] += 0.004; p.values[V_INNOV] += 0.003; }
-    p.values[V_PIETY] += priestShare * 0.5 * plastic;
+    p.values[V_PIETY] += priestShare * 0.3 * plastic;
     p.values[V_INNOV] += scholarShare * 0.6 * plastic + p.edu * 0.006;
     p.values[V_PIETY] -= p.edu * 0.005;
     for (let k = 0; k < NV; k++) p.values[k] = clamp(p.values[k], -1, 1);
     // assimilation into the local majority culture
     if (p.culture !== s.culture) {
       const pr = age < 15 ? 0.25 : 0.025 * conf;
-      if (c.rng.chance(pr)) p.culture = s.culture;
+      const part = partOf(c, p, pr);
+      if (part) part.culture = s.culture;
     }
   }
   // dominant culture & religion
   const cc = new Map<number, number>();
   const rc = new Map<number, number>();
   for (const p of people) {
-    cc.set(p.culture, (cc.get(p.culture) ?? 0) + 1);
-    rc.set(p.religion, (rc.get(p.religion) ?? 0) + 1);
+    cc.set(p.culture, (cc.get(p.culture) ?? 0) + p.n);
+    rc.set(p.religion, (rc.get(p.religion) ?? 0) + p.n);
   }
   s.culture = [...cc.entries()].sort((a, b) => b[1] - a[1])[0][0];
   const topR = [...rc.entries()].sort((a, b) => b[1] - a[1])[0];
@@ -86,7 +88,7 @@ export function cultureYear(c: Ctx, s: Settlement): void {
   s.religion = topR[0];
   if (oldReligion >= 0 && oldReligion !== s.religion && s.pop > 40) {
     const r = w.religions.get(s.religion);
-    if (r) logEvent(w, { type: 'conversion', imp: 2, text: `${s.name} came to follow the ${r.name}.`, x: s.x, y: s.y, settlements: [s.id], why: `${Math.round((topR[1] / people.length) * 100)}% of residents now adhere to it.` });
+    if (r) logEvent(w, { type: 'conversion', imp: 2, text: `${s.name} came to follow the ${r.name}.`, x: s.x, y: s.y, settlements: [s.id], why: `${Math.round((topR[1] / heads) * 100)}% of residents now adhere to it.` });
   }
 
   // ethnogenesis: divergent and isolated communities become a new people
@@ -123,8 +125,8 @@ export function culturesGlobalYear(c: Ctx): void {
   for (const p of w.persons.values()) {
     let e = sums.get(p.culture);
     if (!e) { e = { n: 0, v: new Array(NV).fill(0) }; sums.set(p.culture, e); }
-    e.n++;
-    for (let k = 0; k < NV; k++) e.v[k] += p.values[k];
+    e.n += p.n;
+    for (let k = 0; k < NV; k++) e.v[k] += p.values[k] * p.n;
   }
   for (const cu of w.cultures.values()) {
     const e = sums.get(cu.id);
@@ -154,11 +156,12 @@ export function religionYear(c: Ctx, s: Settlement): void {
   const pol = w.polities.get(s.polity);
   // priests convert; state religion carries extra weight; neighbours' faiths seep in through contact
   const priestsBy = new Map<number, number>();
-  for (const p of people) if (p.occ === O_PRIEST) priestsBy.set(p.religion, (priestsBy.get(p.religion) ?? 0) + 1);
+  const heads = headcount(people);
+  for (const p of people) if (p.occ === O_PRIEST) priestsBy.set(p.religion, (priestsBy.get(p.religion) ?? 0) + p.n);
   const options: { r: number; pull: number }[] = [];
   for (const [r, n] of priestsBy) {
     const rel = w.religions.get(r);
-    options.push({ r, pull: (n / people.length) * 8 * (rel?.proselytism ?? 0.5) });
+    options.push({ r, pull: (n / heads) * 8 * (rel?.proselytism ?? 0.5) });
   }
   if (pol?.inst.stateReligion && pol.religion >= 0) options.push({ r: pol.religion, pull: 0.04 + (1 - pol.gov.tolerance) * 0.04 });
   for (const key in s.contacts) {
@@ -178,9 +181,10 @@ export function religionYear(c: Ctx, s: Settlement): void {
       for (let k = 0; k < NV; k++) fit -= Math.abs(p.values[k] - rel.doctrine[k]) * 0.15;
       const attach = 0.5 + Math.max(0, p.values[V_PIETY]) * 0.4;
       const pr = o.pull * (1 + fit) * (1 - attach * 0.6) * (crisis ? 1.8 : 1) * (ageOf(w, p) < 25 ? 1.5 : 1);
-      if (pr > 0 && c.rng.chance(Math.min(0.3, pr))) {
-        p.religion = o.r;
-        remember(p, w.tick, M_CONVERTED, 0.3, o.r);
+      const part = pr > 0 ? partOf(c, p, Math.min(0.3, pr)) : null;
+      if (part) {
+        part.religion = o.r;
+        remember(part, w.tick, M_CONVERTED, 0.3, o.r);
       }
     }
   }
@@ -190,11 +194,11 @@ export function religionYear(c: Ctx, s: Settlement): void {
     let minority = 0;
     for (const p of people) {
       if (p.religion !== pol.religion) {
-        minority++;
+        minority += p.n;
         if (c.rng.chance(0.15 * (0.35 - pol.gov.tolerance) * 4)) remember(p, w.tick, M_PERSECUTED, -0.6, pol.id);
       }
     }
-    if (minority > people.length * 0.2 && c.rng.chance(0.1)) {
+    if (minority > heads * 0.2 && c.rng.chance(0.1)) {
       const r = w.religions.get(pol.religion);
       logEvent(w, {
         type: 'persecution', imp: 3, text: `Followers of minority faiths were persecuted in ${s.name}.`, x: s.x, y: s.y, settlements: [s.id], polities: [pol.id],
@@ -204,7 +208,7 @@ export function religionYear(c: Ctx, s: Settlement): void {
   }
 
   // prophets: crisis + charisma + devotion can found a new faith
-  if (crisis && c.rng.chance(0.06)) {
+  if (crisis && s.pop >= 60 && c.rng.chance(0.02)) {
     let prophet: Person | null = null;
     let best = 0;
     for (const p of people) {
@@ -214,6 +218,7 @@ export function religionYear(c: Ctx, s: Settlement): void {
       if (sc > best) { best = sc; prophet = p; }
     }
     if (prophet && best > 0.25) {
+      prophet = individuate(c, prophet);
       const parent = w.religions.get(prophet.religion);
       const doctrine = prophet.values.map((v, k) => clamp(v * 0.7 + (parent?.doctrine[k] ?? 0) * 0.3 + c.rng.normal(0, 0.2), -1, 1));
       doctrine[V_PIETY] = Math.max(doctrine[V_PIETY], 0.4);
@@ -235,10 +240,11 @@ export function religionYear(c: Ctx, s: Settlement): void {
         if (p === prophet) continue;
         const friend = prophet.rels.some((r) => r.id === p.id && r.a > 0.3);
         const kin = p.mother === prophet.id || p.father === prophet.id || p.spouse === prophet.id;
-        if (friend || kin || c.rng.chance(0.08 + (p.happiness < 0.4 ? 0.15 : 0))) {
-          p.religion = rel.id;
-          remember(p, w.tick, M_CONVERTED, 0.5, rel.id, ev);
-          followers++;
+        const part = friend || kin ? p : partOf(c, p, 0.08 + (p.happiness < 0.4 ? 0.15 : 0));
+        if (part) {
+          part.religion = rel.id;
+          remember(part, w.tick, M_CONVERTED, 0.5, rel.id, ev);
+          followers += part.n;
         }
       }
       const e = w.events[w.events.length - 1];

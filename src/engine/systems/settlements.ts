@@ -8,7 +8,7 @@ import {
   O_ARTISAN, O_BUILDER, O_FARMER, O_FISHER, O_MERCHANT, V_INNOV, V_PIETY, isWater,
 } from '../constants';
 import { ageOf, clamp, type Ctx } from '../context';
-import { addToHousehold, createPolity, createSettlement, meanValues, remember } from '../entities';
+import { addToHousehold, createPolity, createSettlement, householdSize, individuate, meanValues, remember, splitHousehold } from '../entities';
 import { logEvent } from '../history';
 import { siteScore } from '../gen/terrain';
 import { invalidateFarmCache } from './economy';
@@ -147,7 +147,7 @@ export function constructionMonth(c: Ctx, s: Settlement): void {
   const labor = cost[0] * fx.buildCost;
   const builders = c.residents(s).filter((p) => p.occ === O_BUILDER);
   let effort = 0;
-  for (const b of builders) effort += (0.5 + b.skills[O_BUILDER]) * b.health;
+  for (const b of builders) effort += (0.5 + b.skills[O_BUILDER]) * b.health * b.n;
   if (effort <= 0) return;
   // materials gate progress
   let matFrac = 1;
@@ -258,7 +258,7 @@ export function fissionYear(c: Ctx, s: Settlement): void {
   const w = c.w;
   const t = w.tiles;
   const people = c.residents(s);
-  if (people.length < 24) return;
+  if (s.pop < 24) return;
   const housing = s.buildings[BLD_HOUSING] * 5;
   const reasons: string[] = [];
   const causes: number[] = [];
@@ -266,7 +266,7 @@ export function fissionYear(c: Ctx, s: Settlement): void {
   if (s.nomadic && (s.pop > 45 || (s.foodRatio < 0.92 && s.pop > 25))) { pressure += Math.max(0, s.pop - 40) / 25 + (s.foodRatio < 0.92 ? 0.5 : 0); reasons.push(s.foodRatio < 0.92 ? 'the hunting grounds could no longer feed the band' : 'the band had grown too large to forage together'); }
   if (!s.nomadic && s.pop > housing * 1.3) { pressure += 0.4; reasons.push('the town was overcrowded'); }
   if (s.lowFoodYears >= 2) { pressure += 0.5; reasons.push('years of hunger'); if (s.ctx.famine) causes.push(s.ctx.famine); }
-  if (!s.nomadic && s.farmland > 0 && s.workers[O_FARMER] * c.fx(s.id).farmArea > s.farmland * 1.3 && s.pop > 120) { pressure += 0.35; reasons.push('there was no more land to farm nearby'); }
+  if (!s.nomadic && s.farmland > 0 && s.workers[O_FARMER] * c.fx(s.id).farmArea > s.farmland * w.config.density * 1.3 && s.pop > 120) { pressure += 0.35; reasons.push('there was no more land to farm nearby'); }
   if (s.unrest > 0.45) { pressure += s.unrest - 0.3; reasons.push('bitter factional strife'); if (s.ctx.riot) causes.push(s.ctx.riot); }
   pressure *= w.config.mobility;
   if (pressure <= 0 || !c.rng.chance(Math.min(0.6, pressure * 0.4))) return;
@@ -283,6 +283,7 @@ export function fissionYear(c: Ctx, s: Settlement): void {
     if (sc > best) { best = sc; leader = p; }
   }
   if (!leader) return;
+  leader = individuate(c, leader);
   const allowSea = c.fx(s.id).seafaring <= 0.5;
   const site = freeSite(c, s.x, s.y, 4, s.nomadic ? 14 : 12, t.region[s.y * t.w + s.x], allowSea);
   if (site < 0) return;
@@ -298,16 +299,34 @@ export function fissionYear(c: Ctx, s: Settlement): void {
     const k = w.persons.get(pid);
     if (k && k.sid === s.id) groupHh.add(k.hh);
   }
+  // the group that leaves: bands split roughly in half, towns send out a colony
+  const desired = s.nomadic ? s.pop * 0.4 : Math.min(s.pop * 0.3, 60 + s.pop * 0.04);
   // unhappy households join
+  let est = 0;
+  for (const hid of groupHh) { const h = w.households.get(hid); if (h) est += householdSize(w, h); }
   for (const hid of s.households) {
-    if (groupHh.size * 4.5 > s.pop * 0.4) break;
+    if (est > desired) break;
+    if (groupHh.has(hid)) continue;
     const h = w.households.get(hid);
     if (!h) continue;
     const head = w.persons.get(h.members[0]);
-    if (head && head.happiness < 0.45 && c.rng.chance(0.35)) groupHh.add(hid);
+    if (head && head.happiness < 0.45 && c.rng.chance(0.35)) { groupHh.add(hid); est += householdSize(w, h); }
   }
+  // pooled households send only a share of their people
   let size = 0;
-  for (const hid of groupHh) size += w.households.get(hid)?.members.length ?? 0;
+  const going: Household[] = [];
+  const order = [leader.hh, ...[...groupHh].filter((id) => id !== leader!.hh)];
+  for (const hid of order) {
+    const h = w.households.get(hid);
+    if (!h) continue;
+    const z = householdSize(w, h);
+    const room = Math.max(0, desired - size);
+    const isLeaders = hid === leader.hh;
+    if (!isLeaders && room < 3) break;
+    if (z <= Math.max(12, room)) { going.push(h); size += z; continue; }
+    const part = splitHousehold(c, h, Math.max(isLeaders ? 4 : 1, room) / z, isLeaders ? leader.id : -1);
+    if (part !== h || isLeaders) { going.push(part); size += householdSize(w, part); }
+  }
   if (size < 8 || size > s.pop * 0.6) return;
 
   const x = site % t.w;
@@ -319,10 +338,7 @@ export function fissionYear(c: Ctx, s: Settlement): void {
   ns.contacts[s.id] = 0.6;
   s.contacts[ns.id] = 0.6;
   ns.market.price = [...s.market.price];
-  for (const hid of groupHh) {
-    const h = w.households.get(hid);
-    if (h) moveHousehold(c, h, s, ns, false);
-  }
+  for (const h of going) moveHousehold(c, h, s, ns, false);
   const pol = w.polities.get(s.polity);
   const loyal = pol && !reasons.includes('bitter factional strife') && pol.gov.centralization > 0.3 && Math.hypot(x - s.x, y - s.y) < 6 + 4 * pol.gov.centralization;
   let polityText = '';
@@ -373,9 +389,10 @@ export function moveHousehold(c: Ctx, h: Household, from: Settlement, to: Settle
     p.sid = to.id;
     if (migrant) remember(p, w.tick, M_MIGRATED, 0.1, from.id);
   }
-  if (migrant) w.acc.migrants += h.members.length;
-  from.pop = Math.max(0, from.pop - h.members.length);
-  to.pop += h.members.length;
+  const size = householdSize(w, h);
+  if (migrant) w.acc.migrants += size;
+  from.pop = Math.max(0, from.pop - size);
+  to.pop += size;
 }
 
 function attractiveness(c: Ctx, s: Settlement, p: Person): number {
@@ -399,7 +416,7 @@ export function migrationMonth(c: Ctx, s: Settlement): void {
   const mob = w.config.mobility;
   const tries = Math.min(3, Math.ceil(s.households.length / 30));
   for (let k = 0; k < tries; k++) {
-    const h = w.households.get(s.households[c.rng.int(s.households.length)]);
+    let h = w.households.get(s.households[c.rng.int(s.households.length)]);
     if (!h) continue;
     const head = w.persons.get(h.members[0]);
     if (!head) continue;
@@ -416,7 +433,13 @@ export function migrationMonth(c: Ctx, s: Settlement): void {
       const v = attractiveness(c, o, head) - travel / 50;
       if (v > bestV) { bestV = v; best = o; }
     }
-    if (best) moveHousehold(c, h, s, best);
+    if (best) {
+      // from a pooled household only some families leave at a time
+      const z = householdSize(w, h);
+      const leavers = Math.max(6, s.pop * 0.004);
+      if (z > leavers * 1.5) h = splitHousehold(c, h, leavers / z);
+      if (h.members.length && householdSize(w, h) < s.pop) moveHousehold(c, h, s, best);
+    }
   }
 }
 

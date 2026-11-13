@@ -15,6 +15,7 @@ import {
   O_WOODCUTTER, ORE_COPPER, ORE_GOLD, ORE_IRON, V_INDIV, V_PIETY, isWater,
 } from '../constants';
 import { ageOf, clamp, type Ctx } from '../context';
+import { headcount, householdSize } from '../entities';
 import { cropFactor, wildSeason, type ClimateField } from './environment';
 import type { Household, Person, Polity, Settlement } from '../types';
 import { planTrade, type Order } from './trade';
@@ -107,15 +108,15 @@ export function buildWork(c: Ctx, s: Settlement): SettlementWork {
     const age = ageOf(w, p);
     if (p.occ === O_NONE || !isWorker(age, p)) continue;
     workers[p.occ].push(p);
-    hhWorkers.set(p.hh, (hhWorkers.get(p.hh) ?? 0) + 1);
+    hhWorkers.set(p.hh, (hhWorkers.get(p.hh) ?? 0) + p.n);
   }
   for (let o = 0; o < NOCC; o++) {
     for (const p of workers[o]) {
       const h = w.households.get(p.hh);
-      labor[o].push(laborOf(ageOf(w, p), p, o) * toolMult(h, hhWorkers.get(p.hh) ?? 1));
+      labor[o].push(laborOf(ageOf(w, p), p, o) * toolMult(h, hhWorkers.get(p.hh) ?? 1) * p.n);
     }
   }
-  for (let o = 0; o < NOCC; o++) s.workers[o] = workers[o].length;
+  for (let o = 0; o < NOCC; o++) s.workers[o] = headcount(workers[o]);
   return {
     s, people, workers, labor, hhWorkers, pol: w.polities.get(s.polity),
     sells: Array.from({ length: NG }, () => []),
@@ -187,7 +188,10 @@ export function produce(c: Ctx, sw: SettlementWork, field: ClimateField): void {
   if (fx.agriculture) {
     const ft = farmTiles(c, s, field);
     const L = sum(sw.labor[O_FARMER]);
-    let cap = L * fx.farmArea;
+    // `density` is how many times more people a tile carries than at the engine's base scale:
+    // each worker tills proportionally less of the tile and the tile yields proportionally more
+    const K = w.config.density;
+    let cap = (L * fx.farmArea) / K;
     let accrual = 0;
     let marginalQ = 0;
     let totalFarm = 0;
@@ -205,7 +209,7 @@ export function produce(c: Ctx, sw: SettlementWork, field: ClimateField): void {
       t.fert[i] = Math.max(0.02, t.fert[i] - 0.0011 * (worked / Math.max(area, 1e-6)) * area * fx.depletion);
     }
     s.farmland = totalFarm;
-    const monthly = (accrual * 100 * fx.farmYield) / 12;
+    const monthly = (accrual * 100 * K * fx.farmYield) / 12;
     s.harvestAcc += monthly;
     // labour contribution recorded for the harvest split
     sw.workers[O_FARMER].forEach((p, k) => {
@@ -218,8 +222,8 @@ export function produce(c: Ctx, sw: SettlementWork, field: ClimateField): void {
       if (tile >= 0) {
         const rate = t.forest[tile] > 0.3 ? 0.1 : 0.3;
         const cleared = Math.min(0.85 - t.farmland[tile], cap * rate);
-        const woodGain = t.forest[tile] * 100 * (cleared / Math.max(0.15, 1 - t.farmland[tile]));
-        t.forest[tile] = Math.max(0, t.forest[tile] - woodGain / 100);
+        const woodGain = t.forest[tile] * 100 * K * (cleared / Math.max(0.15, 1 - t.farmland[tile]));
+        t.forest[tile] = Math.max(0, t.forest[tile] - woodGain / (100 * K));
         t.farmland[tile] += cleared;
         invalidateFarmCache(s);
         const share = cleared / L;
@@ -227,7 +231,7 @@ export function produce(c: Ctx, sw: SettlementWork, field: ClimateField): void {
           const h = w.households.get(p.hh);
           if (!h) return;
           h.goods[G_WOOD] += (woodGain * sw.labor[O_FARMER][k]) / L;
-          if (sw.pol?.inst.privateProperty) h.land += share * sw.labor[O_FARMER][k];
+          if (sw.pol?.inst.privateProperty) h.land += share * sw.labor[O_FARMER][k] * K;
         });
       }
     }
@@ -258,7 +262,7 @@ export function produce(c: Ctx, sw: SettlementWork, field: ClimateField): void {
   // --- Woodcutting
   {
     let W = 0;
-    for (const i of s.territory) if (!isWater(t.biome[i])) W += t.forest[i] * 100;
+    for (const i of s.territory) if (!isWater(t.biome[i])) W += t.forest[i] * 100 * w.config.density;
     const L = sum(sw.labor[O_WOODCUTTER]);
     const per = 5 * fx.woodYield;
     const pot = L * per;
@@ -365,7 +369,7 @@ export function produce(c: Ctx, sw: SettlementWork, field: ClimateField): void {
     const tp = p[G_TOOLS] - (metalTools ? 0.6 * p[G_METAL] + 0.3 * p[G_WOOD] : 0.5 * p[G_WOOD] + 0.4 * p[G_STONE]);
     const lp = p[G_LUX] * 1.2 * fx.luxury - (0.5 * p[G_WOOD] + 0.15 * p[G_METAL]);
     const m = s.market;
-    const inputAvail = Math.min(1, (m.supply[G_WOOD] + m.supply[G_STONE] * 0.5 + m.supply[G_METAL]) / Math.max(1, (sw.workers[O_ARTISAN].length + 1) * capPer * 0.7));
+    const inputAvail = Math.min(1, (m.supply[G_WOOD] + m.supply[G_STONE] * 0.5 + m.supply[G_METAL]) / Math.max(1, (s.workers[O_ARTISAN] + 1) * capPer * 0.7));
     setYield(s, O_ARTISAN, Math.max(0.05, Math.max(tp, lp) * capPer * 0.75 * inputAvail));
   }
 
@@ -420,21 +424,24 @@ export function householdOrders(c: Ctx, sw: SettlementWork): void {
     let woodcutter = false;
     let workers = 0;
     let piety = 0;
+    let size = 0;
+    let artisans = 0;
     for (const id of h.members) {
       const m = w.persons.get(id);
       if (!m) continue;
       const age = ageOf(w, m);
-      F += foodNeed(age);
-      consc += m.consc;
-      piety += m.values[V_PIETY];
+      F += foodNeed(age) * m.n;
+      consc += m.consc * m.n;
+      piety += m.values[V_PIETY] * m.n;
+      size += m.n;
       for (const mm of m.mem) if (mm.k === 1 && w.tick - mm.t < 240) famine = 1;
       if (m.occ === O_FARMER) farmer = true;
-      if (m.occ === O_ARTISAN) artisan = true;
+      if (m.occ === O_ARTISAN) { artisan = true; artisans += m.n; }
       if (m.occ === O_MINER) miner = true;
       if (m.occ === O_WOODCUTTER) woodcutter = true;
-      if (m.occ !== O_NONE) workers++;
+      if (m.occ !== O_NONE) workers += m.n;
     }
-    const n = h.members.length;
+    const n = Math.max(1, size);
     consc /= n;
     const reserveMonths = farmer ? monthsToHarvest + 1.5 + consc * 2 + famine * 2 : 1.5 + consc * 1.5 + famine;
     const foodTarget = F * reserveMonths;
@@ -449,7 +456,7 @@ export function householdOrders(c: Ctx, sw: SettlementWork): void {
     }
     // --- wood (fuel + artisan inputs)
     const fuel = n * 0.12 * coldK;
-    const woodTarget = fuel * 3 + (artisan ? 2.5 : 0);
+    const woodTarget = fuel * 3 + 2.5 * artisans;
     if (woodcutter && h.goods[G_WOOD] > woodTarget) sw.sells[G_WOOD].push({ h, q: h.goods[G_WOOD] - woodTarget, flag: 0 });
     else if (!woodcutter && h.goods[G_WOOD] > woodTarget * 2 + 2) sw.sells[G_WOOD].push({ h, q: (h.goods[G_WOOD] - woodTarget * 2) * 0.5, flag: 0 });
     else if (h.goods[G_WOOD] < woodTarget) {
@@ -457,8 +464,8 @@ export function householdOrders(c: Ctx, sw: SettlementWork): void {
       if (q > 0.01) { sw.buys[G_WOOD].push({ h, q, flag: 0 }); budget -= q * p[G_WOOD]; }
     }
     // --- stone & metal: miners sell, artisans buy
-    const stoneTarget = artisan ? 2 : 0;
-    const metalTarget = artisan ? 2 : 0;
+    const stoneTarget = 2 * artisans;
+    const metalTarget = 2 * artisans;
     if (h.goods[G_STONE] > stoneTarget + 0.01) sw.sells[G_STONE].push({ h, q: h.goods[G_STONE] - stoneTarget, flag: 0 });
     else if (artisan && h.goods[G_STONE] < stoneTarget) {
       const q = Math.min(stoneTarget - h.goods[G_STONE], (budget * 0.3) / p[G_STONE]);
@@ -526,7 +533,16 @@ export function clearMarket(c: Ctx, sw: SettlementWork): void {
     let S = 0;
     let D = 0;
     for (const o of sells) S += o.q;
-    for (const o of buys) D += o.q;
+    // nobody can order more than the money they still hold (a household may place several orders)
+    const committed = new Map<number, number>();
+    for (const o of buys) {
+      if (o.h && price > 0) {
+        const left = Math.max(0, o.h.money - (committed.get(o.h.id) ?? 0));
+        if (o.q * price > left) o.q = left / price;
+        committed.set(o.h.id, (committed.get(o.h.id) ?? 0) + o.q * price);
+      }
+      D += o.q;
+    }
     const traded = Math.min(S, D);
     if (traded > 1e-9) {
       const fs = traded / S;
@@ -579,9 +595,10 @@ export function clearMarket(c: Ctx, sw: SettlementWork): void {
 }
 
 function distributeToHouseholds(c: Ctx, s: Settlement, value: number) {
-  const n = s.households.length;
-  if (!n) { c.w.moneyLost += value; return; }
-  for (const id of s.households) c.w.households.get(id)!.money += value / n;
+  if (!s.households.length) { c.w.moneyLost += value; return; }
+  const sizes = s.households.map((id) => householdSize(c.w, c.w.households.get(id)!));
+  const tot = sizes.reduce((a, b) => a + b, 0) || 1;
+  s.households.forEach((id, k) => { c.w.households.get(id)!.money += (value * sizes[k]) / tot; });
 }
 
 // ---------------------------------------------------------------------- wages, tithes, consumption
@@ -597,7 +614,7 @@ export function payWages(c: Ctx, sw: SettlementWork): void {
   let bill = 0;
   for (const o of salaried) {
     if (o === O_BUILDER && s.project < 0) continue;
-    bill += sw.workers[o].length * wage * (o === O_SOLDIER ? 1.1 : 1);
+    bill += headcount(sw.workers[o]) * wage * (o === O_SOLDIER ? 1.1 : 1);
   }
   let paidFrac = 0;
   if (pol && bill > 0) {
@@ -611,22 +628,23 @@ export function payWages(c: Ctx, sw: SettlementWork): void {
     for (const p of sw.workers[o]) {
       const h = w.households.get(p.hh);
       if (!h) continue;
-      let pay = o === O_BUILDER && s.project < 0 ? 0 : wage * k * paidFrac;
+      let pay = o === O_BUILDER && s.project < 0 ? 0 : wage * k * paidFrac * p.n;
       // unpaid soldiers are fed from the granary
       if (o === O_SOLDIER && paidFrac < 1 && s.granary > 1) {
-        const food = Math.min(s.granary, 1.2 * (1 - paidFrac));
+        const food = Math.min(s.granary, 1.2 * (1 - paidFrac) * p.n);
         s.granary -= food;
         h.goods[G_FOOD] += food;
         pay += food * s.market.price[G_FOOD];
       }
-      h.money += o === O_SOLDIER && paidFrac < 1 ? wage * k * paidFrac : pay;
+      h.money += o === O_SOLDIER && paidFrac < 1 ? wage * k * paidFrac * p.n : pay;
       h.income += pay;
     }
     s.yieldRaw[o] = s.yieldRaw[o] * 0.85 + (o === O_BUILDER && s.project < 0 ? 0 : wage * k * paidFrac) * 0.15;
   }
   // tithes from the devout support priests (in addition to public support)
   const priests = sw.workers[O_PRIEST];
-  if (priests.length) {
+  const nPriests = headcount(priests);
+  if (nPriests) {
     let tithe = 0;
     for (const hid of s.households) {
       const h = w.households.get(hid);
@@ -639,9 +657,9 @@ export function payWages(c: Ctx, sw: SettlementWork): void {
     }
     for (const p of priests) {
       const h = w.households.get(p.hh);
-      if (h) { h.money += tithe / priests.length; h.income += tithe / priests.length; }
+      if (h) { h.money += (tithe * p.n) / nPriests; h.income += (tithe * p.n) / nPriests; }
     }
-    s.yieldRaw[O_PRIEST] += (tithe / priests.length) * 0.15;
+    s.yieldRaw[O_PRIEST] += (tithe / nPriests) * 0.15;
   }
 }
 
@@ -657,16 +675,19 @@ export function consume(c: Ctx, sw: SettlementWork): void {
   // per household need
   const hhs: Household[] = [];
   const needs: number[] = [];
+  const sizes: number[] = [];
   for (const hid of s.households) {
     const h = w.households.get(hid);
     if (!h) continue;
     let F = 0;
+    let z = 0;
     for (const id of h.members) {
       const m = w.persons.get(id);
-      if (m) F += foodNeed(ageOf(w, m));
+      if (m) { F += foodNeed(ageOf(w, m)) * m.n; z += m.n; }
     }
     hhs.push(h);
     needs.push(F);
+    sizes.push(z);
   }
   // --- relief: public granary and communal sharing
   let deficit = 0;
@@ -682,8 +703,8 @@ export function consume(c: Ctx, sw: SettlementWork): void {
     }
     // households with surplus share according to communal values
     let indiv = 0;
-    for (const p of people) indiv += p.values[V_INDIV];
-    indiv /= Math.max(1, people.length);
+    for (const p of people) indiv += p.values[V_INDIV] * p.n;
+    indiv /= Math.max(1, headcount(people));
     // foraging bands practise demand-sharing; larger communities share according to their values
     const solidarity = clamp(0.45 - 0.4 * indiv + (band ? 0.4 : 0));
     const keep = band ? 1.3 : 2.5;
@@ -713,6 +734,7 @@ export function consume(c: Ctx, sw: SettlementWork): void {
   let eatenTotal = 0;
   let needTotal = 0;
   let hungry = 0;
+  let heads = 0;
   for (let k = 0; k < hhs.length; k++) {
     const h = hhs[k];
     const F = needs[k];
@@ -721,15 +743,16 @@ export function consume(c: Ctx, sw: SettlementWork): void {
     const a = F > 0 ? eaten / F : 1;
     eatenTotal += eaten;
     needTotal += F;
-    if (a < 0.9) hungry++;
+    heads += sizes[k];
+    if (a < 0.9) hungry += sizes[k];
     h.hunger = h.hunger * 0.92 + (a < 0.85 ? 1 - a : 0);
     // fuel
-    const fuel = h.members.length * 0.12 * coldK;
+    const fuel = sizes[k] * 0.12 * coldK;
     const burned = Math.min(h.goods[G_WOOD], fuel);
     h.goods[G_WOOD] -= burned;
     const coldShort = fuel > 0 ? 1 - burned / fuel : 0;
     // luxuries consumed
-    const luxPer = h.goods[G_LUX] / Math.max(1, h.members.length);
+    const luxPer = h.goods[G_LUX] / Math.max(1, sizes[k]);
     const luxUse = h.goods[G_LUX] * 0.15;
     h.goods[G_LUX] -= luxUse;
     for (const id of h.members) {
@@ -758,7 +781,7 @@ export function consume(c: Ctx, sw: SettlementWork): void {
   const protect = s.buildings[BLD_GRANARY] > 0 ? 0.35 : 0.8;
   s.granary *= 1 - BASE_SPOIL[G_FOOD] * fx.spoil * warm * protect * over;
   s.foodRatio = s.foodRatio * 0.85 + (needTotal > 0 ? eatenTotal / needTotal : 1) * 0.15;
-  s.hungerShare = s.hungerShare * 0.85 + (hhs.length ? hungry / hhs.length : 0) * 0.15;
+  s.hungerShare = s.hungerShare * 0.85 + (heads ? hungry / heads : 0) * 0.15;
   void G_LUX; void G_TOOLS;
 }
 

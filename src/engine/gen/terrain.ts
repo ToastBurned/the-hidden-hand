@@ -198,7 +198,7 @@ export function generateTerrain(cfg: WorldConfig, rng: Rng): Tiles {
       for (const j of neighbors(t, i, nb)) if (!isWater(t.biome[j])) { nearLand = true; break; }
       const T = t.temp[i];
       const prod = Math.max(0.2, 1 - Math.abs(T - 12) / 30);
-      t.fishCap[i] = b === B_LAKE ? 14 : b === B_SEA ? (nearLand ? 22 : 10) * prod : 4 * prod;
+      t.fishCap[i] = (b === B_LAKE ? 14 : b === B_SEA ? (nearLand ? 22 : 10) * prod : 4 * prod) * cfg.density;
       t.fish[i] = t.fishCap[i];
       t.move[i] = 99;
       continue;
@@ -209,9 +209,9 @@ export function generateTerrain(cfg: WorldConfig, rng: Rng): Tiles {
     t.fert[i] = t.fertBase[i];
     t.forestCap[i] = Math.min(1, P.forest * (0.4 + R));
     t.forest[i] = t.forestCap[i] * (0.8 + 0.2 * rng.next());
-    t.gameCap[i] = P.game * (0.6 + 0.6 * moist);
+    t.gameCap[i] = P.game * (0.6 + 0.6 * moist) * cfg.density;
     t.game[i] = t.gameCap[i];
-    t.fishCap[i] = t.river[i] ? 3 + 3 * t.river[i] : 0;
+    t.fishCap[i] = (t.river[i] ? 3 + 3 * t.river[i] : 0) * cfg.density;
     t.fish[i] = t.fishCap[i];
     t.stone[i] = Math.min(1, P.stone + Math.max(0, t.elev[i] - 0.3));
     t.move[i] = P.move * (t.river[i] ? 0.8 : 1);
@@ -219,9 +219,9 @@ export function generateTerrain(cfg: WorldConfig, rng: Rng): Tiles {
     const rough = b === B_MOUNTAIN ? 1 : b === B_HILLS ? 0.7 : 0.1;
     const roll = rng.next();
     const k = cfg.resources * rough;
-    if (roll < 0.016 * k) { t.oreKind[i] = ORE_COPPER; t.ore[i] = rng.range(600, 2400); }
-    else if (roll < 0.042 * k) { t.oreKind[i] = ORE_IRON; t.ore[i] = rng.range(1000, 4000); }
-    else if (roll < 0.048 * k) { t.oreKind[i] = ORE_GOLD; t.ore[i] = rng.range(200, 800); }
+    if (roll < 0.016 * k) { t.oreKind[i] = ORE_COPPER; t.ore[i] = rng.range(600, 2400) * cfg.density; }
+    else if (roll < 0.042 * k) { t.oreKind[i] = ORE_IRON; t.ore[i] = rng.range(1000, 4000) * cfg.density; }
+    else if (roll < 0.048 * k) { t.oreKind[i] = ORE_GOLD; t.ore[i] = rng.range(200, 800) * cfg.density; }
   }
   void B_SAVANNA; void B_STEPPE; void B_TAIGA; void B_TUNDRA; void B_FOREST; void B_JUNGLE; void B_MARSH; void B_HILLS; void B_ICE; void B_DEEP; void B_SEA;
   return t;

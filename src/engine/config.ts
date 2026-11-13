@@ -17,6 +17,8 @@ export interface WorldConfig {
   aridity: number;
   resources: number;
   fertility: number;
+  /** People a tile can carry, relative to the engine's base scale. */
+  density: number;
   // initial population
   bands: number;
   bandSize: number;
@@ -39,6 +41,8 @@ export interface WorldConfig {
   mobility: number;
   traitVariance: number;
   // engine
+  /** Upper bound on simulated agents; beyond it ordinary people are grouped. */
+  agentBudget: number;
   interventions: Intervention[];
 }
 
@@ -91,6 +95,8 @@ export const PARAMS: ParamMeta[] = [
   { key: 'fertility', label: 'Soil fertility', group: 'Geography', min: 0.3, max: 2, step: 0.05, desc: 'Multiplier on agricultural soil quality.' },
   { key: 'bands', label: 'Founding bands', group: 'Population', min: 1, max: 40, step: 1, integer: true, desc: 'Number of initial foraging bands.' },
   { key: 'bandSize', label: 'Band size', group: 'Population', min: 8, max: 80, step: 1, integer: true, desc: 'People per founding band.' },
+  { key: 'density', label: 'Land carrying capacity', group: 'Geography', min: 1, max: 60, step: 1, integer: true, desc: 'How many people each map tile can support, relative to the base scale. 1 gives a world of a few thousand people; 10 gives hundreds of thousands; higher values reach millions once farming and later technologies spread.' },
+  { key: 'agentBudget', label: 'Detail budget (agents)', group: 'Population', min: 2000, max: 30000, step: 500, integer: true, desc: 'How many agents the engine simulates at once. Beyond this, ordinary people are grouped into representative agents; notable people always stay individual. Higher is more detailed and slower.' },
   { key: 'climateVolatility', label: 'Climate volatility', group: 'Environment', min: 0, max: 3, step: 0.05, desc: 'Year-to-year variance of rainfall and temperature; drives droughts and bumper years.' },
   { key: 'climateTrend', label: 'Climate trend (°C/century)', group: 'Environment', min: -3, max: 3, step: 0.1, desc: 'Long-run warming or cooling.' },
   { key: 'disasters', label: 'Disaster frequency', group: 'Environment', min: 0, max: 4, step: 0.1, desc: 'Multiplier on floods, fires, earthquakes and eruptions.' },
@@ -112,8 +118,8 @@ export const PARAMS: ParamMeta[] = [
 export const DEFAULT_CONFIG: WorldConfig = {
   name: 'New World',
   seed: 1,
-  width: 112,
-  height: 72,
+  width: 128,
+  height: 80,
   seaLevel: 0.48,
   landmasses: 3,
   mountains: 1,
@@ -121,7 +127,8 @@ export const DEFAULT_CONFIG: WorldConfig = {
   aridity: 1,
   resources: 1,
   fertility: 1,
-  bands: 14,
+  density: 20,
+  bands: 18,
   bandSize: 34,
   climateVolatility: 1,
   climateTrend: 0,
@@ -139,6 +146,7 @@ export const DEFAULT_CONFIG: WorldConfig = {
   conformity: 1,
   mobility: 1,
   traitVariance: 1,
+  agentBudget: 6000,
   interventions: [],
 };
 

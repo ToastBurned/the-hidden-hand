@@ -10,7 +10,7 @@ import { fbm } from '../core/noise';
 import { clamp, type Ctx } from '../context';
 import { B_FOREST, B_JUNGLE, B_MOUNTAIN, B_TAIGA, BLD_HOUSING, BLD_GRANARY, BLD_WALLS, BLD_TEMPLE, G_FOOD, D_DISASTER, M_DISASTER, NBLD, isWater, B_HILLS } from '../constants';
 import { logEvent } from '../history';
-import { killPerson, remember } from '../entities';
+import { agentDeaths, remember } from '../entities';
 import type { Settlement, World } from '../types';
 
 /** Non-serialised per-year rain field, derived deterministically from climate state. */
@@ -172,10 +172,7 @@ function damageSettlement(c: Ctx, s: Settlement, frac: number, deathRate: number
   let deaths = 0;
   for (const p of c.residents(s)) {
     remember(p, w.tick, M_DISASTER, -0.4, s.id, ev);
-    if (c.rng.chance(deathRate)) {
-      killPerson(c, p, D_DISASTER, ev);
-      deaths++;
-    }
+    deaths += agentDeaths(c, p, deathRate, D_DISASTER, ev);
   }
   for (const hid of s.households) {
     const h = w.households.get(hid);

@@ -2,6 +2,7 @@
  * Read-only views of the world for the presentation layer. The UI never touches engine
  * state directly: the worker calls these functions and posts plain data objects.
  */
+import { householdSize } from './entities';
 import {
   BLD_NAMES, DEATH_NAMES, G_FOOD, GOOD_NAMES, MEMORY_NAMES, NG, NOCC, NV, OCC_NAMES, VALUE_NAMES, BIOME_NAMES, ORE_NAMES, isWater,
 } from './constants';
@@ -154,10 +155,10 @@ export function settlementDetail(sim: Simulation, id: number) {
   let money = 0;
   let food = 0;
   for (const p of people) {
-    occ[p.occ]++;
-    ages[Math.min(9, Math.floor(ageOf(w, p) / 10))]++;
-    cultures.set(p.culture, (cultures.get(p.culture) ?? 0) + 1);
-    religions.set(p.religion, (religions.get(p.religion) ?? 0) + 1);
+    occ[p.occ] += p.n;
+    ages[Math.min(9, Math.floor(ageOf(w, p) / 10))] += p.n;
+    cultures.set(p.culture, (cultures.get(p.culture) ?? 0) + p.n);
+    religions.set(p.religion, (religions.get(p.religion) ?? 0) + p.n);
   }
   for (const hid of s.households) { const h = w.households.get(hid); if (h) { money += h.money; food += h.goods[G_FOOD]; } }
   const notable = people.filter((p) => p.notable || p.title).slice(0, 30).map((p) => personRef(sim, p.id)!);
@@ -238,7 +239,7 @@ export function personDetail(sim: Simulation, id: number) {
   const deeds = base.deeds.map((e) => ev(sim, e)).filter(Boolean) as HistEvent[];
   const s = w.settlements.get(base.sid);
   const out = {
-    id, alive: !!p, name: base.name, family: base.family, sex: base.sex, born: base.born, died: d?.died ?? -1, cause: d ? DEATH_NAMES[d.cause] : '',
+    id, alive: !!p, represents: p?.n ?? 1, name: base.name, family: base.family, sex: base.sex, born: base.born, died: d?.died ?? -1, cause: d ? DEATH_NAMES[d.cause] : '',
     age: p ? Math.floor(ageOf(w, p)) : Math.floor((d!.died - d!.born) / 12),
     title: base.title, notable: base.notable, occupation: OCC_NAMES[base.occ],
     settlement: s ? { id: s.id, name: s.name } : null,
@@ -262,7 +263,7 @@ export function personDetail(sim: Simulation, id: number) {
 function householdInfo(sim: Simulation, p: Person) {
   const h = sim.w.households.get(p.hh);
   if (!h) return null;
-  return { members: h.members.length, money: h.money, food: h.goods[G_FOOD], land: h.land, tools: h.tools, goods: h.goods.map((v, g) => ({ good: GOOD_NAMES[g], v })).filter((x) => x.v > 0.05) };
+  return { members: householdSize(sim.w, h), money: h.money, food: h.goods[G_FOOD], land: h.land, tools: h.tools, goods: h.goods.map((v, g) => ({ good: GOOD_NAMES[g], v })).filter((x) => x.v > 0.05) };
 }
 
 export function eventDetail(sim: Simulation, id: number) {
