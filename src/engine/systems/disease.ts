@@ -5,7 +5,7 @@
  */
 import { BLD_AQUEDUCT, BLD_HOUSING, D_DISEASE, M_PLAGUE } from '../constants';
 import { ageOf, type Ctx } from '../context';
-import { killPerson, remember } from '../entities';
+import { agentDeaths, headcount, partOf, remember, splitAgent } from '../entities';
 import { logEvent } from '../history';
 import type { Disease, Settlement } from '../types';
 
@@ -35,10 +35,12 @@ export function seedInfection(c: Ctx, s: Settlement, d: Disease, n: number): num
   const people = c.residents(s).filter((p) => !p.inf && !p.immune.includes(d.id));
   let k = 0;
   for (let i = 0; i < n && people.length; i++) {
-    const p = people.splice(c.rng.int(people.length), 1)[0];
+    let p = people.splice(c.rng.int(people.length), 1)[0];
+    if (p.n > n - k) p = splitAgent(c, p, Math.max(1, n - k));
     p.inf = d.id;
     p.infUntil = c.w.tick + d.duration;
-    k++;
+    k += p.n;
+    if (k >= n) break;
   }
   return k;
 }
@@ -51,14 +53,14 @@ export function diseaseMonth(c: Ctx): void {
     if (!s.alive || s.pop === 0) continue;
     const people = c.residents(s);
     const counts = new Map<number, number>();
-    for (const p of people) if (p.inf) counts.set(p.inf, (counts.get(p.inf) ?? 0) + 1);
+    for (const p of people) if (p.inf) counts.set(p.inf, (counts.get(p.inf) ?? 0) + p.n);
     if (!counts.size) continue;
     infectedBy.set(s.id, counts);
     const fx = c.fx(s.id);
     const crowd = s.nomadic ? 0.7 : Math.min(2, Math.max(0.8, s.pop / Math.max(5, s.buildings[BLD_HOUSING] * 5)));
     const density = Math.min(1.6, 0.6 + Math.log10(Math.max(10, s.pop)) * 0.3);
     const sanit = s.buildings[BLD_AQUEDUCT] > 0 ? 0.6 : 1;
-    const N = people.length;
+    const N = headcount(people);
     for (const [did, I] of counts) {
       const d = w.diseases.get(did);
       if (!d) continue;
@@ -66,7 +68,9 @@ export function diseaseMonth(c: Ctx): void {
       const pInf = 1 - Math.exp(-(beta * I) / N);
       for (const p of people) {
         if (p.inf || p.immune.includes(did)) continue;
-        if (c.rng.next() < pInf) { p.inf = did; p.infUntil = w.tick + d.duration; }
+        // large groups catch a disease together once it is spreading fast; otherwise part of the group falls ill
+        const part = p.n > 1 && pInf > 0.35 ? p : partOf(c, p, pInf);
+        if (part) { part.inf = did; part.infUntil = w.tick + d.duration; }
       }
     }
     // progression
@@ -81,11 +85,11 @@ export function diseaseMonth(c: Ctx): void {
       const frail = (age < 5 ? 1.6 : age > 55 ? 1.8 : 1) * (1.6 - p.health) * (1.3 - p.nutrition * 0.5);
       const pDie = (d.lethality / d.duration) * frail * vir * fx.disease;
       p.health -= 0.08;
-      if (c.rng.next() < pDie) {
-        d.deaths++;
-        deaths++;
-        killPerson(c, p, D_DISEASE, s.ctx.plague ?? -1);
-        continue;
+      const dead = agentDeaths(c, p, pDie, D_DISEASE, s.ctx.plague ?? -1);
+      if (dead > 0) {
+        d.deaths += dead;
+        deaths += dead;
+        if (!w.persons.has(p.id)) continue;
       }
       if (w.tick >= p.infUntil) {
         p.immune.push(p.inf);
@@ -148,12 +152,26 @@ export function diseaseEmergenceYear(c: Ctx): void {
   const w = c.w;
   const k = w.config.diseaseEmergence;
   if (k <= 0) return;
+  // New diseases are rare events for the world as a whole. Their frequency rises with total
+  // population, but far less than proportionally; where one appears depends on crowding,
+  // size and contact with herd animals.
+  const cands: Settlement[] = [];
+  const wts: number[] = [];
+  let total = 0;
   for (const s of w.settlements.values()) {
     if (!s.alive || s.pop < 60) continue;
     const fx = c.fx(s.id);
     const crowd = s.nomadic ? 0.5 : Math.min(2, s.pop / Math.max(5, s.buildings[BLD_HOUSING] * 5));
-    const p = 0.004 * k * (s.pop / 400) ** 1.1 * (fx.herding ? 2 : 1) * crowd;
-    if (c.rng.chance(p)) {
+    const wt = (s.pop / 400) ** 1.1 * (fx.herding ? 2 : 1) * crowd;
+    cands.push(s); wts.push(wt); total += wt;
+  }
+  if (!cands.length || total <= 0) return;
+  const rate = Math.min(0.35, 0.004 * k * Math.min(total, 3 * Math.max(1, total) ** 0.35));
+  if (c.rng.chance(rate)) {
+    let r = c.rng.next() * total;
+    let s = cands[0];
+    for (let i = 0; i < cands.length; i++) { r -= wts[i]; if (r <= 0) { s = cands[i]; break; } }
+    {
       const d = newDisease(c, s, 1);
       seedInfection(c, s, d, 2 + c.rng.int(4));
       s.ctx.plagueFrom = undefined as unknown as number;

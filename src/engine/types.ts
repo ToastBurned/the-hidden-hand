@@ -16,6 +16,13 @@ export interface Relation {
 
 export interface Person {
   id: number;
+  /**
+   * How many real people this agent represents. Notable people (rulers and their families,
+   * inventors, prophets, founders, elites) are always 1. Ordinary people in large populations
+   * are consolidated into representative agents of similar people (same sex, age band,
+   * occupation, culture, faith and marital state) so the world can grow to realistic sizes.
+   */
+  n: number;
   name: string;
   family: string; // lineage name
   sex: 0 | 1; // 0 female, 1 male
@@ -428,6 +435,8 @@ export interface World {
   /** Monetary accounting: money created and destroyed, for invariant checks. */
   moneyMinted: number;
   moneyLost: number;
+  /** Total number of living people (sum of agent weights), maintained by the simulation. */
+  population: number;
 }
 
 export interface YearAccumulator {

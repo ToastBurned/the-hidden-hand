@@ -9,7 +9,7 @@ import {
   V_INNOV, B_STEPPE, B_SAVANNA, isWater, NV,
 } from '../constants';
 import { ageOf, type Ctx } from '../context';
-import { remember, meanValues } from '../entities';
+import { individuate, remember, meanValues } from '../entities';
 import { logEvent } from '../history';
 import { NTECH, TECHS, TECH_BY_KEY } from '../techs';
 import type { Person, Settlement } from '../types';
@@ -74,19 +74,21 @@ export function technologyYear(c: Ctx, s: Settlement): void {
   // research effort
   let pts = 0;
   let literate = 0;
+  let adults = 0;
   for (const p of people) {
     if (ageOf(w, p) < 14) continue;
-    if (p.occ === O_SCHOLAR) pts += 2 + 3 * p.skills[O_SCHOLAR] * p.intel;
-    else if (p.occ === O_ARTISAN) pts += 0.25 * (0.5 + p.open);
-    else if (p.occ === O_PRIEST) pts += 0.3;
-    else if (p.occ === O_MERCHANT) pts += 0.25;
-    else if (p.occ === O_FARMER || p.occ === O_FORAGER || p.occ === O_FISHER) pts += 0.03 * p.open;
-    else pts += 0.03;
-    literate += p.edu;
+    adults += p.n;
+    if (p.occ === O_SCHOLAR) pts += (2 + 3 * p.skills[O_SCHOLAR] * p.intel) * p.n;
+    else if (p.occ === O_ARTISAN) pts += 0.25 * (0.5 + p.open) * p.n;
+    else if (p.occ === O_PRIEST) pts += 0.3 * p.n;
+    else if (p.occ === O_MERCHANT) pts += 0.25 * p.n;
+    else if (p.occ === O_FARMER || p.occ === O_FORAGER || p.occ === O_FISHER) pts += 0.03 * p.open * p.n;
+    else pts += 0.03 * p.n;
+    literate += p.edu * p.n;
   }
-  const lit = people.length ? literate / people.length : 0;
+  const lit = adults ? literate / adults : 0;
   pts *= fx.research * (1 + 0.25 * Math.min(4, s.buildings[BLD_SCHOOL])) * (1 + mean[V_INNOV] * 0.6) * w.config.innovation * (1 + lit) * (pol?.inst.schools ? 1.1 : 1);
-  pts += Math.sqrt(people.length) * 0.35 * w.config.innovation;
+  pts += Math.sqrt(s.pop) * 0.35 * w.config.innovation;
   // candidates
   const cands: { id: number; wgt: number }[] = [];
   for (const T of TECHS) {
@@ -151,6 +153,7 @@ function discover(c: Ctx, s: Settlement, id: number, people: Person[]): void {
   const firstEver = ![...w.settlements.values()].some((o) => o !== s && o.techs[id]) && !w.events.some((e) => e.type === 'invention' && e.data?.tech === id);
   const big = ['agriculture', 'writing', 'iron', 'sailing', 'currency', 'philosophy', 'printing', 'bronze'].includes(T.key);
   if (inv) {
+    if (firstEver) inv = individuate(c, inv);
     inv.notable = inv.notable || firstEver;
     remember(inv, w.tick, M_INVENTED, 0.8, id);
   }
@@ -175,8 +178,9 @@ export function diffusionYear(c: Ctx): void {
     if (!s.alive || s.pop === 0) continue;
     const people = c.residents(s);
     let open = 0;
-    for (const p of people) open += p.values[V_INNOV];
-    open = people.length ? open / people.length : 0;
+    let heads = 0;
+    for (const p of people) { open += p.values[V_INNOV] * p.n; heads += p.n; }
+    open = heads ? open / heads : 0;
     for (const key in s.contacts) {
       const o = w.settlements.get(+key);
       if (!o || !o.alive) continue;

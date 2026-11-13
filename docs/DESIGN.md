@@ -228,16 +228,42 @@ See [EXPERIMENTS.md](EXPERIMENTS.md). In short: conditions × seeds, run in para
 correction; one-way ANOVA (η²) across conditions; percentile bands over time; divergence timing; and rank
 correlations between outcomes and each world's geography and early state.
 
+## Scale: representative agents
+
+The engine simulates a bounded number of agents (`agentBudget`, default 6,000) however large the population grows.
+
+- Every `Person` has `n`, the number of people it stands for. Rulers, title holders, prophets, first inventors,
+  founders and their parents, spouses and children always have `n = 1` and are never merged.
+- Deaths thin an agent (a binomial draw of its `n`); births create a child agent whose `n` is the number of
+  births in the group that month. War, disease, disaster and violence all work the same way.
+- When part of a group does something different (converts, changes trade, marries, falls ill, migrates), that part
+  is split off as a new agent. A married group takes a matching share of its spouses along.
+- Once a year (`systems/scale.ts`), if the world is over budget, similar households in a settlement are pooled and
+  similar members inside them are merged, in passes of increasing coarseness until the settlement meets its share
+  of the budget. The budget is shared out by the square root of population, so villages keep more detail per head
+  than cities. Headcount, money, goods, land and tools are conserved exactly by splits and merges.
+- When the story needs a specific person out of a group (a successor, a rebel leader, a prophet, an inventor, the
+  founder of a colony), one individual is drawn out of the group with their own name and slightly varied character.
+- `density` sets how many people a map tile can carry relative to the engine's base scale: wild food, fish, ore and
+  wood stocks scale up, and each farm worker tills proportionally less of a tile for the same output. Density 1
+  reproduces the original world of a few thousand people; the default of 20 reaches about 100,000 with the
+  pre-industrial technologies.
+
 ## Known limitations
 
-- **Scale.** The default world reaches a few thousand people over a few centuries, as agreed. Larger maps and more
-  founding bands work but slow down roughly in proportion to population.
+- **Scale.** Ordinary people are pooled into representative agents once the world outgrows its agent budget
+  (see "Scale" below). Pooling is an approximation: pooled households behave like social classes, so individual
+  inheritance, marriage choice and friendships are only modelled in detail for notable people and in small
+  communities. Measured inequality (Gini) is biased downward in pooled settlements because differences inside a
+  pool are invisible. Minority faiths and cultures that are very small within a class can be folded into its
+  majority when the budget is tight.
+- **Speed.** A default world costs roughly 0.1 to 0.5 s per simulated year while small and 1 to 2 s per year at
+  100,000 people or more. The agent count runs at about twice its budget late on, because groups split during the
+  year (conversions, job changes, marriages, outbreaks) and are only re-merged at year end.
+- **Slack land early on.** With the default land density the first two centuries have land to spare, so early
+  droughts matter much less than they do once the land fills up.
 - **Calibration.** Parameters are chosen for plausible behaviour, not fitted to historical data. The validation report
   checks broad stylised facts, not specific societies.
-- **Starvation** is a larger share of deaths in the first decades (when foragers are fragile and farming has not yet
-  appeared) than later.
-- **Polity labels**: many small early polities are led by religious figures, because sacral legitimacy is the
-  easiest early form of authority in the model.
 - **Coarse geography**: a tile is a region, so cities are not spatially resolved and roads are abstract.
 - **No naval warfare, credit, slavery, or detailed law.** These would be natural extensions; the module structure
   is designed for it (each system is a function of the world state, called from `sim.ts`).

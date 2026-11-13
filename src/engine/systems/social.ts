@@ -8,7 +8,7 @@ import {
   M_WAR_LOSS, M_PERSECUTED, isWater,
 } from '../constants';
 import { ageOf, clamp, type Ctx } from '../context';
-import { affinity, createHousehold, addToHousehold, killPerson, relate, remember } from '../entities';
+import { affinity, createHousehold, addToHousehold, householdSize, killPerson, relate, remember, splitAgent, thinAgent } from '../entities';
 import { logEvent } from '../history';
 import { occupationValue } from './economy';
 import type { Person, Settlement } from '../types';
@@ -31,7 +31,7 @@ export function allowedOccupations(c: Ctx, s: Settlement): boolean[] {
   const a = new Array(NOCC).fill(false);
   a[O_FORAGER] = true;
   a[O_FARMER] = fx.agriculture > 0;
-  a[O_FISHER] = fish > 5;
+  a[O_FISHER] = fish > 5 * c.w.config.density;
   a[O_WOODCUTTER] = forest > 1.5;
   a[O_MINER] = stone > 0.25 || ore;
   a[O_ARTISAN] = s.pop >= 20;
@@ -59,30 +59,44 @@ export function chooseOccupations(c: Ctx, s: Settlement, all: boolean): void {
     vmax = Math.max(vmax, values[o]);
   }
   const counts = new Array(NOCC).fill(0);
-  for (const p of people) counts[p.occ]++;
+  for (const p of people) counts[p.occ] += p.n;
   const vacancies = (o: number) => quotaFor(s, o) - counts[o];
   const order = all ? c.rng.shuffle([...people]) : people.filter((p) => p.occ === O_NONE);
-  for (const p of order) {
+  for (let p of order) {
     const age = ageOf(w, p);
     if (age < 12 || p.health < 0.15) {
-      if (p.occ !== O_NONE) { counts[p.occ]--; p.occ = O_NONE; counts[O_NONE]++; }
+      if (p.occ !== O_NONE) { counts[p.occ] -= p.n; p.occ = O_NONE; counts[O_NONE] += p.n; }
       continue;
     }
-    if (age > 66 && c.rng.chance(0.4)) {
-      if (p.occ !== O_NONE) { counts[p.occ]--; p.occ = O_NONE; counts[O_NONE]++; }
+    if (age > 66) {
+      // retirement: a share of an older group stops working each year
+      const k = p.n === 1 ? (c.rng.chance(0.4) ? 1 : 0) : c.rng.binomial(p.n, 0.4);
+      if (k > 0 && p.occ !== O_NONE) {
+        const r = k < p.n ? splitAgent(c, p, k) : p;
+        counts[r.occ] -= r.n; r.occ = O_NONE; counts[O_NONE] += r.n;
+      }
       continue;
     }
-    if (!all && age > 66) continue;
     const h = w.households.get(p.hh);
     const hungry = h ? h.hunger > 0.15 : false;
     // most people keep their trade; some reconsider each year (more when struggling)
-    if (all && p.occ !== O_NONE && !c.rng.chance(0.2 + (hungry ? 0.4 : 0) + (values[p.occ] < vmax * 0.3 ? 0.3 : 0))) continue;
+    if (all && p.occ !== O_NONE) {
+      const pr = 0.2 + (hungry ? 0.4 : 0) + (values[p.occ] < vmax * 0.3 ? 0.3 : 0);
+      if (p.n === 1) { if (!c.rng.chance(pr)) continue; }
+      else {
+        // for a group, the share that reconsiders is split off and decides together
+        const k = c.rng.binomial(p.n, pr);
+        if (k <= 0) continue;
+        if (k < p.n) p = splitAgent(c, p, k);
+      }
+    }
     let best = O_FORAGER;
     let bestU = -Infinity;
     for (let o = 1; o < NOCC; o++) {
       if (!allowed[o]) continue;
       const salaried = o === O_SOLDIER || o === O_SCHOLAR || o === O_PRIEST || o === O_BUILDER;
       if (salaried && p.occ !== o && vacancies(o) <= 0) continue;
+      if (salaried && p.occ !== o && p.n > vacancies(o)) continue;
       if (o === O_SOLDIER && (p.sex === 0 || age < 16 || age > 50)) continue;
       if (age < 15 && !(o === O_FORAGER || o === O_FARMER || o === O_FISHER)) continue;
       let u = values[o] * (0.55 + p.skills[o]);
@@ -111,10 +125,10 @@ export function chooseOccupations(c: Ctx, s: Settlement, all: boolean): void {
       const g = best === O_WOODCUTTER ? 1 : best === O_MINER ? 2 : best === O_ARTISAN ? 4 : -1;
       if (g >= 0) {
         const demand = s.market.demand[g] + (best === O_ARTISAN ? s.market.demand[5] : 0);
-        values[best] *= 1 - 1 / (Math.max(0, demand) / 2 + 2);
-      } else if (best === O_MERCHANT) values[best] *= 0.8;
-      counts[p.occ]--;
-      counts[best]++;
+        values[best] *= (1 - 1 / (Math.max(0, demand) / 2 + 2)) ** Math.min(p.n, 40);
+      } else if (best === O_MERCHANT) values[best] *= 0.8 ** Math.min(p.n, 40);
+      counts[p.occ] -= p.n;
+      counts[best] += p.n;
       p.occ = best;
       p.occSince = w.tick;
     }
@@ -170,8 +184,10 @@ export function marriagesMonth(c: Ctx, s: Settlement): void {
     else if (p.sex === 1 && age >= 17 && age < 60) singlesM.push(p);
   }
   if (!singlesF.length) return;
-  for (const f of singlesF) {
-    if (!c.rng.chance(0.07)) continue;
+  for (let f of singlesF) {
+    const seekers = f.n === 1 ? (c.rng.chance(0.07) ? 1 : 0) : c.rng.binomial(f.n, 0.07);
+    if (seekers <= 0) continue;
+    if (!w.persons.has(f.id) || f.spouse >= 0) continue;
     let pool = singlesM;
     let exo = false;
     const fAgeNow = ageOf(w, f);
@@ -204,7 +220,12 @@ export function marriagesMonth(c: Ctx, s: Settlement): void {
       if (sc > bestScore && !closeKin(c, f, m) && !(cousins(c, f, m) && c.rng.chance(0.7))) { bestScore = sc; best = m; }
     }
     if (!best) continue;
-    marry(c, s, f, best, exo);
+    // groups marry in matched numbers: the larger side splits
+    let m = best;
+    const k = Math.min(seekers, m.n);
+    if (f.n > k) f = splitAgent(c, f, k, k === 1 && (m.notable || !!m.title));
+    if (m.n > k) m = splitAgent(c, m, k, k === 1 && (f.notable || !!f.title));
+    marry(c, s, f, m, exo);
   }
 }
 
@@ -224,7 +245,7 @@ export function marry(c: Ctx, s: Settlement, f: Person, m: Person, exo: boolean)
     // dowry & inheritance-in-life from both parental households
     for (const ph of [fh, mh]) {
       if (!ph) continue;
-      const share = 1 / Math.max(2, ph.members.length);
+      const share = Math.min(0.5, f.n / Math.max(2, householdSize(w, ph)));
       for (let g = 0; g < NG; g++) {
         const q = ph.goods[g] * share * (g === G_FOOD ? 0.5 : 0.3);
         ph.goods[g] -= q;
@@ -270,8 +291,9 @@ export function interactionsMonth(c: Ctx, s: Settlement): void {
   const fx = c.fx(s.id);
   const pol = w.polities.get(s.polity);
   let soldiers = 0;
-  for (const p of people) if (p.occ === O_SOLDIER) soldiers++;
-  const order = Math.min(1, fx.lawOrder + soldiers / Math.max(10, n * 0.05) * 0.3 + (pol?.inst.writtenLaw ? 0.2 : 0));
+  let heads = 0;
+  for (const p of people) { heads += p.n; if (p.occ === O_SOLDIER) soldiers += p.n; }
+  const order = Math.min(1, fx.lawOrder + soldiers / Math.max(10, heads * 0.05) * 0.3 + (pol?.inst.writtenLaw ? 0.2 : 0));
   const samples = Math.ceil(n / 4);
   for (let k = 0; k < samples; k++) {
     const a = people[c.rng.int(n)];
@@ -313,7 +335,8 @@ export function interactionsMonth(c: Ctx, s: Settlement): void {
           const kin = w.persons.get(kid);
           if (kin) { remember(kin, w.tick, M_FEUD, -0.8, killer.id, ev); relate(kin, killer.id, -0.9); }
         }
-        killPerson(c, victim, D_VIOLENCE, ev);
+        if (victim.n > 1) thinAgent(c, victim, 1, D_VIOLENCE, ev);
+        else killPerson(c, victim, D_VIOLENCE, ev);
       }
     }
   }
@@ -336,7 +359,7 @@ export function wellbeingYear(c: Ctx, s: Settlement): void {
     if (!h) continue;
     let v = h.money + h.land * 40 + h.tools * p[4];
     for (let g = 0; g < NG; g++) v += h.goods[g] * p[g];
-    wealth.push({ h: hid, v: v / Math.max(1, h.members.length) });
+    wealth.push({ h: hid, v: v / Math.max(1, householdSize(w, h)) });
   }
   wealth.sort((a, b) => a.v - b.v);
   const rank = new Map<number, number>();

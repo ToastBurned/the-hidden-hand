@@ -12,7 +12,7 @@ import {
   BLD_HOUSING, D_VIOLENCE, NOCC, O_NONE,
 } from '../constants';
 import { ageOf, clamp, lerp, type Ctx } from '../context';
-import { createPolity, govFromValues, killPerson, meanValues, remember, defaultInstitutions } from '../entities';
+import { createPolity, govFromValues, headcount, householdSize, individuate, killPerson, meanValues, remember, defaultInstitutions, thinAgent } from '../entities';
 import { logEvent } from '../history';
 import { TECH_BY_KEY } from '../techs';
 import type { Person, Polity, Settlement } from '../types';
@@ -47,7 +47,7 @@ export function militaryStrength(c: Ctx, pol: Polity, sid = -1): number {
       const age = ageOf(w, p);
       if (age < 16 || age > 50) continue;
       const base = p.occ === O_SOLDIER ? 1 + p.skills[O_SOLDIER] : levy * (0.5 + p.health * 0.5);
-      str += base * p.health * fx.weapon * fx.cavalry;
+      str += base * p.health * fx.weapon * fx.cavalry * p.n;
     }
   }
   return str;
@@ -92,7 +92,7 @@ export function succession(c: Ctx, pol: Polity, causeEvent = -1): void {
   const top = scored[0];
   const second = scored[1];
   const contested = !!second && second.s > top.s * 0.92 && pol.settlements.length >= 2 && pol.legitimacy < 0.55 && second.p.ambition > 0.6;
-  const leader = top.p;
+  const leader = individuate(c, top.p);
   const hereditary = !!prev && (prev as Person).children?.includes(leader.id);
   pol.leader = leader.id;
   pol.leaderSince = w.tick;
@@ -111,7 +111,7 @@ export function succession(c: Ctx, pol: Polity, causeEvent = -1): void {
   pol.ctx.succession = ev;
   if (contested) {
     // a rival claimant raises the provinces in revolt
-    const rival = second.p;
+    const rival = individuate(c, second.p);
     const provinces = pol.settlements.filter((id) => id !== pol.capital);
     if (provinces.length) {
       const seat = w.settlements.get(c.rng.pick(provinces))!;
@@ -152,8 +152,8 @@ export function titleFor(pol: Polity, sex: 0 | 1 = 1): string {
 function baseTitle(pol: Polity): string {
   const g = pol.gov;
   const size = pol.settlements.length;
-  if (g.sacral > 0.55 && g.sacral >= g.heredity) return size > 3 ? 'High Priest-King' : 'High Priest';
-  if (g.heredity > 0.5) return size >= 5 ? 'Emperor' : size >= 2 ? 'King' : 'Chief';
+  if (pol.inst.priesthood && g.sacral > 0.6 && g.sacral >= g.heredity && g.sacral >= g.consent && g.sacral >= g.force) return size > 3 ? 'High Priest-King' : 'High Priest';
+  if (g.heredity > 0.42 && g.heredity >= g.consent * 0.8) return size >= 5 ? 'Emperor' : size >= 2 ? 'King' : 'Chief';
   if (g.consent > 0.55 && g.participation > 0.5) return size >= 2 ? 'Consul' : 'Speaker';
   if (g.force > 0.5) return 'Warlord';
   return size >= 2 ? 'Lord' : 'Headman';
@@ -164,7 +164,7 @@ export function govLabel(pol: Polity, pop: number): string {
   const n = pol.settlements.length;
   const big = n >= 5 || pop > 2500;
   if (pop < 120 && n === 1 && g.centralization < 0.45) return g.participation > 0.55 ? 'Egalitarian band' : 'Tribe';
-  if (g.sacral > 0.55 && g.sacral >= g.heredity) return big ? 'Theocratic empire' : 'Theocracy';
+  if (pol.inst.priesthood && g.sacral > 0.6 && g.sacral >= g.heredity && g.sacral >= g.consent) return big ? 'Theocratic empire' : 'Theocracy';
   if (g.force > 0.55 && g.force >= g.heredity) return big ? 'Military empire' : 'Warlord state';
   if (g.heredity > 0.5) {
     if (big && g.centralization > 0.55) return 'Empire';
@@ -214,7 +214,7 @@ export function politicsYear(c: Ctx, pol: Polity): void {
   const people = polityPeople(c, pol);
   if (!people.length) return;
   const mean = meanValues(people);
-  const pop = people.length;
+  const pop = headcount(people);
   const leader = w.persons.get(pol.leader);
   if (!leader || leader.sid !== pol.capital && !pol.settlements.includes(leader.sid)) {
     const deathEv = leader ? -1 : w.events.length ? findLeaderDeath(c, pol) : -1;
@@ -237,7 +237,7 @@ export function politicsYear(c: Ctx, pol: Polity): void {
   famine /= pop; unrest /= pop; prosperity /= pop;
   let target = 0.55 + prosperity * 0.25 - famine * 0.6 - pol.warWeariness * 0.3;
   if (L) {
-    const sameFaith = people.filter((p) => p.religion === L.religion).length / pop;
+    const sameFaith = headcount(people.filter((p) => p.religion === L.religion)) / pop;
     target += g.sacral * (sameFaith - 0.5) * 0.4 + g.merit * (L.intel - 0.5) * 0.3 + g.consent * (L.extra - 0.5) * 0.3;
   }
   pol.legitimacy = clamp(lerp(pol.legitimacy, target, 0.25));
@@ -274,7 +274,7 @@ export function politicsYear(c: Ctx, pol: Polity): void {
 
   // --- institutions emerge from conditions and values
   const inst = pol.inst;
-  const priests = people.filter((p) => p.occ === O_PRIEST).length;
+  const priests = headcount(people.filter((p) => p.occ === O_PRIEST));
   const has = (key: string) => (c.w.settlements.get(pol.capital)?.techs[TECH_BY_KEY[key]] ?? 0) > 0;
   const change = (key: keyof typeof inst, on: boolean, text: string) => {
     if (inst[key] === on) return;
@@ -335,7 +335,7 @@ export function politicsYear(c: Ctx, pol: Polity): void {
   }
   if (L) L.title = titleFor(pol, L.sex);
   pol.warWeariness = Math.max(0, pol.warWeariness * 0.8 - 0.02);
-  pol.history.push({ y: Math.floor(w.tick / 12), pop, settlements: pol.settlements.length, treasury: pol.treasury, army: people.filter((p) => p.occ === O_SOLDIER).length });
+  pol.history.push({ y: Math.floor(w.tick / 12), pop, settlements: pol.settlements.length, treasury: pol.treasury, army: headcount(people.filter((p) => p.occ === O_SOLDIER)) });
   if (pol.history.length > 600) pol.history.shift();
   void O_SCHOLAR; void O_BUILDER; void G_FOOD; void O_NONE; void defaultInstitutions;
 }
@@ -378,9 +378,13 @@ export function financeMonth(c: Ctx, pol: Polity): void {
     for (const hid of s.households) { const h = w.households.get(hid); if (h && h.members.length) hhs.push(h); }
   }
   if (!hhs.length) { pol.treasury += toWelfare + toElite; return; }
-  hhs.sort((a, b) => a.money / a.members.length - b.money / b.members.length);
+  const size = new Map<number, number>();
+  for (const h of hhs) size.set(h.id, Math.max(1, householdSize(w, h)));
+  hhs.sort((a, b) => a.money / size.get(a.id)! - b.money / size.get(b.id)!);
   const poor = hhs.slice(0, Math.max(1, Math.ceil(hhs.length * 0.3)));
-  for (const h of poor) h.money += toWelfare / poor.length;
+  let poorN = 0;
+  for (const h of poor) poorN += size.get(h.id)!;
+  for (const h of poor) h.money += (toWelfare * size.get(h.id)!) / poorN;
   // elite: the ruler's household and the highest-status households
   const lh = L ? w.households.get(L.hh) : undefined;
   const rich = hhs.slice(-Math.max(1, Math.ceil(hhs.length * 0.1)));
@@ -398,6 +402,7 @@ export function unrestMonth(c: Ctx, s: Settlement): void {
   const people = c.residents(s);
   if (!people.length) return;
   const sample = people.length > 60 ? 60 : people.length;
+  let sampleN = 0;
   let unhappy = 0;
   let foreignCulture = 0;
   let foreignFaith = 0;
@@ -405,30 +410,40 @@ export function unrestMonth(c: Ctx, s: Settlement): void {
   let persecuted = 0;
   for (let k = 0; k < sample; k++) {
     const p = people[(k * 7919) % people.length];
-    unhappy += 1 - p.happiness;
-    if (p.culture !== pol.culture) foreignCulture++;
-    if (pol.religion >= 0 && p.religion !== pol.religion) foreignFaith++;
-    egal += -p.values[V_HIER];
-    for (const m of p.mem) if (m.k === 10 && w.tick - m.t < 120) { persecuted++; break; }
+    sampleN += p.n;
+    unhappy += (1 - p.happiness) * p.n;
+    if (p.culture !== pol.culture) foreignCulture += p.n;
+    if (pol.religion >= 0 && p.religion !== pol.religion) foreignFaith += p.n;
+    egal += -p.values[V_HIER] * p.n;
+    for (const m of p.mem) if (m.k === 10 && w.tick - m.t < 120) { persecuted += p.n; break; }
   }
-  unhappy /= sample; foreignCulture /= sample; foreignFaith /= sample; egal /= sample; persecuted /= sample;
+  unhappy /= sampleN; foreignCulture /= sampleN; foreignFaith /= sampleN; egal /= sampleN; persecuted /= sampleN;
   // inequality: share of wealth held by the richest fifth of households
-  const ws: number[] = [];
+  const ws: { v: number; z: number }[] = [];
   for (const hid of s.households) {
     const h = w.households.get(hid);
-    if (h) ws.push((h.money + h.land * 40 + h.goods[0]) / Math.max(1, h.members.length));
+    if (h) { const z = Math.max(1, householdSize(w, h)); ws.push({ v: (h.money + h.land * 40 + h.goods[0]) / z, z }); }
   }
-  ws.sort((a, b) => b - a);
-  const top = ws.slice(0, Math.max(1, Math.floor(ws.length / 5))).reduce((a, b) => a + b, 0);
-  const all = ws.reduce((a, b) => a + b, 0) || 1;
-  const ineq = top / all;
+  ws.sort((a, b) => b.v - a.v);
+  let all = 0;
+  let allN = 0;
+  for (const x of ws) { all += x.v * x.z; allN += x.z; }
+  let top = 0;
+  let seen = 0;
+  for (const x of ws) {
+    const take = Math.min(x.z, allN / 5 - seen);
+    if (take <= 0) break;
+    top += x.v * take;
+    seen += take;
+  }
+  const ineq = top / (all || 1);
   const capital = w.settlements.get(pol.capital);
   const dist = capital ? Math.hypot(capital.x - s.x, capital.y - s.y) : 0;
   const admin = pol.ctx.admin ?? 2;
   const overextension = Math.max(0, pol.settlements.length - admin) * 0.05 + (dist > 8 ? (dist - 8) * 0.012 * (1 - pol.gov.centralization * 0.5) : 0);
   let soldiers = 0;
-  for (const p of people) if (p.occ === O_SOLDIER) soldiers++;
-  const repression = Math.min(0.25, (soldiers / Math.max(1, people.length)) * 3) * pol.gov.centralization;
+  for (const p of people) if (p.occ === O_SOLDIER) soldiers += p.n;
+  const repression = Math.min(0.25, (soldiers / Math.max(1, s.pop)) * 3) * pol.gov.centralization;
   const raw = unhappy * 0.6 + s.hungerShare * 0.5 + Math.max(0, pol.gov.taxRate - 0.1) * 1.2 + Math.max(0, ineq - 0.4) * Math.max(0, egal) * 1.2
     + foreignCulture * 0.18 * (1 - pol.gov.tolerance) + foreignFaith * 0.25 * (1 - pol.gov.tolerance) + persecuted * 0.4
     + pol.warWeariness * 0.25 + (1 - pol.legitimacy) * 0.3 + overextension - fx.lawOrder - repression - s.cohesion * 0.15 - 0.32;
@@ -462,10 +477,12 @@ function riot(c: Ctx, s: Settlement, pol: Polity, why: { unhappy: number; ineq: 
   s.buildings[BLD_HOUSING] *= 0.97;
   pol.legitimacy = clamp(pol.legitimacy - 0.04);
   const people = c.residents(s);
-  const deaths = Math.min(5, Math.floor(people.length * 0.005 + c.rng.next() * 2));
+  const deaths = Math.min(5 + s.pop * 0.002, Math.floor(s.pop * 0.005 + c.rng.next() * 2));
   for (let i = 0; i < deaths; i++) {
     const p = people[c.rng.int(people.length)];
-    if (p && c.w.persons.has(p.id) && p.id !== pol.leader) killPerson(c, p, D_VIOLENCE, ev);
+    if (!p || !c.w.persons.has(p.id) || p.id === pol.leader) continue;
+    if (p.n > 1) thinAgent(c, p, 1, D_VIOLENCE, ev);
+    else killPerson(c, p, D_VIOLENCE, ev);
   }
   for (const p of people) if (p.happiness < 0.4 && c.w.persons.has(p.id) && c.rng.chance(0.3)) remember(p, w.tick, M_REVOLT, -0.2, pol.id, ev);
 }
@@ -475,17 +492,19 @@ export function revolution(c: Ctx, pol: Polity, s: Settlement): void {
   const w = c.w;
   const people = c.residents(s);
   const rebels = people.filter((p) => p.happiness < 0.45 && ageOf(w, p) >= 18);
-  if (rebels.length < 5) return;
+  const rebelN = headcount(rebels);
+  if (rebelN < 5) return;
   const rv = meanValues(rebels);
   let leader = rebels[0];
   for (const p of rebels) if (p.ambition * p.extra > leader.ambition * leader.extra) leader = p;
+  leader = individuate(c, leader);
   const old = w.persons.get(pol.leader);
   const ev = logEvent(w, {
     type: 'revolution', imp: 4,
     text: `Revolution in ${pol.name}: ${old ? `${old.title} ${old.name} ${old.family} was overthrown and ` : ''}${leader.name} ${leader.family} took power.`,
     x: s.x, y: s.y, persons: [leader.id, ...(old ? [old.id] : [])], settlements: [s.id], polities: [pol.id],
     causes: [s.ctx.riot ?? -1, s.ctx.famine ?? -1, pol.ctx.lastDefeat ?? -1],
-    why: `Unrest in the capital reached ${Math.round(s.unrest * 100)}%; ${rebels.length} residents backed the revolt. The rebels were ${rv[V_HIER] < 0 ? 'egalitarian' : 'hierarchical'} and ${rv[V_PIETY] > 0 ? 'devout' : 'secular'}.`,
+    why: `Unrest in the capital reached ${Math.round(s.unrest * 100)}%; ${rebelN} residents backed the revolt. The rebels were ${rv[V_HIER] < 0 ? 'egalitarian' : 'hierarchical'} and ${rv[V_PIETY] > 0 ? 'devout' : 'secular'}.`,
   });
   if (old && c.rng.chance(0.5)) killPerson(c, old, D_VIOLENCE, ev);
   if (pol.leaders.length) pol.leaders[pol.leaders.length - 1].to = w.tick;

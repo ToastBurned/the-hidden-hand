@@ -26,6 +26,8 @@ import { diplomacyYear, warDecisionsYear, warMonth } from './systems/war';
 import { diffusionYear, technologyYear } from './systems/technology';
 import { computeYearStats, emptyAcc } from './systems/stats';
 import { applyInterventions } from './systems/interventions';
+import { consolidateYear } from './systems/scale';
+import { householdSize } from './entities';
 
 export const ENGINE_VERSION = 1;
 
@@ -114,6 +116,7 @@ export class Simulation implements Ctx {
       lineage: {},
       moneyMinted: 0,
       moneyLost: 0,
+      population: 0,
     };
     const sim = new Simulation(w);
     sim.rng = rng;
@@ -123,6 +126,8 @@ export class Simulation implements Ctx {
     for (const p of w.polities.values()) money += p.treasury;
     w.moneyMinted = money;
     updateTerritories(sim);
+    w.population = 0;
+    for (const p of w.persons.values()) w.population += p.n;
     for (const s of w.settlements.values()) {
       s.buildings[BLD_HOUSING] = Math.ceil(s.pop / 5) + 1;
       s.granary = s.pop * 1.5;
@@ -277,11 +282,17 @@ export class Simulation implements Ctx {
     this.time('disasters', () => disastersMonth(this, this.field));
 
     const alive = [...w.settlements.values()].filter((s) => s.alive);
+    let total = 0;
     for (const s of alive) {
       let n = 0;
-      for (const hid of s.households) n += w.households.get(hid)?.members.length ?? 0;
+      for (const hid of s.households) {
+        const h = w.households.get(hid);
+        if (h) for (const id of h.members) n += w.persons.get(id)?.n ?? 0;
+      }
       s.pop = n;
+      total += n;
     }
+    w.population = total;
     // ---- economy
     const works = new Map<number, SettlementWork>();
     this.time('production', () => {
@@ -353,7 +364,7 @@ export class Simulation implements Ctx {
     // prosperity & history
     let meanWealth = 0;
     let n = 0;
-    for (const h of w.households.values()) { meanWealth += h.money + h.goods[G_FOOD]; n += h.members.length; }
+    for (const h of w.households.values()) { meanWealth += h.money + h.goods[G_FOOD]; n += householdSize(w, h); }
     meanWealth = n ? meanWealth / n : 1;
     for (const s of alive) {
       s.lowFoodYears = s.foodRatio < 0.88 ? s.lowFoodYears + 1 : 0;
@@ -365,6 +376,7 @@ export class Simulation implements Ctx {
       if (s.history.length > 600) s.history.shift();
       chooseOccupations(this, s, true);
     }
+    consolidateYear(this);
     w.stats.push(computeYearStats(this, this.field));
     w.acc = emptyAcc();
     ecologyYear(this);

@@ -7,7 +7,7 @@ import {
   D_AGE, D_ACCIDENT, D_CHILDBIRTH, D_INFANT, D_STARVATION, M_BIRTH, M_FAMINE, NOCC, O_NONE, O_SCHOLAR, BLD_SCHOOL, V_INDIV, V_PIETY,
 } from '../constants';
 import { ageOf, clamp, type Ctx } from '../context';
-import { addToHousehold, createPerson, killPerson, remember, movePersonToNewHousehold } from '../entities';
+import { addToHousehold, agentDeaths, createPerson, killPerson, remember, movePersonToNewHousehold, thinAgent } from '../entities';
 import { logEvent } from '../history';
 import type { Person, Settlement } from '../types';
 
@@ -35,13 +35,26 @@ export function demographyMonth(c: Ctx, s: Settlement): void {
       continue;
     }
     const h = sileHazard(age, fx.infantMort, fx.adultMort, mort) * (1 + 7 * (1 - p.health) ** 2);
-    if (c.rng.next() < 1 - Math.exp(-h / 12)) {
-      let cause = D_AGE;
-      if (age < 1) cause = D_INFANT;
-      else if (p.nutrition < 0.6) cause = D_STARVATION;
-      else if (age < 45 && c.rng.chance(0.4)) cause = D_ACCIDENT;
-      killPerson(c, p, cause, cause === D_STARVATION ? famineEv : -1);
+    const prob = 1 - Math.exp(-h / 12);
+    let cause = D_AGE;
+    if (age < 1) cause = D_INFANT;
+    else if (p.nutrition < 0.6) cause = D_STARVATION;
+    if (p.n === 1) {
+      if (c.rng.next() < prob) {
+        if (cause === D_AGE && age < 45 && c.rng.chance(0.4)) cause = D_ACCIDENT;
+        killPerson(c, p, cause, cause === D_STARVATION ? famineEv : -1);
+      }
+      continue;
     }
+    // a representative agent: a binomial number of the people it stands for die
+    let k = c.rng.binomial(p.n, prob);
+    if (k <= 0) continue;
+    if (cause === D_AGE && age < 45) {
+      const acc = c.rng.binomial(k, 0.4);
+      if (acc > 0) { thinAgent(c, p, Math.min(acc, p.n), D_ACCIDENT); k -= acc; }
+      if (!w.persons.has(p.id)) continue;
+    }
+    if (k > 0) thinAgent(c, p, k, cause, cause === D_STARVATION ? famineEv : -1);
   }
 }
 
@@ -54,30 +67,39 @@ export function birthsMonth(c: Ctx, s: Settlement): void {
     if (p.sex !== 0) continue;
     const age = ageOf(w, p);
     if (age < 15 || age >= 49) continue;
-    if (w.tick - p.lastBirth < 22) continue; // lactational amenorrhoea / spacing
+    if (p.n === 1 && w.tick - p.lastBirth < 22) continue; // lactational amenorrhoea / spacing
     const sched = FERT_SCHEDULE[Math.floor(age / 5)] ?? 0;
     if (sched <= 0) continue;
     const married = p.spouse >= 0 && w.persons.has(p.spouse);
     // desired family size falls with education and individualism (demographic transition)
-    const living = p.children.reduce((n, id) => n + (w.persons.has(id) ? 1 : 0), 0);
+    const living = p.children.reduce((n, id) => n + (w.persons.get(id)?.n ?? 0), 0) / p.n;
     const desired = 7 - 3.5 * p.edu - 1.2 * Math.max(0, p.values[V_INDIV]) + 1 * Math.max(0, p.values[V_PIETY]);
     const want = living >= desired ? 0.25 : 1;
     const hh = w.households.get(p.hh);
     // fertility responds to the community's food security, not only to the mother's own condition
     const security = clamp((s.foodRatio - 0.82) / 0.15, 0.1, 1);
     const stress = (hh ? Math.max(0, 1 - hh.hunger * 2) : 1) * security;
-    const annual = 0.48 * sched * fec * p.nutrition ** 3 * p.health * stress * want * (married ? 1 : 0.04);
-    if (c.rng.next() >= annual / 12) continue;
-    giveBirth(c, s, p, married ? w.persons.get(p.spouse) : undefined, fx.infantMort * fx.adultMort);
+    let annual = 0.48 * sched * fec * p.nutrition ** 3 * p.health * stress * want * (married ? 1 : 0.04);
+    if (p.n === 1) {
+      if (c.rng.next() >= annual / 12) continue;
+      giveBirth(c, s, p, married ? w.persons.get(p.spouse) : undefined, fx.infantMort * fx.adultMort);
+      continue;
+    }
+    // birth spacing for a group of women: those who gave birth recently cannot conceive (≈22 months)
+    annual = annual / (1 + annual * 1.8);
+    const k = c.rng.binomial(p.n, annual / 12);
+    if (k > 0) giveBirth(c, s, p, married ? w.persons.get(p.spouse) : undefined, fx.infantMort * fx.adultMort, k);
   }
 }
 
-export function giveBirth(c: Ctx, s: Settlement, mother: Person, father: Person | undefined, mortMult: number): Person | null {
+export function giveBirth(c: Ctx, s: Settlement, mother: Person, father: Person | undefined, mortMult: number, k = 1): Person | null {
   const w = c.w;
   const age = ageOf(w, mother);
   mother.lastBirth = w.tick;
-  w.acc.births++;
-  w.acc.birthsByAge[Math.min(9, Math.floor(age / 5))]++;
+  w.acc.births += k;
+  w.acc.birthsByAge[Math.min(9, Math.floor(age / 5))] += k;
+  w.population += k;
+  s.pop += k;
   // culture: child takes the culture of the parent who matches the settlement, else mother's
   let culture = mother.culture;
   if (father && father.culture !== mother.culture && father.culture === s.culture) culture = father.culture;
@@ -91,6 +113,7 @@ export function giveBirth(c: Ctx, s: Settlement, mother: Person, father: Person 
     father,
     culture,
     religion,
+    n: k,
   });
   const h = w.households.get(mother.hh);
   if (h) addToHousehold(c, child, h);
@@ -99,7 +122,8 @@ export function giveBirth(c: Ctx, s: Settlement, mother: Person, father: Person 
   if (father) remember(father, w.tick, M_BIRTH, 0.4, child.id);
   // maternal mortality
   const mm = 0.011 * Math.sqrt(mortMult) * (1.5 - mother.health) * (age > 38 ? 1.6 : 1);
-  if (c.rng.chance(mm)) killPerson(c, mother, D_CHILDBIRTH);
+  if (k === 1 && mother.n === 1) { if (c.rng.chance(mm)) killPerson(c, mother, D_CHILDBIRTH); }
+  else agentDeaths(c, mother, (mm * k) / mother.n, D_CHILDBIRTH);
   return child;
 }
 
@@ -148,8 +172,9 @@ export function skillsYear(c: Ctx, s: Settlement): void {
   const people = c.residents(s);
   const schools = s.buildings[BLD_SCHOOL];
   let scholars = 0;
-  for (const p of people) if (p.occ === O_SCHOLAR) scholars++;
-  const literacyBoost = Math.min(1, (schools * 30 + scholars * 6) / Math.max(1, people.length * 0.3));
+  let heads = 0;
+  for (const p of people) { heads += p.n; if (p.occ === O_SCHOLAR) scholars += p.n; }
+  const literacyBoost = Math.min(1, (schools * 30 + scholars * 6) / Math.max(1, heads * 0.3));
   for (const p of people) {
     const age = ageOf(w, p);
     if (p.occ !== O_NONE) {

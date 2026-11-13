@@ -69,11 +69,13 @@ describe('conservation and consistency over a long run', () => {
     let total = 0;
     for (const s of w.settlements.values()) {
       if (!s.alive) continue;
-      const n = sim.residents(s).length;
+      const n = sim.residents(s).reduce((x, p) => x + p.n, 0);
       total += n;
       expect(Math.abs(n - s.pop)).toBeLessThanOrEqual(Math.max(3, s.pop * 0.1));
     }
-    expect(total).toBe(w.persons.size);
+    let heads = 0;
+    for (const p of w.persons.values()) heads += p.n;
+    expect(total).toBe(heads);
   });
 
   it('polities own only living settlements, and every living settlement has a polity', () => {
@@ -132,5 +134,97 @@ describe('conservation and consistency over a long run', () => {
     // causes reference earlier events (they may have been pruned, but never point forward)
     for (const e of w.events) for (const c of e.causes) expect(c).toBeLessThan(e.id);
     expect(ids.size).toBe(w.events.length);
+  });
+});
+
+
+describe('representative agents (large populations)', () => {
+  // a deliberately tiny agent budget forces pooling early, so the machinery is exercised quickly
+  const sim = Simulation.create({ seed: 5, agentBudget: 500, density: 20 });
+  const w = sim.w;
+  let minMoney = Infinity;
+  let moneyDrift = 0;
+  let maxAgents = 0;
+  sim.runYears(140, (s) => {
+    for (const h of s.w.households.values()) minMoney = Math.min(minMoney, h.money);
+    moneyDrift = Math.max(moneyDrift, Math.abs(moneyStock(s.w) - (s.w.moneyMinted - s.w.moneyLost)) / Math.max(1, s.w.moneyMinted));
+    maxAgents = Math.max(maxAgents, s.w.persons.size);
+  });
+  const heads = [...w.persons.values()].reduce((a, p) => a + p.n, 0);
+
+  it('pools ordinary people so agents stay far below the population', () => {
+    expect(heads).toBeGreaterThan(1500);
+    expect(w.persons.size).toBeLessThan(heads * 0.75);
+    expect([...w.persons.values()].some((p) => p.n > 5)).toBe(true);
+  });
+
+  it('keeps rulers, the titled and their close kin as individuals', () => {
+    for (const p of w.persons.values()) {
+      expect(Number.isInteger(p.n) && p.n >= 1, `agent ${p.id} has n=${p.n}`).toBe(true);
+      if (p.notable || p.title) expect(p.n).toBe(1);
+    }
+    for (const pol of w.polities.values()) {
+      if (!pol.alive) continue;
+      const L = w.persons.get(pol.leader);
+      if (L) expect(L.n).toBe(1);
+    }
+  });
+
+  it('conserves money and never lets a household go into debt while pooling and splitting', () => {
+    expect(moneyDrift).toBeLessThan(1e-6);
+    expect(minMoney).toBeGreaterThanOrEqual(-1e-6);
+  });
+
+  it('keeps households, settlements and the population count consistent', () => {
+    let total = 0;
+    for (const p of w.persons.values()) {
+      const h = w.households.get(p.hh);
+      expect(h, `agent ${p.id} has no household`).toBeTruthy();
+      expect(h!.members).toContain(p.id);
+      expect(h!.sid).toBe(p.sid);
+      expect(w.settlements.get(p.sid)?.alive).toBe(true);
+      total += p.n;
+    }
+    for (const h of w.households.values()) for (const id of h.members) expect(w.persons.has(id)).toBe(true);
+    expect(Math.abs(total - w.population)).toBeLessThanOrEqual(Math.max(5, total * 0.02));
+    const st = w.stats[w.stats.length - 1];
+    expect(Math.abs(st.pop - total)).toBeLessThanOrEqual(Math.max(5, total * 0.05));
+  });
+
+  it('demography stays plausible when people are pooled', () => {
+    const last = w.stats.slice(-30);
+    const mean = (f: (x: (typeof last)[number]) => number) => last.reduce((a, b) => a + f(b), 0) / last.length;
+    expect(mean((s) => s.tfr)).toBeGreaterThan(2.5);
+    expect(mean((s) => s.tfr)).toBeLessThan(9);
+    expect(mean((s) => s.lifeExp)).toBeGreaterThan(15);
+    expect(mean((s) => s.lifeExp)).toBeLessThan(55);
+    for (const p of w.persons.values()) expect((w.tick - p.born) / 12).toBeLessThan(115);
+  });
+
+  it('a pooled world saves, loads and continues identically', () => {
+    w.rng = sim.rng.state();
+    const copy = new Simulation(deserializeWorld(serializeWorld(w)));
+    const a = new Simulation(deserializeWorld(serializeWorld(w)));
+    copy.runYears(5);
+    a.runYears(5);
+    copy.w.rng = copy.rng.state();
+    a.w.rng = a.rng.state();
+    expect(digest(copy.w)).toBe(digest(a.w));
+  });
+
+  it('worlds saved before representative agents load as fully individual', () => {
+    const small = Simulation.create({ seed: 3 });
+    small.runYears(3);
+    small.w.rng = small.rng.state();
+    const raw = JSON.parse(serializeWorld(small.w));
+    for (const [, p] of raw.persons.__map) delete p.n;
+    delete raw.population;
+    delete raw.config.agentBudget;
+    delete raw.config.density;
+    const old = deserializeWorld(JSON.stringify(raw));
+    for (const p of old.persons.values()) expect(p.n).toBe(1);
+    expect(old.population).toBe(old.persons.size);
+    expect(old.config.density).toBe(1);
+    new Simulation(old).runYears(2);
   });
 });

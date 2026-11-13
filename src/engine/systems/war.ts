@@ -10,7 +10,7 @@ import {
   BLD_HOUSING, BLD_WALLS, D_WAR, G_FOOD, M_WAR_FOUGHT, M_WAR_LOSS, NBLD, NG, O_SOLDIER, ORE_COPPER, ORE_IRON, V_MILIT, V_PIETY,
 } from '../constants';
 import { ageOf, clamp, type Ctx } from '../context';
-import { createPolity, killPerson, meanValues, remember } from '../entities';
+import { agentDeaths, createPolity, headcount, householdSize, killPerson, meanValues, remember, splitHousehold } from '../entities';
 import { logEvent } from '../history';
 import { NTECH } from '../techs';
 import type { DiploRel, Polity, Settlement, War } from '../types';
@@ -67,11 +67,11 @@ export function diplomacyYear(c: Ctx): void {
   for (const p of w.persons.values()) {
     const s = w.settlements.get(p.sid);
     if (!s) continue;
-    popOf.set(s.polity, (popOf.get(s.polity) ?? 0) + 1);
+    popOf.set(s.polity, (popOf.get(s.polity) ?? 0) + p.n);
     for (const m of p.mem) {
       if (m.k !== M_WAR_LOSS) continue;
       const key = `${s.polity},${m.s}`;
-      grievance.set(key, (grievance.get(key) ?? 0) + -m.v);
+      grievance.set(key, (grievance.get(key) ?? 0) + -m.v * p.n);
     }
   }
   for (const a of alive) {
@@ -135,6 +135,9 @@ export function warDecisionsYear(c: Ctx): void {
     if (!L) continue;
     const peopleA = polityPop(c, a);
     if (peopleA < 25) continue;
+    // a realm still weary from its last war does not start another
+    if (a.warWeariness > 0.3) continue;
+    if (a.ctx.warDeclaredAt !== undefined && w.tick - a.ctx.warDeclaredAt < 12 * 12) continue;
     const strA = militaryStrength(c, a);
     // material pressure
     let hunger = 0;
@@ -143,13 +146,13 @@ export function warDecisionsYear(c: Ctx): void {
     for (const sid of a.settlements) {
       const s = w.settlements.get(sid)!;
       hunger += s.hungerShare * s.pop;
-      if (s.workers[2] * c.fx(sid).farmArea > s.farmland * 1.2) landLimited += s.pop;
+      if (s.workers[2] * c.fx(sid).farmArea > s.farmland * w.config.density * 1.2) landLimited += s.pop;
       for (const i of s.territory) if (w.tiles.ore[i] > 0 && (w.tiles.oreKind[i] === ORE_COPPER || w.tiles.oreKind[i] === ORE_IRON)) hasOre = true;
     }
     hunger /= peopleA;
     landLimited /= peopleA;
     let mil = 0;
-    for (const p of polityPeople(c, a)) mil += p.values[V_MILIT];
+    for (const p of polityPeople(c, a)) mil += p.values[V_MILIT] * p.n;
     mil /= peopleA;
     let bestScore = 0;
     let best: { b: Polity; target: Settlement; goal: War['goal']; reasons: string[]; causes: number[] } | null = null;
@@ -158,7 +161,7 @@ export function warDecisionsYear(c: Ctx): void {
       if (!b || !b.alive) continue;
       const r = a.relations[+key];
       if (r.treaty === 'alliance' || (r.treaty === 'peace' && w.tick < r.treatyUntil)) continue;
-      if (w.tick - r.lastWar < 12 * 8) continue;
+      if (w.tick - r.lastWar < 12 * 15) continue;
       const d = distance(c, a, b);
       if (!isFinite(d) || d > 50) continue;
       // richest reachable target settlement of b
@@ -182,17 +185,19 @@ export function warDecisionsYear(c: Ctx): void {
       const causes: number[] = [];
       let motive = 0;
       const want = hunger * 1.2 + landLimited * 0.6;
-      if (want > 0.15) { motive += want * Math.min(1.5, tScore / 3); reasons.push(hunger > 0.15 ? `hunger at home (${Math.round(hunger * 100)}% of households)` : 'shortage of farmland'); }
+      if (want > 0.2) { motive += want * Math.min(1.5, tScore / 3); reasons.push(hunger > 0.15 ? `hunger at home (${Math.round(hunger * 100)}% of households)` : 'shortage of farmland'); }
       for (const sid of a.settlements) { const s = w.settlements.get(sid)!; if (s.ctx.famine !== undefined && w.tick - (s.ctx.famineAt ?? -999) < 36) causes.push(s.ctx.famine); }
       if (!hasOre && target.territory.some((i) => w.tiles.ore[i] > 0)) { motive += 0.2; reasons.push(`the ore deposits of ${target.name}`); }
-      if (r.border > 0.2) { motive += r.border * 0.4; reasons.push('disputed borderlands'); }
+      if (r.border > 0.3) { motive += r.border * 0.3; reasons.push('disputed borderlands'); }
       if (r.grievance > 0.1) { motive += r.grievance * 0.6; reasons.push('remembered wrongs from past wars'); if (r.lastWar > 0) { const prior = [...w.wars.values()].reverse().find((x) => (x.attackers.includes(a.id) && x.defenders.includes(b.id)) || (x.attackers.includes(b.id) && x.defenders.includes(a.id))); if (prior) causes.push(prior.id); } }
       const ra = w.religions.get(a.religion);
       let holy = false;
       if (ra && b.religion >= 0 && b.religion !== a.religion && ra.holyWar > 0.4 && a.gov.tolerance < 0.4) { motive += ra.holyWar * 0.4 * (1 + Math.max(0, L.values[V_PIETY])); reasons.push(`zeal of the ${ra.name}`); holy = true; }
       motive += Math.max(0, mil) * 0.3 + (L.ambition - 0.5) * 0.4 + (0.5 - L.agree) * 0.3 - r.opinion * 0.5;
       motive *= 0.6 + 0.8 * clamp((w.config.aggression + 1) / 2);
-      const cost = d / 80 + a.warWeariness * 0.8 + (r.treaty === 'peace' ? 0.3 : 0);
+      // rulers need a cause their people will accept; naked ambition suffices only for the boldest with clear odds
+      if (!reasons.length && !(L.ambition > 0.8 && odds > 0.65)) continue;
+      const cost = d / 80 + a.warWeariness * 0.8 + (r.treaty === 'peace' ? 0.3 : 0) + r.trade / 600;
       const score = motive * odds * 1.4 - cost;
       if (score > bestScore) {
         bestScore = score;
@@ -200,7 +205,7 @@ export function warDecisionsYear(c: Ctx): void {
         best = { b, target, goal, reasons, causes };
       }
     }
-    if (best && bestScore > 0.28 && c.rng.chance(Math.min(0.7, bestScore))) declareWar(c, a, best.b, best.target, best.goal, best.reasons, best.causes);
+    if (best && bestScore > 0.42 && c.rng.chance(Math.min(0.35, bestScore * 0.6))) declareWar(c, a, best.b, best.target, best.goal, best.reasons, best.causes);
   }
 }
 
@@ -217,6 +222,7 @@ function allyStrength(c: Ctx, b: Polity, a: Polity): number {
 
 export function declareWar(c: Ctx, a: Polity, b: Polity, target: Settlement, goal: War['goal'], reasons: string[], causes: number[]): War {
   const w = c.w;
+  a.ctx.warDeclaredAt = w.tick;
   const id = w.nextId++;
   const war: War = {
     id, name: `${goal === 'holy' ? 'Holy War' : goal === 'raid' ? 'Raids' : 'War'} of ${coreName(a.name)} and ${coreName(b.name)}`,
@@ -332,13 +338,14 @@ export function warMonth(c: Ctx): void {
 function meanMil(c: Ctx, p: Polity): number {
   const people = polityPeople(c, p);
   let m = 0;
-  for (const q of people) m += q.values[V_MILIT];
-  return people.length ? m / people.length : 0;
+  for (const q of people) m += q.values[V_MILIT] * q.n;
+  return people.length ? m / headcount(people) : 0;
 }
 
 function casualties(c: Ctx, pol: Polity, frac: number, enemy: Polity, ev: number, atSid: number): number {
   const w = c.w;
   const fighters = [];
+  const share = new Map<number, number>();
   for (const sid of pol.settlements) {
     if (atSid >= 0 && sid !== atSid && c.rng.chance(0.6)) continue;
     const s = w.settlements.get(sid);
@@ -347,12 +354,27 @@ function casualties(c: Ctx, pol: Polity, frac: number, enemy: Polity, ev: number
       if (p.sex !== 1) continue;
       const age = ageOf(w, p);
       if (age < 16 || age > 50) continue;
-      if (p.occ === O_SOLDIER || pol.inst.conscription || s.pop < 150 || c.rng.chance(0.15)) fighters.push(p);
+      const all = p.occ === O_SOLDIER || pol.inst.conscription || s.pop < 150;
+      if (p.n > 1) { fighters.push(p); share.set(p.id, all ? 1 : 0.15); }
+      else if (all || c.rng.chance(0.15)) fighters.push(p);
     }
   }
   let k = 0;
   for (const p of fighters) {
     remember(p, w.tick, M_WAR_FOUGHT, -0.3, enemy.id, ev);
+    if (p.n > 1) {
+      // a group of fighters: a binomial number of them fall
+      const sh = share.get(p.id) ?? 1;
+      const dead = agentDeaths(c, p, Math.min(0.9, sh * frac * (p.occ === O_SOLDIER ? 0.8 : 1.2) * (1.3 - p.skills[O_SOLDIER] * 0.5)), D_WAR, ev);
+      k += dead;
+      if (dead > 0) {
+        for (const kid of [p.spouse, ...p.children.slice(0, 6)]) {
+          const kin = w.persons.get(kid);
+          if (kin) remember(kin, w.tick, M_WAR_LOSS, -0.7 * Math.min(1, (dead * 3) / (dead + p.n)), enemy.id, ev);
+        }
+      }
+      continue;
+    }
     if (c.rng.chance(frac * (p.occ === O_SOLDIER ? 0.8 : 1.2) * (1.3 - p.skills[O_SOLDIER] * 0.5))) {
       // kin remember who killed their own
       for (const kid of [p.spouse, p.mother, p.father, ...p.children]) {
@@ -394,7 +416,7 @@ function sack(c: Ctx, war: War, attacker: Polity, defender: Polity, s: Settlemen
   let deaths = 0;
   for (const p of people) {
     remember(p, w.tick, M_WAR_LOSS, -0.6, attacker.id, battleEv);
-    if (c.rng.chance(0.025)) { killPerson(c, p, D_WAR, battleEv); deaths++; }
+    deaths += agentDeaths(c, p, 0.025, D_WAR, battleEv);
   }
   w.acc.warDeaths += deaths;
   const conquer = war.goal === 'conquest' || war.goal === 'holy';
@@ -413,7 +435,11 @@ function sack(c: Ctx, war: War, attacker: Polity, defender: Polity, s: Settlemen
   if (refuge.length) {
     for (const hid of [...s.households]) {
       const h = w.households.get(hid);
-      if (h && c.rng.chance(0.12)) moveHousehold(c, h, s, c.rng.pick(refuge));
+      if (!h) continue;
+      if (householdSize(w, h) > 12) {
+        const part = splitHousehold(c, h, 0.12);
+        if (part !== h) moveHousehold(c, part, s, c.rng.pick(refuge));
+      } else if (c.rng.chance(0.12)) moveHousehold(c, h, s, c.rng.pick(refuge));
     }
   }
   if (conquer) {

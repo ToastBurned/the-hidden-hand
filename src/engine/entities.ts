@@ -68,6 +68,8 @@ export interface PersonInit {
   religion: number;
   values?: number[];
   family?: string;
+  /** People represented by this agent (default 1). */
+  n?: number;
 }
 
 export function createPerson(c: Ctx, init: PersonInit): Person {
@@ -94,6 +96,7 @@ export function createPerson(c: Ctx, init: PersonInit): Person {
   const phon = cu?.phon ?? 1;
   const p: Person = {
     id,
+    n: Math.max(1, Math.round(init.n ?? 1)),
     name: personName(c.rng, phon, sex),
     family: init.family ?? f?.family ?? m?.family ?? familyName(c.rng, phon),
     sex,
@@ -172,16 +175,40 @@ export function createHousehold(c: Ctx, sid: number): Household {
 
 export function addToHousehold(c: Ctx, p: Person, h: Household): void {
   const old = c.w.households.get(p.hh);
-  if (old && old !== h) removeFromHousehold(c, p, old, false);
+  if (old && old !== h) removeFromHousehold(c, p, old, false, h);
   p.hh = h.id;
   p.sid = h.sid;
   if (!h.members.includes(p.id)) h.members.push(p.id);
 }
 
-function removeFromHousehold(c: Ctx, p: Person, h: Household, death: boolean): void {
+function removeFromHousehold(c: Ctx, p: Person, h: Household, death: boolean, heir?: Household): void {
   const i = h.members.indexOf(p.id);
   if (i >= 0) h.members.splice(i, 1);
-  if (h.members.length === 0) dissolveHousehold(c, h, death ? p : null);
+  if (h.members.length === 0) {
+    // the last member moving out takes the household's property along
+    if (heir && heir !== h) mergeHouseholdInto(c, h, heir);
+    else dissolveHousehold(c, h, death ? p : null);
+  }
+}
+
+/** Move all property of household `from` into `to` and delete `from` (members must already have left). */
+export function mergeHouseholdInto(c: Ctx, from: Household, to: Household): void {
+  const w = c.w;
+  for (let g = 0; g < NG; g++) to.goods[g] += from.goods[g];
+  to.money += from.money;
+  to.land += from.land;
+  to.toolQ = (to.toolQ * to.tools + from.toolQ * from.tools) / Math.max(1e-6, to.tools + from.tools);
+  to.tools += from.tools;
+  to.labAcc += from.labAcc;
+  if (from.cargo) {
+    if (!to.cargo) { to.cargo = from.cargo; to.cargoDest = from.cargoDest; to.cargoArrive = from.cargoArrive; }
+    else for (let g = 0; g < NG; g++) to.cargo[g] += from.cargo[g];
+  }
+  for (const id of from.members) { const m = w.persons.get(id); if (m) { m.hh = to.id; m.sid = to.sid; if (!to.members.includes(id)) to.members.push(id); } }
+  from.members = [];
+  w.households.delete(from.id);
+  const s = w.settlements.get(from.sid);
+  if (s) { const i = s.households.indexOf(from.id); if (i >= 0) s.households.splice(i, 1); }
 }
 
 /** Inheritance: an emptied household's property passes to heirs or to the community. */
@@ -313,12 +340,24 @@ export function killPerson(c: Ctx, p: Person, cause: number, causeEvent = -1): v
   const w = c.w;
   if (!w.persons.has(p.id)) return;
   const age = ageOf(w, p);
-  w.acc.deaths++;
-  w.acc.deathsBy[cause] = (w.acc.deathsBy[cause] ?? 0) + 1;
-  w.acc.deathAges += age;
-  if (age < 1) w.acc.infantDeaths++;
+  const n = p.n;
+  w.acc.deaths += n;
+  w.acc.deathsBy[cause] = (w.acc.deathsBy[cause] ?? 0) + n;
+  w.acc.deathAges += age * n;
+  if (age < 1) w.acc.infantDeaths += n;
+  w.population -= n;
+  const s0 = w.settlements.get(p.sid);
+  if (s0) s0.pop -= n;
   const hh = w.households.get(p.hh);
   const wealth = hh ? (hh.money + hh.goods.reduce((a, b) => a + b, 0)) / Math.max(1, hh.members.length) : 0;
+  if (n > 1) {
+    // a representative agent: no individual genealogy is kept
+    const spouse = w.persons.get(p.spouse);
+    if (spouse && spouse.spouse === p.id) spouse.spouse = -1;
+    w.persons.delete(p.id);
+    if (hh) removeFromHousehold(c, p, hh, true);
+    return;
+  }
 
   // kin remember
   const spouse = w.persons.get(p.spouse);
@@ -337,7 +376,14 @@ export function killPerson(c: Ctx, p: Person, cause: number, causeEvent = -1): v
     }
   }
 
-  // genealogy archive: everyone is kept compactly, notable people with memories and values
+  // genealogy archive: individuals connected to the record are kept; anonymous commoners are not
+  const kinOfNotable = (id: number) => { const k = w.persons.get(id) ?? w.dead.get(id); return !!k && (k.notable || !!k.title); };
+  const keep = p.notable || !!p.title || p.deeds.length > 0 || kinOfNotable(p.mother) || kinOfNotable(p.father) || kinOfNotable(p.spouse) || w.dead.size < 20000;
+  if (!keep) {
+    w.persons.delete(p.id);
+    if (hh) removeFromHousehold(c, p, hh, true);
+    return;
+  }
   const d: DeadPerson = {
     id: p.id,
     name: p.name,
@@ -377,6 +423,160 @@ export function killPerson(c: Ctx, p: Person, cause: number, causeEvent = -1): v
   w.persons.delete(p.id);
   // polity leadership vacancy is detected by governance
   if (hh) removeFromHousehold(c, p, hh, true);
+}
+
+/** Some of the people an agent represents die (k < p.n); the agent carries on with the rest. */
+export function thinAgent(c: Ctx, p: Person, k: number, cause: number, causeEvent = -1): void {
+  if (k <= 0) return;
+  if (k >= p.n) { killPerson(c, p, cause, causeEvent); return; }
+  const w = c.w;
+  const age = ageOf(w, p);
+  p.n -= k;
+  w.acc.deaths += k;
+  w.acc.deathsBy[cause] = (w.acc.deathsBy[cause] ?? 0) + k;
+  w.acc.deathAges += age * k;
+  if (age < 1) w.acc.infantDeaths += k;
+  w.population -= k;
+  const s = w.settlements.get(p.sid);
+  if (s) s.pop -= k;
+}
+
+/** Deaths among the people an agent represents, given a per-person probability. */
+export function agentDeaths(c: Ctx, p: Person, prob: number, cause: number, causeEvent = -1): number {
+  if (prob <= 0) return 0;
+  const k = p.n === 1 ? (c.rng.next() < prob ? 1 : 0) : c.rng.binomial(p.n, Math.min(1, prob));
+  if (k > 0) thinAgent(c, p, k, cause, causeEvent);
+  return k;
+}
+
+/**
+ * Split k people off a representative agent into a new agent in the same household.
+ * With `individual`, the new agent is a distinct person with their own name and a little
+ * variation in character, used when the story needs a specific person (an inventor, a leader).
+ */
+export function splitAgent(c: Ctx, p: Person, k: number, individual = false): Person {
+  if (k >= p.n) return p;
+  const q = rawSplit(c, p, k, individual);
+  // a married group takes a matching share of its spouses along, so splitting never divorces anyone
+  if (!individual) {
+    const sp = c.w.persons.get(p.spouse);
+    if (sp && sp.hh === p.hh && sp.n > 1) {
+      const ks = Math.min(sp.n - 1, k);
+      const sq = rawSplit(c, sp, ks, false);
+      q.spouse = sq.id;
+      sq.spouse = q.id;
+    }
+  }
+  return q;
+}
+
+/** Take part of an agent: each represented person is included with probability `prob`. Returns null if none. */
+export function partOf(c: Ctx, p: Person, prob: number): Person | null {
+  if (prob <= 0) return null;
+  if (p.n === 1) return c.rng.next() < prob ? p : null;
+  const k = c.rng.binomial(p.n, Math.min(1, prob));
+  if (k <= 0) return null;
+  return k >= p.n ? p : splitAgent(c, p, k);
+}
+
+function rawSplit(c: Ctx, p: Person, k: number, individual: boolean): Person {
+  const w = c.w;
+  p.n -= k;
+  const id = w.nextId++;
+  const cu = w.cultures.get(p.culture);
+  const jit = (v: number) => (individual ? clamp(v + c.rng.normal(0, 0.12)) : v);
+  const q: Person = {
+    ...p,
+    id,
+    n: k,
+    name: individual ? personName(c.rng, cu?.phon ?? 1, p.sex) : p.name,
+    born: individual ? p.born + c.rng.int(25) - 12 : p.born,
+    spouse: -1,
+    children: [],
+    skills: [...p.skills],
+    values: p.values.map((v) => (individual ? clamp(v + c.rng.normal(0, 0.08), -1, 1) : v)),
+    rels: [],
+    mem: p.mem.map((m) => ({ ...m })),
+    immune: [...p.immune],
+    deeds: [],
+    notable: false,
+    title: '',
+    open: jit(p.open), consc: jit(p.consc), extra: jit(p.extra), agree: jit(p.agree), neuro: jit(p.neuro), ambition: jit(p.ambition), intel: jit(p.intel),
+  };
+  w.persons.set(id, q);
+  const h = w.households.get(p.hh);
+  if (h) h.members.push(id);
+  return q;
+}
+
+/**
+ * Split a share of a pooled household off into a new household in the same settlement, with a
+ * matching share of its property. Used when only part of a large pooled household migrates.
+ * `include` names a member who must go with the new household.
+ */
+export function splitHousehold(c: Ctx, h: Household, frac: number, include = -1): Household {
+  const w = c.w;
+  const nh = createHousehold(c, h.sid);
+  const before = householdSize(w, h);
+  const moved: Person[] = [];
+  const seen = new Set<number>();
+  for (const id of [...h.members]) {
+    if (seen.has(id)) continue;
+    const p = w.persons.get(id);
+    if (!p) continue;
+    seen.add(id);
+    const sp = w.persons.get(p.spouse);
+    const together = sp && sp.spouse === p.id && sp.hh === h.id ? sp : undefined;
+    if (together) seen.add(together.id);
+    const must = id === include || (together && together.id === include);
+    if (p.n === 1 || (together && together.n === 1)) {
+      if (must || c.rng.next() < frac) { moved.push(p); if (together) moved.push(together); }
+      continue;
+    }
+    const k = must ? Math.max(1, Math.round(p.n * frac)) : Math.floor(p.n * frac + c.rng.next());
+    if (k <= 0) continue;
+    if (k >= p.n) { moved.push(p); if (together) moved.push(together); continue; }
+    const q = splitAgent(c, p, k);
+    moved.push(q);
+    const qs = w.persons.get(q.spouse);
+    if (qs) moved.push(qs);
+  }
+  let out = 0;
+  for (const p of moved) {
+    const i = h.members.indexOf(p.id);
+    if (i >= 0) h.members.splice(i, 1);
+    nh.members.push(p.id);
+    p.hh = nh.id;
+    out += p.n;
+  }
+  const f = before > 0 ? out / before : 0;
+  for (let g = 0; g < NG; g++) { const q = h.goods[g] * f; h.goods[g] -= q; nh.goods[g] += q; }
+  const money = h.money * f; h.money -= money; nh.money += money;
+  const land = h.land * f; h.land -= land; nh.land += land;
+  const tools = h.tools * f; h.tools -= tools; nh.tools += tools; nh.toolQ = h.toolQ;
+  const lab = h.labAcc * f; h.labAcc -= lab; nh.labAcc += lab;
+  nh.hunger = h.hunger;
+  if (!nh.members.length) {
+    // nobody left with it: undo
+    w.households.delete(nh.id);
+    const s = w.settlements.get(h.sid);
+    if (s) { const i = s.households.indexOf(nh.id); if (i >= 0) s.households.splice(i, 1); }
+    return h;
+  }
+  if (!h.members.length) { mergeHouseholdInto(c, h, nh); }
+  return nh;
+}
+
+/** Return a single individual from an agent, splitting one person off if it represents several. */
+export function individuate(c: Ctx, p: Person): Person {
+  return p.n > 1 ? splitAgent(c, p, 1, true) : p;
+}
+
+/** People who must never be folded into a representative agent. */
+export function isProtected(w: { persons: Map<number, Person> }, p: Person): boolean {
+  if (p.notable || p.title || p.deeds.length) return true;
+  const k = (id: number) => { const x = w.persons.get(id); return !!x && (x.notable || !!x.title); };
+  return k(p.mother) || k(p.father) || k(p.spouse);
 }
 
 // ------------------------------------------------------------------ settlements
@@ -542,8 +742,23 @@ export function createPolity(c: Ctx, capital: Settlement, values: number[], name
 export function meanValues(people: Person[]): number[] {
   const v = new Array(NV).fill(0);
   if (!people.length) return v;
-  for (const p of people) for (let k = 0; k < NV; k++) v[k] += p.values[k];
-  return v.map((x) => x / people.length);
+  let n = 0;
+  for (const p of people) { n += p.n; for (let k = 0; k < NV; k++) v[k] += p.values[k] * p.n; }
+  return v.map((x) => x / n);
+}
+
+/** Number of people living in a household. */
+export function householdSize(w: { persons: Map<number, Person> }, h: Household): number {
+  let n = 0;
+  for (const id of h.members) n += w.persons.get(id)?.n ?? 0;
+  return n;
+}
+
+/** Number of people represented by a list of agents. */
+export function headcount(people: Person[]): number {
+  let n = 0;
+  for (const p of people) n += p.n;
+  return n;
 }
 
 export { V_INDIV, V_MILIT, V_PIETY, V_HIER };
