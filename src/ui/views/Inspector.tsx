@@ -172,7 +172,7 @@ function PolityPanel({ id, onOpen }: { id: number; onOpen: Open }) {
         ['Ruler', d.leader ? <PersonLink p={d.leader} onOpen={onOpen} /> : '—'],
         ['Dynasty', d.dynasty || '—'],
         ['Capital', <Link to={{ kind: 'settlement', id: d.capital.id }} onOpen={onOpen}>{d.capital.name}</Link>],
-        ['Culture', d.culture], ['State faith', d.religion], ['War weariness', <Meter value={d.warWeariness} />],
+        ['Culture', d.culture], ['State faith', d.religion], ['Revenue last year', fmtNum(d.revenue), 'Taxes collected, in shells'], ['Spending last year', fmtNum(d.spending), 'Wages, welfare and payments to the elite'], ['War weariness', <Meter value={d.warWeariness} />],
       ]} />
       <Section title="How it is governed">
         <p className="small muted">Government is a set of continuous traits that drift with the values of the people, crises and the ruler. The label is a description of the current mix, not a stage.</p>

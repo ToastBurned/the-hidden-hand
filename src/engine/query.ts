@@ -207,7 +207,7 @@ export function polityDetail(sim: Simulation, id: number) {
     leader: L ? personRef(sim, L.id) : null, dynasty: p.dynasty,
     capital: { id: p.capital, name: w.settlements.get(p.capital)?.name ?? '?' },
     settlements: p.settlements.map((sid) => ({ id: sid, name: w.settlements.get(sid)?.name ?? '?', pop: w.settlements.get(sid)?.pop ?? 0 })),
-    gov: p.gov, inst: p.inst, treasury: p.treasury, legitimacy: p.legitimacy, warWeariness: p.warWeariness,
+    gov: p.gov, inst: p.inst, treasury: p.treasury, revenue: p.lastRevenue ?? 0, spending: p.lastSpending ?? 0, legitimacy: p.legitimacy, warWeariness: p.warWeariness,
     culture: w.cultures.get(p.culture)?.name ?? '?', religion: w.religions.get(p.religion)?.name ?? '—',
     relations: Object.entries(p.relations).map(([k, r]) => ({ id: +k, name: w.polities.get(+k)?.name ?? '?', alive: !!w.polities.get(+k)?.alive, ...r }))
       .filter((r) => r.alive).sort((a, b) => a.opinion - b.opinion),

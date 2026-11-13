@@ -319,6 +319,8 @@ export function politicsYear(c: Ctx, pol: Polity): void {
     s.quota[O_SCHOLAR] = s.pop >= 60 ? Math.min(Math.round(s.pop * 0.03), Math.round((s.pop / 150) * (1 + Math.max(0, sMean[V_INNOV])) + (budget * g.spendLearning * share) / wage)) : 0;
     s.quota[O_BUILDER] = s.project >= 0 ? Math.max(1, Math.min(Math.round(s.pop / 12), Math.round(2 + (budget * g.spendBuild * share) / wage))) : 0;
   }
+  pol.lastRevenue = pol.revenue;
+  pol.lastSpending = pol.spending;
   pol.revenue = 0;
   pol.spending = 0;
 

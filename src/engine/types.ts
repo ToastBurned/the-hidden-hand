@@ -240,6 +240,8 @@ export interface Polity {
   leaders: { id: number; from: number; to: number; name: string }[];
   revenue: number;
   spending: number;
+  lastRevenue?: number; // previous year's totals, for display
+  lastSpending?: number;
 }
 
 export interface Culture {
