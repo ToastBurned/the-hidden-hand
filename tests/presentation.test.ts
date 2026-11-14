@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { Simulation } from '../src/engine/sim';
-import { chapters, eraOf, familyTree, frame, lookOf, personDetail, settlementDetail, storyDigest, timeline, yearSnapshot } from '../src/engine/query';
+import { TECHS } from '../src/engine/techs';
+import { ERA_NAMES, chapters, eraMinTechs, eraOf, familyTree, frame, lookOf, personDetail, settlementDetail, storyDigest, timeline, yearSnapshot } from '../src/engine/query';
 
 /** The read-only views the interface draws from: they must be well-formed and must not disturb the simulation. */
 describe('presentation queries', () => {
@@ -12,7 +13,7 @@ describe('presentation queries', () => {
     for (const p of sim.w.persons.values()) {
       const l = lookOf(sim, p.id)!;
       expect(l.skin).toBeGreaterThanOrEqual(0); expect(l.skin).toBeLessThanOrEqual(1);
-      expect(l.era).toBeGreaterThanOrEqual(0); expect(l.era).toBeLessThanOrEqual(5);
+      expect(l.era).toBeGreaterThanOrEqual(0); expect(l.era).toBeLessThanOrEqual(8);
       expect(l.n).toBeGreaterThanOrEqual(1);
       if (++n > 200) break;
     }
@@ -71,5 +72,18 @@ describe('presentation queries', () => {
     expect(b.w.persons.size).toBe(a.w.persons.size);
     expect(b.w.nextId).toBe(a.w.nextId);
     expect(b.rng.state()).toEqual(a.rng.state());
+  });
+
+  it('places a settlement in the latest era it has a real foothold in', () => {
+    const techs = () => new Array(TECHS.length).fill(0);
+    const of = (era: number, n: number, t = techs()) => { TECHS.filter((x) => x.era === era).slice(0, n).forEach((x) => { t[x.id] = 1; }); return t; };
+    expect(ERA_NAMES.length).toBe(9);
+    expect(eraOf(sim, { techs: techs() })).toBe(0);
+    const farm = techs(); farm[TECHS.find((t) => t.key === 'agriculture')!.id] = 1;
+    expect(eraOf(sim, { techs: farm })).toBe(1);
+    // one stray tech of a later era is not enough; a handful is
+    expect(eraOf(sim, { techs: of(7, 1, of(3, eraMinTechs()[3])) })).toBe(3);
+    expect(eraOf(sim, { techs: of(7, eraMinTechs()[7], of(3, eraMinTechs()[3])) })).toBe(7);
+    expect(eraOf(sim, { techs: of(8, 40) })).toBe(8);
   });
 });

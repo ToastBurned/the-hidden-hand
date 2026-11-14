@@ -4,6 +4,7 @@ import { fmtPct, useQuery, useSim } from '../hooks';
 import type { overview } from '../../engine/query';
 import { Link } from '../components/common';
 import { hueCss } from '../colors';
+import { TechTable } from '../components/TechTable';
 
 type O = ReturnType<typeof overview>;
 const yr = (t: number) => Math.floor(t / 12);
@@ -28,20 +29,7 @@ export function Societies({ onOpen }: { onOpen: (s: Selection) => void }) {
       )}
       {tab === 'cultures' && <Tree now={now} onOpen={onOpen} kind="culture" items={data.cultures.map((c) => ({ id: c.id, name: c.name, parent: c.parent, from: yr(c.founded), alive: c.alive, hue: c.hue }))} />}
       {tab === 'religions' && <Tree now={now} onOpen={onOpen} kind="religion" items={data.religions.map((c) => ({ id: c.id, name: c.name, parent: c.parent, from: yr(c.founded), alive: c.alive, hue: c.hue }))} />}
-      {tab === 'techs' && (
-        <table className="grid-table">
-          <thead><tr><th>Technology</th><th>Requires</th><th>First discovered</th><th>Known in</th><th /></tr></thead>
-          <tbody>{data.techs.map((t) => (
-            <tr key={t.id} className={t.first ? '' : 'muted'}>
-              <td title={t.desc}><b>{t.name}</b><div className="small muted">{t.desc}</div></td>
-              <td className="small">{t.prereq.map((p) => data.techs.find((x) => x.id === p)?.name).join(', ')}</td>
-              <td>{t.first ? <Link to={{ kind: 'event', id: t.first.id }} onOpen={onOpen}>Year {yr(t.first.t)}</Link> : '—'}</td>
-              <td>{t.knownBy ? `${t.knownBy} settlements` : t.first ? 'forgotten everywhere' : ''}</td>
-              <td />
-            </tr>
-          ))}</tbody>
-        </table>
-      )}
+      {tab === 'techs' && <TechTable techs={data.techs} onOpen={onOpen} />}
       {tab === 'wars' && (
         <table className="grid-table">
           <thead><tr><th>War</th><th>Years</th><th>Aim</th><th>Battles</th><th>Dead</th><th>Outcome</th></tr></thead>

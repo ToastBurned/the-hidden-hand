@@ -6,7 +6,7 @@ import { FEATURE_LABELS, OUTCOME_LABELS } from '../../engine/analysis/experiment
 import { renderReport } from '../../engine/analysis/report';
 import { INTERVENTION_KINDS, PARAMS, type Intervention, type InterventionKind, type WorldConfig } from '../../engine/config';
 import { METRICS } from '../../engine/systems/stats';
-import { TECHS } from '../../engine/techs';
+import { TechPicker } from '../components/TechPicker';
 import { LineChart } from '../components/LineChart';
 import { SERIES } from '../colors';
 import { downloadText } from '../saves';
@@ -165,7 +165,7 @@ function ConditionEditor({ index, c, onChange, onRemove }: { index: number; c: C
               <select value={String(iv.target ?? 'all')} onChange={(e) => setIv(i, { ...iv, target: e.target.value as 'all' })}>
                 <option value="all">everywhere</option><option value="largest">largest settlement</option><option value="smallest">smallest settlement</option>
               </select>
-              {iv.kind === 'grant_tech' && <select value={iv.tech ?? 'agriculture'} onChange={(e) => setIv(i, { ...iv, tech: e.target.value })}>{TECHS.map((t) => <option key={t.key} value={t.key}>{t.name}</option>)}</select>}
+              {iv.kind === 'grant_tech' && <TechPicker value={iv.tech ?? 'agriculture'} onChange={(k) => setIv(i, { ...iv, tech: k })} />}
               <button className="icon" onClick={() => setIv(i, null)} title="Remove">×</button>
             </div>
           ))}

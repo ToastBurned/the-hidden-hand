@@ -13,6 +13,7 @@ import { Portrait } from '../art/Portrait';
 import { TownThumb } from '../city/TownThumb';
 import { toggleFollowFamily, toggleFollowPerson, usePrefs } from '../prefs';
 import { ERA_LABELS } from '../era';
+import { ERAS as TECH_ERAS } from '../../engine/techtree/schema';
 
 type Open = (s: Selection) => void;
 type SD = NonNullable<ReturnType<typeof settlementDetail>>;
@@ -135,7 +136,12 @@ function SettlementPanel({ id, onOpen, x }: { id: number; onOpen: Open; x: Extra
         <KV rows={d.buildings.map((b) => [b.name, b.level.toFixed(1)] as [string, string])} />
         {d.project && <div className="small">Building: {d.project.name} ({fmtPct(d.project.progress)})</div>}
         <div className="mini-h">Known ({d.techs.length})</div>
-        <div className="chips">{d.techs.map((t) => <span key={t} className="chip">{t}</span>)}</div>
+        {d.techsByEra.map((g, i) => (
+          <details key={g.era} className="known-era" open={i === 0}>
+            <summary>{TECH_ERAS[g.era]} ({g.names.length})</summary>
+            <div className="chips">{g.names.map((t) => <span key={t} className="chip">{t}</span>)}</div>
+          </details>
+        ))}
         {d.research.length > 0 && <><div className="mini-h">Close to discovering</div><Bars items={d.research.map((r) => ({ label: r.name, value: r.p }))} fmt={fmtPct} max={1} /></>}
       </Section>
       <Section title="Connections" open={false}>
