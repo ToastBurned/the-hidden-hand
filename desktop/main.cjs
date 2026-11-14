@@ -1,6 +1,6 @@
 'use strict';
 /**
- * The Noosphere desktop app (Electron main process).
+ * The Hidden Hand desktop app (Electron main process).
  *
  * Loads the same single-file build the browser version uses (copied to desktop/app/index.html by
  * scripts/prepare-app.cjs) and gives it real file saves through the bridge in preload.cjs.
@@ -9,7 +9,10 @@ const { app, BrowserWindow, Menu, dialog, ipcMain, shell } = require('electron')
 const fs = require('node:fs');
 const fsp = require('node:fs/promises');
 const path = require('node:path');
-const { SaveStore, atomicWrite } = require('./storage.cjs');
+const { SaveStore, atomicWrite, EXT, LEGACY_EXT } = require('./storage.cjs');
+
+/** Developer mode shows the simulation tools (experiments, direct interventions): `--dev` or HIDDENHAND_DEV=1. */
+const devMode = process.argv.includes('--dev') || process.env.HIDDENHAND_DEV === '1';
 
 // --- Performance --------------------------------------------------------------------------------
 // Keep the simulation running at full speed when the window is minimised or covered (browsers
@@ -22,7 +25,7 @@ app.commandLine.appendSwitch('disable-features', 'CalculateNativeWinOcclusion');
 // thread with pointer compression), rather than a limit chosen from the machine's memory.
 app.commandLine.appendSwitch('js-flags', '--max-old-space-size=4096');
 
-if (process.env.NOOSPHERE_USER_DATA) app.setPath('userData', process.env.NOOSPHERE_USER_DATA);
+if (process.env.HIDDENHAND_USER_DATA) app.setPath('userData', process.env.HIDDENHAND_USER_DATA);
 
 // One window at a time: a second launch focuses the existing one.
 if (!app.requestSingleInstanceLock()) {
@@ -43,8 +46,26 @@ function saveSettings() {
   fs.mkdirSync(path.dirname(settingsFile()), { recursive: true });
   atomicWrite(settingsFile(), JSON.stringify(settings, null, 2)).catch(() => {});
 }
-const defaultSavesFolder = () => path.join(app.getPath('documents'), 'Noosphere', 'Saves');
-const savesFolder = () => process.env.NOOSPHERE_SAVES_DIR || settings.savesFolder || defaultSavesFolder();
+const defaultSavesFolder = () => path.join(app.getPath('documents'), 'The Hidden Hand', 'Saves');
+/** Where saves lived before the project was renamed from The Noosphere. */
+const legacySavesFolder = () => path.join(app.getPath('documents'), 'Noosphere', 'Saves');
+/**
+ * One-time carry-over after the rename: if the default saves folder does not exist yet but the old
+ * Documents\Noosphere\Saves does, copy the old worlds across. The old folder is left untouched.
+ */
+function carryOverLegacySaves() {
+  if (process.env.HIDDENHAND_SAVES_DIR || settings.savesFolder) return;
+  const from = legacySavesFolder();
+  const to = defaultSavesFolder();
+  try {
+    if (fs.existsSync(to) || !fs.existsSync(from)) return;
+    fs.mkdirSync(to, { recursive: true });
+    for (const f of fs.readdirSync(from)) {
+      if (f.endsWith(LEGACY_EXT) || f.endsWith(EXT)) fs.copyFileSync(path.join(from, f), path.join(to, f));
+    }
+  } catch { /* best effort: the old folder can still be chosen from File > Change Saves Folder */ }
+}
+const savesFolder = () => process.env.HIDDENHAND_SAVES_DIR || settings.savesFolder || defaultSavesFolder();
 let store;
 function resetStore() { store = new SaveStore(savesFolder(), { trash: (f) => shell.trashItem(f) }); }
 
@@ -58,7 +79,7 @@ function createWindow() {
     x: b.x, y: b.y,
     minWidth: 960,
     minHeight: 600,
-    title: 'The Noosphere',
+    title: 'The Hidden Hand',
     backgroundColor: '#0b0f14',
     show: false,
     autoHideMenuBar: false,
@@ -86,7 +107,7 @@ function createWindow() {
     if (details.reason === 'clean-exit') return;
     const r = await dialog.showMessageBox(win, {
       type: 'error',
-      title: 'The Noosphere stopped',
+      title: 'The Hidden Hand stopped',
       message: `The simulation stopped unexpectedly (${details.reason}).`,
       detail: 'Worlds you saved are safe in your saves folder. Reload to carry on from a save.',
       buttons: ['Reload', 'Quit'],
@@ -103,7 +124,7 @@ function createWindow() {
   win.on('close', remember);
   win.on('closed', () => { win = null; });
 
-  win.loadFile(path.join(__dirname, 'app', 'index.html'));
+  win.loadFile(path.join(__dirname, 'app', 'index.html'), devMode ? { query: { dev: '1' } } : undefined);
 }
 
 // --- Bridge (see src/platform/desktop.ts) -------------------------------------------------------
@@ -118,8 +139,8 @@ function registerIpc() {
   ipcMain.handle('file:export', async (_e, suggestedName, text) => {
     const r = await dialog.showSaveDialog(win, {
       title: 'Export world',
-      defaultPath: path.join(app.getPath('documents'), path.basename(String(suggestedName || 'world.noosphere.json'))),
-      filters: [{ name: 'Noosphere world', extensions: ['json'] }, { name: 'All files', extensions: ['*'] }],
+      defaultPath: path.join(app.getPath('documents'), path.basename(String(suggestedName || `world${EXT}`))),
+      filters: [{ name: 'Hidden Hand world', extensions: ['json'] }, { name: 'All files', extensions: ['*'] }],
     });
     if (r.canceled || !r.filePath) return false;
     await atomicWrite(r.filePath, String(text));
@@ -130,7 +151,7 @@ function registerIpc() {
       title: 'Import world',
       defaultPath: savesFolder(),
       properties: ['openFile'],
-      filters: [{ name: 'Noosphere world', extensions: ['json', 'noosphere'] }, { name: 'All files', extensions: ['*'] }],
+      filters: [{ name: 'Hidden Hand world', extensions: ['json'] }, { name: 'All files', extensions: ['*'] }],
     });
     if (r.canceled || !r.filePaths[0]) return null;
     return fsp.readFile(r.filePaths[0], 'utf8');
@@ -155,7 +176,7 @@ async function chooseSavesFolder() {
   dialog.showMessageBox(win, {
     type: 'info',
     message: 'Saves folder changed',
-    detail: `New saves go to:\n${savesFolder()}\n\nWorlds already in the old folder stay there. Copy their .noosphere.json files across to see them in the Library.`,
+    detail: `New saves go to:\n${savesFolder()}\n\nWorlds already in the old folder stay there. Copy their world files across to see them in the Library.`,
   });
 }
 
@@ -189,12 +210,12 @@ function buildMenu() {
       label: 'Help',
       submenu: [
         {
-          label: 'About The Noosphere',
+          label: 'About The Hidden Hand',
           click: () => dialog.showMessageBox(win, {
             type: 'info',
             title: 'About',
-            message: `The Noosphere ${app.getVersion()}`,
-            detail: `An autonomous civilisation simulation.\n\nSaved worlds: ${savesFolder()}\nElectron ${process.versions.electron} · Chromium ${process.versions.chrome}`,
+            message: `The Hidden Hand ${app.getVersion()}`,
+            detail: `Steer a living civilisation from the shadows.\n\nSaved worlds: ${savesFolder()}\nElectron ${process.versions.electron} · Chromium ${process.versions.chrome}`,
           }),
         },
       ],
@@ -205,6 +226,7 @@ function buildMenu() {
 
 app.whenReady().then(() => {
   loadSettings();
+  carryOverLegacySaves();
   resetStore();
   registerIpc();
   buildMenu();

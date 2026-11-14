@@ -3,7 +3,7 @@ import { setPrefs } from '../prefs';
 
 interface Step { target?: string; title: string; body: string; tab?: string }
 export const TOUR: Step[] = [
-  { title: 'Welcome to the Noosphere', body: 'A world of people who are born, farm, trade, marry, worship, invent, rule and fight. Nobody scripts what happens. You watch, and when you choose to, you intervene.' },
+  { title: 'Welcome to The Hidden Hand', body: 'A world of people who are born, farm, trade, marry, worship, invent, rule and fight. Nobody scripts what happens. Nobody takes orders from you either: whatever you shape, you shape from the shadows.' },
   { target: '[data-tour="play"]', title: 'Set time moving', body: 'Play and pause here, or press Space. The buttons beside it set the speed: from a month at a time to centuries in minutes.' },
   { target: '[data-tour="tab-story"]', tab: 'story', title: 'The story so far', body: 'The front page tells you what matters right now: the headlines, the figures of the age and the realms. Click any of them to dig in.' },
   { target: '[data-tour="tab-world"]', tab: 'world', title: 'The living map', body: 'Forests thin, fields spread, caravans move and armies march. Scroll to zoom in until settlements become towns, then double-click one to walk its streets.' },

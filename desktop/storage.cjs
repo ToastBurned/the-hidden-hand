@@ -2,7 +2,7 @@
 /**
  * Saved worlds as plain files in a folder on disk.
  *
- * Each save is one `<name>-year<N>-<stamp>.noosphere.json` file in exactly the format the browser
+ * Each save is one `<name>-year<N>-<stamp>.hiddenhand.json` file in exactly the format the browser
  * version exports, so files move freely between the two: drop an exported world into the folder and
  * it appears in the Library; copy a file out of it and the browser version can import it.
  *
@@ -13,7 +13,10 @@ const fs = require('node:fs');
 const fsp = require('node:fs/promises');
 const path = require('node:path');
 
-const EXT = '.noosphere.json';
+const EXT = '.hiddenhand.json';
+/** Saves written before the rename from The Noosphere. They are still listed and loaded. */
+const LEGACY_EXT = '.noosphere.json';
+const isSaveName = (id) => id.endsWith(EXT) || id.endsWith(LEGACY_EXT);
 const INDEX = '.library-index.json';
 
 function slug(name) {
@@ -26,7 +29,7 @@ function stamp(d = new Date()) {
   return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}${p(d.getMilliseconds(), 3)}`;
 }
 
-/** Reads just enough of a world file to label it. Returns null if it is not a Noosphere world. */
+/** Reads just enough of a world file to label it. Returns null if it is not a world file. */
 function describeWorld(text) {
   try {
     const w = JSON.parse(text);
@@ -49,7 +52,7 @@ class SaveStore {
 
   /** Resolves a save id to its path, refusing anything that is not a plain save file in the folder. */
   file(id) {
-    if (typeof id !== 'string' || !id.endsWith(EXT) || path.basename(id) !== id || id.includes('..')) {
+    if (typeof id !== 'string' || !isSaveName(id) || path.basename(id) !== id || id.includes('..')) {
       throw new Error('Not a save in the saves folder.');
     }
     return path.join(this.folder, id);
@@ -71,7 +74,7 @@ class SaveStore {
     const next = {};
     const out = [];
     for (const id of await fsp.readdir(this.folder)) {
-      if (!id.endsWith(EXT)) continue;
+      if (!isSaveName(id)) continue;
       let st;
       try { st = await fsp.stat(path.join(this.folder, id)); } catch { continue; }
       if (!st.isFile()) continue;
@@ -135,4 +138,4 @@ async function atomicWrite(file, text) {
   await fsp.rename(tmp, file);
 }
 
-module.exports = { SaveStore, describeWorld, slug, EXT, atomicWrite };
+module.exports = { SaveStore, describeWorld, slug, EXT, LEGACY_EXT, atomicWrite };
