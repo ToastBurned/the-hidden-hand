@@ -144,6 +144,58 @@ exhaustion. Alliances form between polities that like each other and share faith
 **Simplification:** there is no tactical model, no explicit army movement and no naval warfare; a war is a series of
 monthly engagements over a target settlement resolved with a Lanchester-style strength comparison.
 
+## War at sea
+
+`systems/naval.ts`. A realm's ports are its coastal settlements with a harbour once it has boats. Each year the
+ports pay a ship levy (heavier in wartime and under centralised rule), topped up from the treasury; the money goes
+to the shipwrights and crews of the ports, so it stays in circulation. Ships cost wood and labour at local prices,
+decay, and need upkeep. A realm wants more ships the more harbours it has, the more martial its budget and ruler,
+and the bigger the fleet of a rival it is at war with or hostile to. Ship quality follows seafaring knowledge.
+
+- **Invasion across water.** When no settlement of the attacker shares a landmass with the target, the army must
+  sail. Without at least two ships no such war is declared. Each campaign month the fleets fight first (the
+  defender has a home-waters bonus); a beaten invasion fleet means no landing that month, and a victorious or
+  unopposed one lands as much of the army as its ships can carry (40 fighting men per ship).
+- **Shared coasts.** Rival fleets may also clash off a coastal target reached overland, and command of the sea
+  strengthens the army that holds it.
+- **Blockade.** A side whose fleet is at least 1.5 times its enemy's closes the enemy's ports for the war: fishing
+  falls by 30% and sea trade with other landmasses stops.
+
+## Credit and debt
+
+`systems/finance.ts`. A bank appears in a town with coinage, a market, at least 400 people and several merchants.
+
+- Households with more than four months' food money deposit a little of the excess each month (up to two years'
+  worth); households short of food borrow, but only against security (land or a working income).
+- Loans pay 22% a year (10% under a law capping interest). Interest is shared with depositors. A bank keeps at
+  least a third of its deposits in hand and lends at most 60% of them.
+- Borrowers who owe more than a year's food and cannot pay default. Under debt bondage half of such a debt is
+  recovered from the debtor's goods and their happiness falls sharply.
+- A bank fails when depositors cannot be paid (a run) or its assets fall below 85% of deposits. Depositors get what
+  cash remains, its loans are never collected, it closes, and trust takes 25 years to return. Failures raise
+  unrest and cost the ruler legitimacy.
+- At war, a realm whose treasury is empty borrows from the richest bank it controls. It pays 12% interest; if the
+  debt passes four years of revenue or it falls four years behind, it repudiates, which can break the bank.
+  No one lends to it for 25 years after.
+- The share of people deep in debt adds to unrest.
+- Bank reserves are money and are counted in the money supply; deposits and debts are claims, so money is still
+  conserved exactly (tested).
+
+## Law
+
+`systems/law.ts`. Every realm has a law in six fields. Land and military service mirror the existing institutions
+(private property and conscription). The other four are legislated only after a realm adopts a written code, at
+most one revision a year, driven by values and experience:
+
+| Field | Choices | What moves it | Effect |
+| --- | --- | --- | --- |
+| Justice | custom, code, courts | a written code; killings; a bureaucracy and size for courts | less violence and unrest |
+| Debt | none, debt bondage, interest cap and relief | debt crises and popular participation vs a hierarchical elite | interest rates, recovery of defaults, debt cancellation when a town is deep in debt |
+| Trade | open, tariffs | central treasuries, blockades, low individualism vs merchants | 12% duty on goods sold by foreign merchants, paid to the treasury |
+| Faith | tolerance, establishment | a pious, intolerant people with a state religion | more persecution of minority faiths |
+
+Every enactment is an event with its reasons and causes, so laws show up in the chronicle and the causal history.
+
 ## Technology
 
 Thirty technologies, from agriculture, animal husbandry, pottery and boats through bronze, writing, the wheel,
@@ -265,8 +317,9 @@ The engine simulates a bounded number of agents (`agentBudget`, default 6,000) h
 - **Calibration.** Parameters are chosen for plausible behaviour, not fitted to historical data. The validation report
   checks broad stylised facts, not specific societies.
 - **Coarse geography**: a tile is a region, so cities are not spatially resolved and roads are abstract.
-- **No naval warfare, credit, slavery, or detailed law.** These would be natural extensions; the module structure
-  is designed for it (each system is a function of the world state, called from `sim.ts`).
+- **War at sea, credit and law are deliberately simple.** Sea battles are rare (most realms never meet a rival fleet),
+  wartime state borrowing is rare because few capitals have banks, and laws are chosen from short fixed menus.
+  There is no slavery, no chartered company, no insurance and no bond market.
 - **Browser storage**: saves live in the browser's storage for the page. Opening the app from a different folder or
   browser shows a different library. Export important worlds to files. The desktop app (`desktop/`) removes this
   limitation: there, saves are ordinary files in a folder on disk, behind the bridge in `src/platform/desktop.ts`.

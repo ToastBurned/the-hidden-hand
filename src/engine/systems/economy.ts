@@ -172,8 +172,8 @@ export function produce(c: Ctx, sw: SettlementWork, field: ClimateField): void {
     let F = 0;
     for (const i of s.territory) F += t.fish[i];
     const L = sum(sw.labor[O_FISHER]);
-    // a blockaded port cannot send its boats out
-    const per = 2.6 * fx.fishYield * season * (1 + 0.12 * Math.min(4, s.buildings[BLD_HARBOR])) * ((s.ctx.blockadeUntil ?? -1) >= w.tick ? 0.4 : 1);
+    // a blockaded port can only send out boats that slip past the enemy fleet
+    const per = 2.6 * fx.fishYield * season * (1 + 0.12 * Math.min(4, s.buildings[BLD_HARBOR])) * ((s.ctx.blockadeUntil ?? -1) >= w.tick ? 0.7 : 1);
     const pot = L * per;
     const maxTake = F * 0.18;
     const take = maxTake > 0 ? maxTake * (1 - Math.exp(-pot / maxTake)) : 0;
