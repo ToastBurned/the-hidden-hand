@@ -13,6 +13,7 @@ import { Icon } from '../Icons';
 import { settlementClarity, polityClarity } from '../veil';
 import { townName } from '../panels/OrderPanel';
 import type { PlayApi } from '../PlayScreen';
+import { HelpMark } from '../codex/Codex';
 
 export type AssignIntent =
   | { kind: 'operation'; agent?: number; target?: { kind: 'settlement' | 'person' | 'polity'; id: number } }
@@ -126,7 +127,7 @@ function OperationForm({ api, m, intent, onDone, onAgent }: { api: PlayApi; m: M
         <div className="col">
           {!op && <p className="dim italic small">Choose what {m.name.split(' ')[0]} should do.</p>}
           {op && <>
-            <h3>{op.name}</h3>
+            <h3>{op.name}<HelpMark id={`op:${op.kind}`} label={op.name} /></h3>
             <p className="small dim">{op.blurb}</p>
             {op.target === 'person' && (
               <label className="col" style={{ gap: 4 }}><span className="label">Whom</span>
@@ -200,7 +201,7 @@ function LeverForm({ api, m, onDone, onAgent }: { api: PlayApi; m: MemberView; o
         <div className="col">
           {!lv && <p className="dim italic small">A lever is a standing pressure through a seat. It shifts what people already weigh when they decide, and never decides for them.</p>}
           {lv && <>
-            <h3>{lv.name}</h3>
+            <h3>{lv.name}<HelpMark id={`lever:${lv.kind}`} label={lv.name} /></h3>
             <p className="small dim">{lv.blurb}</p>
             <div className="small"><span className="label">Takes</span> {lv.delay}</div>
             <div className="small"><span className="label">Resisted by</span> {lv.resisters}</div>

@@ -9,11 +9,13 @@ import { getSave, type SaveMeta } from '../saves';
 import { LoadDialog } from './LoadDialog';
 import { PlayScreen } from './PlayScreen';
 import { GameModal } from './Modal';
+import { Icon } from './Icons';
 import './theme.css';
 import { TitleScreen } from './TitleScreen';
 import { SettingsDialog } from './SettingsDialog';
 import { CampaignSetup, type CampaignStart } from './CampaignSetup';
 import { useSettings } from './settings';
+import { CodexProvider, useCodex } from './codex/Codex';
 
 /** The tutorial's world: small, fixed, and predictable enough to teach from. */
 export const TUTORIAL_WORLD = { setup: { size: 'small' as const, temperament: 'temperate' as const, seed: 4127, years: 150 }, name: 'The Lantern Coast' };
@@ -44,6 +46,7 @@ export function GameApp() {
   const toTitle = () => { sim.pause(); setScreen({ id: 'title' }); };
   return (
     <div className="hh" style={{ ['--text-scale' as string]: settings.textScale }} data-motion={settings.reducedMotion ? 'reduced' : 'full'}>
+      <CodexProvider>
       {screen.id === 'title' && (
         <TitleScreen
           onNew={() => setScreen({ id: 'setup', tutorial: false })}
@@ -69,8 +72,16 @@ export function GameApp() {
       {dialog === 'load' && <LoadDialog onLoad={load} onClose={() => { setDialog(null); setSavesVersion((v) => v + 1); }} />}
       {dialog === 'chronicles' && <ChroniclesDialog onClose={() => setDialog(null)} />}
       {error && <div className="hh-toast" role="alert" onClick={() => setError(null)}>{error}</div>}
+      {screen.id !== 'play' && <CodexCorner />}
+      </CodexProvider>
     </div>
   );
+}
+
+/** The encyclopaedia's mark on screens without a top bar of their own (the play screen has one). */
+function CodexCorner() {
+  const { open } = useCodex();
+  return <button className="ghost codex-corner" onClick={() => open()} title="Encyclopaedia (F1)" aria-label="Encyclopaedia"><Icon name="book" size={18} /><span className="small">Encyclopaedia</span></button>;
 }
 
 function ChroniclesDialog({ onClose }: { onClose: () => void }) {

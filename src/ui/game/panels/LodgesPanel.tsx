@@ -4,6 +4,7 @@ import type { RoomKind } from '../../../game/view';
 import { Icon } from '../Icons';
 import { dateOf, type PlayApi } from '../PlayScreen';
 import { townName } from './OrderPanel';
+import { HelpMark } from '../codex/Codex';
 
 export function LodgesPanel({ api }: { api: PlayApi }) {
   const g = api.g;
@@ -11,7 +12,7 @@ export function LodgesPanel({ api }: { api: PlayApi }) {
   return (
     <div className="screen">
       <header className="screen-head">
-        <h2>Lodges</h2>
+        <h2>Lodges<HelpMark id="order:lodges" /></h2>
         <p className="dim italic">Each cell can keep a lodge, a hidden house in its town. Rooms cost coin and time, need the Order's crafts, and can be found. Coin pays real builders in that town. The Order has {Math.round(g.resources.wealth)} in coin.</p>
       </header>
       {!g.lodges.length && <p className="dim">The Order has no lodge yet. Give a member the <b>Found a lodge</b> assignment in their own town.</p>}
@@ -27,7 +28,7 @@ export function LodgesPanel({ api }: { api: PlayApi }) {
               const cost = spec.cost * (level + 1);
               return (
                 <div key={k} className={`room ${level ? 'built' : ''}`}>
-                  <div className="row"><b className="grow">{spec.name}</b>{level > 0 && <span className="tiny gold">{'●'.repeat(level)}{'○'.repeat(3 - level)}</span>}</div>
+                  <div className="row"><b className="grow">{spec.name}<HelpMark id={`room:${k}`} label={spec.name} /></b>{level > 0 && <span className="tiny gold">{'●'.repeat(level)}{'○'.repeat(3 - level)}</span>}</div>
                   <div className="tiny dim">{spec.blurb}</div>
                   {have?.building ? <div className="tiny gold">Being built, ready {dateOf(have.done ?? 0)}</div> : level < 3 && (
                     <button className="chip" disabled={!ok || g.resources.wealth < cost} onClick={() => api.act({ type: 'build', lodge: l.id, room: k })} title={!ok ? `Needs the craft of ${spec.needs}` : undefined}>

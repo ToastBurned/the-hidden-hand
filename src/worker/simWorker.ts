@@ -20,6 +20,7 @@ import { proposeNames } from '../engine/game/founding';
 import { creedFromAnswers } from '../engine/game/creed';
 import { leverDefs } from '../engine/game/levers';
 import { opDefs } from '../engine/game/operations';
+import { buildCodex } from '../engine/game/codex';
 import type { Creed, FoundingStory, GameCommand, GameSpeed, Interrupts } from '../game/view';
 
 /** Months per real second at the game's three speeds (index 0 = paused). */
@@ -127,6 +128,8 @@ function loop() {
 }
 
 function answer(kind: string, arg: unknown): unknown {
+  // the encyclopaedia is the rules, not a world: it answers with no world loaded
+  if (kind === 'codex') return buildCodex();
   if (!sim) return null;
   switch (kind) {
     case 'settlement': return settlementDetail(sim, arg as number);

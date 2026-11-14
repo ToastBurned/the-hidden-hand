@@ -40,7 +40,7 @@ export function makeGreatWork(kind: WorkKind): WorkState {
   return { id: `great-${kind}`, kind, title: d.title, text: d.text, held: 0, need: d.need, progress: 0, done: false, doneAt: -1, blocker: null, reward: '' };
 }
 
-interface LesserDef { id: string; title: string; text: string; reward: 'influence' | 'wealth' | 'cohesion'; test: (c: Ctx, g: GameState) => boolean; need: number }
+export interface LesserDef { id: string; title: string; text: string; reward: 'influence' | 'wealth' | 'cohesion'; test: (c: Ctx, g: GameState) => boolean; need: number }
 
 function home(c: Ctx, g: GameState): Settlement | undefined { return c.w.settlements.get(g.order.home); }
 function homePolity(c: Ctx, g: GameState) { const h = home(c, g); return h ? c.w.polities.get(h.polity) : undefined; }
@@ -49,7 +49,7 @@ function memberHolds(g: GameState, kinds: string[], polity?: number): boolean {
 }
 const seats = (g: GameState) => g.offices.filter((o) => g.members.has(o.holder)).length;
 
-const LESSER: Record<WorkKind, LesserDef[]> = {
+export const LESSER: Record<WorkKind, LesserDef[]> = {
   'no-starving': [
     { id: 'granary', title: 'A granary at home', text: 'A public granary standing in our home city.', reward: 'cohesion', need: 1, test: (c, g) => (home(c, g)?.buildings[BLD_GRANARY] ?? 0) >= 1 },
     { id: 'stores', title: 'Keepers of the stores', text: 'A member keeping a granary or the treasury.', reward: 'influence', need: 1, test: (_c, g) => memberHolds(g, ['granary-keeper', 'treasurer']) },
