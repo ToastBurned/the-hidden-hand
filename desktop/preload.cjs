@@ -17,6 +17,8 @@ contextBridge.exposeInMainWorld('hiddenHandDesktop', {
   importFile: () => ipcRenderer.invoke('file:import'),
   savesFolder: () => ipcRenderer.invoke('saves:folder'),
   openSavesFolder: () => ipcRenderer.invoke('saves:open-folder'),
+  /** Calls back with 'hidden' when the window is minimised or hidden and 'visible' when it is back. */
+  onWindowState: (cb) => { ipcRenderer.on('window:state', (_e, state) => { try { cb(state === 'hidden' ? 'hidden' : 'visible'); } catch { /* ignore */ } }); },
   prefs: {
     get: (key) => (Object.prototype.hasOwnProperty.call(prefs, key) ? prefs[key] : null),
     set: (key, value) => {

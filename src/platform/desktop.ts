@@ -31,6 +31,8 @@ export interface HiddenHandDesktop {
    * `get` reads from a copy loaded when the page starts; `set` (null removes) is written to disk
    * straight away by the main process. Missing in desktop builds older than 0.2.
    */
+  /** Window minimised/hidden or shown again (0.2.1 and later), for quietening the sound. */
+  readonly onWindowState?: (cb: (state: 'hidden' | 'visible') => void) => void;
   readonly prefs?: { get(key: string): string | null; set(key: string, value: string | null): void };
 }
 

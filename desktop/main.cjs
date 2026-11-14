@@ -149,6 +149,13 @@ function createWindow() {
     if (!win.isMaximized() && !win.isMinimized() && !win.isFullScreen()) settings.bounds = win.getBounds();
     saveSettings();
   };
+  // The page cannot see minimising (backgroundThrottling is off, so it stays 'visible'); tell it,
+  // so the game's sound can go quiet while the window is down (src/ui/audio).
+  const tell = (state) => { if (win && !win.isDestroyed()) win.webContents.send('window:state', state); };
+  win.on('minimize', () => tell('hidden'));
+  win.on('hide', () => tell('hidden'));
+  win.on('restore', () => tell('visible'));
+  win.on('show', () => tell('visible'));
   win.on('close', remember);
   win.on('closed', () => { win = null; });
 
