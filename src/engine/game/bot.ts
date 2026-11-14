@@ -24,8 +24,11 @@ export interface BotStyle {
   push: number;
   /** Target membership growth per decade. */
   growth: number;
+  /** Pulls levers at all? false = the passive control: an Order that survives and grows but never pushes. */
+  levers: boolean;
 }
-export const DEFAULT_BOT: BotStyle = { dark: true, push: 2, growth: 6 };
+export const DEFAULT_BOT: BotStyle = { dark: true, push: 2, growth: 5, levers: true };
+export const PASSIVE_BOT: BotStyle = { dark: false, push: 0, growth: 5, levers: false };
 /** A player who founds the Order and then does nothing: the baseline that should almost never win. */
 export const IDLE_BOT: BotStyle | null = null;
 
@@ -59,7 +62,8 @@ export function botTurn(sim: Simulation, style: BotStyle = DEFAULT_BOT): void {
   const work = g.greatWork.kind as WorkKind;
   const ms = [...g.members.values()].filter((m) => m.imprisoned < 0 && !m.travel && m.hiddenUntil <= w.tick && w.persons.has(m.pid));
   const years = (w.tick - g.order.founded) / 12;
-  const wantSize = Math.min(40, 4 + Math.floor(years / 10 * style.growth));
+  const wantSize = Math.min(30, 4 + Math.floor(years / 10 * style.growth));
+  let recruiting = [...g.ops.values()].filter((o) => o.status === 'running' && o.kind === 'recruit').length;
   for (const m of ms) {
     if (busy(g, m.pid)) continue;
     const p = w.persons.get(m.pid)!;
@@ -70,9 +74,9 @@ export function botTurn(sim: Simulation, style: BotStyle = DEFAULT_BOT): void {
       if (run(sim, { type: 'operation', kind: 'win-seat', agent: m.pid, target: { kind: 'settlement', id: p.sid }, approach: g.order.wealth > 20 ? 'with coin' : 'through patronage' })) continue;
     }
     // 2. grow the Order
-    if (g.members.size < wantSize && susp < 0.4 && m.influence >= 1) {
+    if (g.members.size + recruiting < wantSize && recruiting < 1 + g.cells.size && susp < 0.4 && m.influence >= 1) {
       const t = bestRecruit(sim, g, m);
-      if (t >= 0 && run(sim, { type: 'operation', kind: 'recruit', agent: m.pid, target: { kind: 'person', id: t }, approach: 'through friendship' })) continue;
+      if (t >= 0 && run(sim, { type: 'operation', kind: 'recruit', agent: m.pid, target: { kind: 'person', id: t }, approach: 'through friendship' })) { recruiting++; continue; }
     }
     // 3. befriend useful office holders in town
     if (m.influence >= 2 && g.allies.length < g.members.size) {
@@ -80,7 +84,7 @@ export function botTurn(sim: Simulation, style: BotStyle = DEFAULT_BOT): void {
       if (o && run(sim, { type: 'operation', kind: 'befriend', agent: m.pid, target: { kind: 'person', id: o.holder }, approach: 'with flattery' })) continue;
     }
   }
-  levers(sim, g, style, work);
+  if (style.levers) levers(sim, g, style, work);
   lodges(sim, g);
   expand(sim, g, work);
 }
@@ -238,6 +242,27 @@ function lodges(sim: Simulation, g: GameState): void {
   void mastery;
 }
 
+/** The state of our people where the Great Work is most held back. */
+export function focusPolity(sim: Simulation, g: GameState, work: WorkKind): number {
+  const w = sim.w;
+  const pops = new Map<number, number>();
+  for (const s of ourSettlements(w)) pops.set(s.polity, (pops.get(s.polity) ?? 0) + s.pop);
+  const fails = (id: number) => {
+    const p = w.polities.get(id);
+    if (!p) return false;
+    switch (work) {
+      case 'peace': return p.gov.spendMilitary > 0.15;
+      case 'no-starving': return p.gov.spendWelfare < 0.18;
+      case 'voice': return p.gov.participation <= 0.5;
+      case 'faith-free': return p.gov.tolerance <= 0.6;
+      case 'knowledge': return p.gov.spendLearning < 0.12;
+      default: return true;
+    }
+  };
+  const list = [...pops.entries()].filter(([id]) => fails(id)).sort((a, b) => b[1] - a[1]);
+  return (list[0] ?? [...pops.entries()].sort((a, b) => b[1] - a[1])[0])?.[0] ?? -1;
+}
+
 function expand(sim: Simulation, g: GameState, work: WorkKind): void {
   const w = sim.w;
   if (w.tick % 12 !== 0) return;
@@ -248,13 +273,11 @@ function expand(sim: Simulation, g: GameState, work: WorkKind): void {
   const from = w.settlements.get(big.c.sid);
   if (!from) return;
   let dest = -1;
-  if (work === 'power') {
-    // the greatest state of our people is where the work must be done
-    const pops = new Map<number, number>();
-    for (const s of ourSettlements(w)) pops.set(s.polity, (pops.get(s.polity) ?? 0) + s.pop);
-    const top = [...pops.entries()].sort((a, b) => b[1] - a[1])[0];
-    const cap = top ? w.polities.get(top[0])?.capital ?? -1 : -1;
-    if (cap >= 0 && cap !== big.c.sid && cellMembers(g, [...g.cells.values()].find((c) => c.sid === cap)?.id ?? -1).length < 4) dest = cap;
+  {
+    // go where the work is blocked: the capital of the largest state of our people that fails the condition
+    const focus = focusPolity(sim, g, work);
+    const cap = focus >= 0 ? w.polities.get(focus)?.capital ?? -1 : -1;
+    if (cap >= 0 && cap !== big.c.sid && cellMembers(g, [...g.cells.values()].find((c) => c.sid === cap)?.id ?? -1).length < 5) dest = cap;
   }
   if (dest < 0) {
     const cands = ourSettlements(w).filter((s) => !towns.has(s.id) && s.pop > 120 && isFinite(sim.travel(from.id, s.id))).sort((a, b) => b.pop - a.pop);
