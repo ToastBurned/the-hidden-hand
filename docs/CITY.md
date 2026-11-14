@@ -166,3 +166,21 @@ preacher, an old feud, the ruler) for the start screen.
 - `stepDay(c, hook)`: a per-day callback.
 - `logEvent`, `startRumour`, `meet`, `crimeReported`, `appoint`, `burn`,
   `placeBuilding` are exported for the game layer to use.
+
+## The 90-year gate
+
+Five seeds run for 90 years without intervention (`npx tsx tools/city.ts <seed> 90 3`):
+
+| Seed | City | Start | Population range | Worst year of hunger |
+|---|---|---|---|---|
+| 1 | Harthaven, 1526 | 5,400 | 5,450 to 6,770 | 6% |
+| 2 | Boschmond, 1532 | 5,000 | 4,480 to 6,260 | 12% |
+| 3 | Lomolo, 1569 | 5,350 | 5,340 to 6,710 | 7% |
+| 4 | Peralillo, 1521 | 5,600 | 5,840 to 7,020 | 7% |
+| 5 | Evermouth, 1527 | 6,500 | 6,090 to 8,150 | 7% |
+
+Every run has plague or pox waves and recovery, dear years with bread at 1.5 to 1.8
+times its usual price, fires, wars and levies, discoveries arriving, great families
+rising, marrying and dying out, contested elections, and the dissenters suppressed or
+tolerated. A 90-year run takes about 75 seconds and produces 350 to 450 events of
+importance 3 or more.

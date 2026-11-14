@@ -365,8 +365,8 @@ export function councilBusiness(c: City, crisisOnly = false): void {
     });
   }
   // taxes
-  if (t.debt > pop * 0.5 && t.taxRate < 0.14) {
-    motions.push({ key: 'taxUp', title: 'raising the city tax', imp: 3, why: `The city owed ${Math.round(t.debt)} ducats.`, lean: (p) => p.consc * 0.4 - wealthy(p) * 0.3 + Math.min(0.6, t.debt / (pop * 4)), pass: () => { t.taxRate = Math.round((t.taxRate + 0.02) * 100) / 100; return `The tax now takes ${Math.round(t.taxRate * 100)} in a hundred.`; } });
+  if (t.debt > pop * 0.5 && t.taxRate < 0.1 && c.day - (t.laws.taxUp ?? -1e9) > DAYS_PER_YEAR * 3) {
+    motions.push({ key: 'taxUp', title: 'raising the city tax', imp: 3, why: `The city owed ${Math.round(t.debt)} ducats.`, lean: (p) => p.consc * 0.4 - wealthy(p) * 0.3 + Math.min(0.6, t.debt / (pop * 4)), pass: () => { t.taxRate = Math.round((t.taxRate + 0.02) * 100) / 100; t.laws.taxUp = c.day; return `The tax now takes ${Math.round(t.taxRate * 100)} in a hundred.`; } });
   } else if (t.money > pop * 2 && t.taxRate > 0.02) {
     motions.push({ key: 'taxDown', title: 'lowering the city tax', imp: 2, why: 'The treasury was full.', lean: (p) => wealthy(p) * 0.4 + p.values[V_INDIV] * 0.3, pass: () => { t.taxRate = Math.round((t.taxRate - 0.01) * 100) / 100; return ''; } });
   }
@@ -479,7 +479,7 @@ export function faithMonth(c: City): void {
       const h = c.households.get(p.hh);
       if (h) { const fine = Math.min(h.money, 10); h.money -= fine; c.treasury.money += fine; }
     }
-    if (elder && r.chance(0.04)) {
+    if (elder && r.chance(0.015)) {
       crimeReported(c, elder, 'heresy');
     }
   }

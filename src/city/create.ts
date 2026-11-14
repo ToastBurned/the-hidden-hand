@@ -16,7 +16,7 @@ export function emptyAcc(): YearAcc {
 
 export function defaultCityConfig(seed: number): CityConfig {
   const r = new Rng(seed, 3);
-  return { seed, population: Math.round(r.range(5000, 7000) / 50) * 50, startYear: 1520 + r.int(60) };
+  return { seed, population: Math.round(r.range(4500, 6500) / 50) * 50, startYear: 1520 + r.int(60) };
 }
 
 export function createCity(cfg: Partial<CityConfig> & { seed: number }): City {

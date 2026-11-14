@@ -82,20 +82,7 @@ export function economyWeek(c: City): void {
       income -= tithe;
     }
     let cash = h.money + income - tax;
-    // rent
-    const home = c.buildings.get(h.home);
-    if (home && home.owner >= 0 && home.owner !== h.id) {
-      const rent = home.rent * (home.kind === B.tenement ? 1 : 1);
-      if (cash >= rent) {
-        cash -= rent;
-        const owner = c.households.get(home.owner);
-        if (owner) profits.set(owner.id, (profits.get(owner.id) ?? 0) + rent);
-      } else {
-        h.debt += rent - Math.max(0, cash);
-        cash = Math.min(cash, 0);
-      }
-    }
-    // food: bought first, then eaten from stores, then gone without
+    // food comes first: bought, then eaten from stores, then gone without
     const need = eaters * BREAD_WEEK * breadPrice;
     let unmet = 0;
     if (cash >= need) cash -= need;
@@ -105,6 +92,15 @@ export function economyWeek(c: City): void {
       const fromStores = Math.min(h.stores, short / Math.max(0.01, need));
       h.stores -= fromStores;
       unmet = clamp(short / need - fromStores);
+    }
+    // rent from what is left; arrears become debt, and debt brings eviction
+    const home = c.buildings.get(h.home);
+    if (home && home.owner >= 0 && home.owner !== h.id) {
+      const rent = home.rent * (home.kind === B.tenement ? 1 : 1);
+      const paid = clamp(cash, 0, rent);
+      cash -= paid;
+      h.debt += rent - paid;
+      if (paid > 0) profits.set(home.owner, (profits.get(home.owner) ?? 0) + paid);
     }
     // put food by in good weeks
     if (unmet === 0 && cash > need * 3 && h.stores < (h.cls === CLASS_WEALTHY ? 25 : h.cls === CLASS_MIDDLING ? 8 : 3)) { cash -= need * 0.4; h.stores += 0.4; }

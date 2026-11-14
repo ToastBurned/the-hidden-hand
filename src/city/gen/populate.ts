@@ -340,8 +340,8 @@ export function populate(c: City, r: Rng, square: { x: number; y: number }): voi
       people++;
     }
     h.head = head.id;
-    h.money = cls === CLASS_WEALTHY ? (fam.great ? r.range(3000, 12000) * fam.prestige : r.range(800, 2500)) : cls === CLASS_MIDDLING ? r.range(15, 140) : r.range(1, 14);
-    h.stores = cls === CLASS_POOR ? r.range(0.5, 2) : cls === CLASS_MIDDLING ? r.range(3, 8) : r.range(10, 30);
+    h.money = cls === CLASS_WEALTHY ? (fam.great ? r.range(3000, 12000) * fam.prestige : r.range(800, 2500)) : cls === CLASS_MIDDLING ? r.range(15, 140) : r.range(3, 20);
+    h.stores = cls === CLASS_POOR ? r.range(2, 5) : cls === CLASS_MIDDLING ? r.range(3, 8) : r.range(10, 30);
     if (fam.great && fam.head < 0 && home.kind === B.manor) fam.head = head.id;
   }
   for (const f of great) if (f.head < 0) { const hh = allHouseholds.find((h) => c.people.get(h.head)?.family === f.id); if (hh) f.head = hh.head; }

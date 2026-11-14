@@ -141,8 +141,8 @@ export function marriageMonth(c: City): void {
       s -= Math.abs(clsOf(m) - clsOf(w)) * 0.45;
       s += m.faith === w.faith ? 0.2 : -0.6;
       s += affinity(w, m.id) * 0.8;
-      if (wf?.great && mf?.great) s += 0.35; // alliances
-      if (wf && mf && wf.id === mf.id) s -= 0.3;
+      if (wf && mf && wf.id === mf.id) s -= 0.6; // cousins: rare
+      else if (wf?.great && mf?.great) s += 0.35; // alliances
       s += (m.status - 0.3) * 0.3 + (TRADES[m.trade].wage > 0 ? 0.15 : -0.3);
       s += r.normal(0, 0.15) + mod(c, `p${w.id}:match${m.id}`);
       if (s > bs) { bs = s; best = m; }
@@ -184,7 +184,7 @@ export function marry(c: City, m: Person, w: Person): void {
     }
   }
   const mf = familyOf(c, m), wf = familyOf(c, w);
-  if (mf?.great && wf?.great) {
+  if (mf?.great && wf?.great && mf.id !== wf.id) {
     logEvent(c, {
       kind: 'marriage', imp: 4, text: `${fullName(c, m)} married ${w.first} of the ${wf.name} family, joining two of the great houses.`,
       why: `An alliance between the ${mf.name} and the ${wf.name}.`, people: [m.id, w.id],
