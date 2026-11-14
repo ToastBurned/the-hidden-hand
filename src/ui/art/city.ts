@@ -160,6 +160,10 @@ export function planCity(inp: CityInput): CityPlan {
       const c = inp.site.coast;
       specials.push({ kind: has(B.harbour) ? 'harbour' : 'jetty', x: c.dx * coastD, y: c.dy * coastD, a: Math.atan2(c.dy, c.dx), s: has(B.harbour) ? 6 + inp.bld[B.harbour] * 3 : 4 });
     }
+    if (inp.era >= 7 && inp.pop > 400) { // mills and factories on the edge of town
+      const nF = Math.min(5, 1 + Math.floor(inp.pop / 4000));
+      for (let k = 0; k < nF; k++) place('factory', 24, plazaR + 46 + k * 8);
+    }
     if (has(B.aqueduct)) { const a = inp.site.coast ? Math.atan2(-inp.site.coast.dy, -inp.site.coast.dx) : r() * 6.28; specials.push({ kind: 'aqueduct', x: 0, y: 0, a, s: 1 }); }
   }
 
@@ -231,6 +235,13 @@ export function planCity(inp: CityInput): CityPlan {
       ringSegs.push({ R, a0, a1, pts });
     });
   });
+  if (!inp.nomadic && inp.era >= 7 && inp.pop > 300) { // a railway runs in beside the first road, ending at a station
+    const c = inp.site.coast;
+    const inland = c ? [...roads].sort((p, q) => (Math.cos(p) * c.dx + Math.sin(p) * c.dy) - (Math.cos(q) * c.dx + Math.sin(q) * c.dy))[0] : roads[0];
+    const a = inland + 0.32;
+    const [sx, sy] = warp(Math.cos(a) * (radius + 10), Math.sin(a) * (radius + 10), inp.id);
+    if (!inWater(sx, sy, inp, coastD - 6)) specials.push({ kind: 'railway', x: sx, y: sy, a, s: radius + 10 });
+  }
   return { houses, fields, tents, roads, ringR: ringR.filter((R) => R < radius + 4), radius, wallR, coastD, plazaR, specials, roadPts, ringSegs, walkers: Math.min(160, Math.round(inp.pop / 12) + 4) };
 }
 
@@ -316,9 +327,12 @@ export function drawCity(g: CanvasRenderingContext2D, plan: CityPlan, inp: CityI
     }
   }
 
+  // streets and railways stop at the shore
+  if (site.coast) { g.save(); clipLand(g, site.coast, plan.coastD + 1, R); }
+  for (const sp of plan.specials) if (sp.kind === 'railway') drawRailway(g, sp, inp, o, R);
   const paved = (inp.bld[B.roads] ?? 0) > 0.5 || inp.era >= 4;
   const roadC: RGB = paved ? [196, 186, 168] : mix(shade(ground, -0.25), [150, 124, 92], 0.5);
-  if (inp.nomadic) { drawCamp(g, plan, inp, o); return; }
+  if (inp.nomadic) { if (site.coast) g.restore(); drawCamp(g, plan, inp, o); return; }
 
   // roads
   g.strokeStyle = css(roadC); g.lineCap = 'round';
@@ -331,14 +345,15 @@ export function drawCity(g: CanvasRenderingContext2D, plan: CityPlan, inp: CityI
   // plaza
   g.fillStyle = css(paved ? [208, 198, 178] : shade(roadC, 0.08));
   g.beginPath(); g.arc(0, 0, plan.plazaR, 0, Math.PI * 2); g.fill();
+  if (site.coast) g.restore();
   if (site.river) drawBridges(g, plan, inp, roadC);
   if (paved && o.detail > 0.7) { g.strokeStyle = 'rgba(0,0,0,0.08)'; g.lineWidth = lw; for (let rr = 3; rr < plan.plazaR; rr += 3) { g.beginPath(); g.arc(0, 0, rr, 0, Math.PI * 2); g.stroke(); } }
 
   // houses
   const roofCold = site.temp < 6;
   const hot = site.temp > 20;
-  const roofBase: RGB = inp.era <= 1 ? [176, 150, 96] : inp.era === 2 ? (hot ? [206, 176, 130] : [168, 124, 80]) : roofCold ? [96, 98, 108] : [170, 86, 58];
-  const wallC: RGB = hot || inp.era >= 3 ? [232, 222, 202] : inp.era <= 1 ? [140, 110, 80] : [196, 170, 130];
+  const roofBase: RGB = inp.era >= 7 ? (hot ? [190, 120, 84] : [92, 96, 110]) : inp.era <= 1 ? [176, 150, 96] : inp.era === 2 ? (hot ? [206, 176, 130] : [168, 124, 80]) : roofCold ? [96, 98, 108] : [170, 86, 58];
+  const wallC: RGB = inp.era >= 7 && !hot ? [176, 104, 82] : hot || inp.era >= 3 ? [232, 222, 202] : inp.era <= 1 ? [140, 110, 80] : [196, 170, 130];
   const dmgR = rng(inp.id * 31 + Math.floor(inp.dmg * 10));
   const burnt = new Set<number>();
   if (inp.dmg > 0.05) for (let i = 0; i < plan.houses.length; i++) if (dmgR() < inp.dmg * 0.6) burnt.add(i);
@@ -348,7 +363,7 @@ export function drawCity(g: CanvasRenderingContext2D, plan: CityPlan, inp: CityI
     g.save();
     g.translate(h.x, h.y); g.rotate(h.a);
     const w = h.w, hh = h.h;
-    const ht = 1.2 + h.tall * (inp.era >= 3 ? 2.2 : 1);
+    const ht = 1.2 + h.tall * (inp.era >= 7 ? 3.6 : inp.era >= 3 ? 2.2 : 1);
     g.fillStyle = 'rgba(0,0,0,0.22)';
     g.fillRect(-w / 2 + ht * 0.6, -hh / 2 + ht * 0.8, w, hh);
     if (burnt.has(i)) {
@@ -391,6 +406,7 @@ export function drawCity(g: CanvasRenderingContext2D, plan: CityPlan, inp: CityI
     for (const a of plan.roads) { const [gx, gy] = warp(Math.cos(a) * plan.wallR, Math.sin(a) * plan.wallR, inp.id); g.fillStyle = css(roadC); g.beginPath(); g.arc(gx, gy, 3.4, 0, Math.PI * 2); g.fill(); }
   }
 
+  if (inp.era >= 8 && o.detail > 0.3) drawLamps(g, plan, inp, o);
   if (o.animate) drawLife(g, plan, inp, o);
   if (inp.sieged) drawSiege(g, plan, inp, o);
   if (inp.dmg > 0.05 && o.animate) drawFires(g, plan, inp, o, burnt);
@@ -478,6 +494,20 @@ function drawSpecial(g: CanvasRenderingContext2D, s: CityPlan['specials'][number
       g.fillStyle = '#9cb8c6'; g.fillRect(-1, -s.s * 0.3 + 1, 2, s.s * 0.6 - 2);
       break;
     }
+    case 'factory': {
+      g.rotate(s.a);
+      const w = s.s, h = s.s * 0.55;
+      shadow(w, h, 3);
+      g.fillStyle = '#8a5a48'; g.fillRect(-w / 2, -h / 2, w, h);
+      // saw-tooth roof
+      const n = 4;
+      for (let k = 0; k < n; k++) { const x0 = -w / 2 + (k * w) / n; g.fillStyle = k % 2 ? '#5e6470' : '#717884'; g.fillRect(x0 + 0.3, -h / 2 + 0.6, w / n - 0.6, h - 1.2); g.fillStyle = 'rgba(190,210,225,0.55)'; g.fillRect(x0 + w / n - 1.4, -h / 2 + 0.6, 0.9, h - 1.2); }
+      // chimney
+      g.fillStyle = '#6a3a2c'; g.beginPath(); g.arc(w / 2 - 2, -h / 2 - 1.5, 2.6, 0, Math.PI * 2); g.fill();
+      g.fillStyle = '#2a2420'; g.beginPath(); g.arc(w / 2 - 2, -h / 2 - 1.5, 1.3, 0, Math.PI * 2); g.fill();
+      if (o.animate) { g.save(); g.rotate(-s.a); const c = Math.cos(s.a), sn = Math.sin(s.a); const cx = (w / 2 - 2) * c - (-h / 2 - 1.5) * sn, cy = (w / 2 - 2) * sn + (-h / 2 - 1.5) * c; smokeDark(g, cx, cy, o.t + Math.abs(s.x), 7); g.restore(); }
+      break;
+    }
     case 'workshops': {
       g.rotate(s.a);
       for (let k = 0; k < 3; k++) { shadow(5, 4); g.fillStyle = '#7d6e5c'; g.fillRect(-8 + k * 6, -2, 5, 4); g.fillStyle = '#3e3832'; g.fillRect(-7 + k * 6, -3, 1.5, 1.5); }
@@ -536,9 +566,69 @@ function flag(g: CanvasRenderingContext2D, x: number, y: number, c: RGB, o: Draw
 
 function smoke(g: CanvasRenderingContext2D, x: number, y: number, t: number, n: number, a: number) {
   for (let k = 0; k < n; k++) {
-    const p = (t * 0.35 + k / n) % 1;
+    const p = (((t * 0.35 + k / n) % 1) + 1) % 1;
     g.fillStyle = `rgba(200,200,200,${(1 - p) * a})`;
     g.beginPath(); g.arc(x + p * 6 + Math.sin(p * 6 + k) * 1.2, y - p * 14, 1.2 + p * 3.2, 0, Math.PI * 2); g.fill();
+  }
+}
+
+function smokeDark(g: CanvasRenderingContext2D, x: number, y: number, t: number, n: number) {
+  for (let k = 0; k < n; k++) {
+    const p = (((t * 0.22 + k / n) % 1) + 1) % 1;
+    g.fillStyle = `rgba(70,68,66,${(1 - p) * 0.6})`;
+    g.beginPath(); g.arc(x + p * 22 + Math.sin(p * 5 + k) * 2, y - p * 30, 2 + p * 8, 0, Math.PI * 2); g.fill();
+  }
+}
+
+/** A railway line running out of town from its station, with a train now and then. */
+function drawRailway(g: CanvasRenderingContext2D, s: CityPlan['specials'][number], inp: CityInput, o: DrawOpts, R: number) {
+  const lw = 1 / o.scale;
+  const c = Math.cos(s.a), sn = Math.sin(s.a);
+  const len = R - s.s;
+  g.save();
+  g.translate(s.x, s.y); g.rotate(s.a);
+  // ballast, sleepers, rails
+  g.fillStyle = '#8c8478'; g.fillRect(0, -2.6, len, 5.2);
+  if (o.detail > 0.4) { g.fillStyle = '#5a4634'; for (let x = 0; x < len; x += 2.4) g.fillRect(x, -2.2, 0.9, 4.4); }
+  g.strokeStyle = '#3c3f44'; g.lineWidth = Math.max(lw, 0.5);
+  g.beginPath(); g.moveTo(0, -1.2); g.lineTo(len, -1.2); g.moveTo(0, 1.2); g.lineTo(len, 1.2); g.stroke();
+  // telegraph poles alongside (the electric age adds wires)
+  if (o.detail > 0.5) {
+    for (let x = 8; x < len; x += 18) { g.fillStyle = '#4a3a2c'; g.beginPath(); g.arc(x, -5.5, 0.7, 0, Math.PI * 2); g.fill(); }
+    if (inp.era >= 8) { g.strokeStyle = 'rgba(40,40,40,0.5)'; g.lineWidth = lw * 0.7; g.beginPath(); g.moveTo(8, -5.5); g.lineTo(len, -5.5); g.stroke(); }
+  }
+  // the station
+  g.fillStyle = 'rgba(0,0,0,0.25)'; g.fillRect(-6 + 1.5, -6 + 1.5, 16, 4.5);
+  g.fillStyle = '#9a6a52'; g.fillRect(-6, -6, 16, 4.5);
+  g.fillStyle = '#5c616c'; g.fillRect(-6, -6, 16, 2.2);
+  g.fillStyle = '#c8bca8'; g.fillRect(-6, -1.4, 18, 0.8);
+  // a train: leaves the station, runs out, comes back
+  if (o.animate) {
+    const cyc = 40, ph = ((o.t + inp.id * 3.7) % cyc) / cyc;
+    const run = Math.min(len - 30, 260);
+    const x = ph < 0.15 ? 0 : ph < 0.5 ? ((ph - 0.15) / 0.35) * run : ph < 0.65 ? run : run * (1 - (ph - 0.65) / 0.35);
+    if (x < run) {
+      for (let k = 0; k < 4; k++) { g.fillStyle = k === 0 ? '#2e3136' : '#6e4a3a'; g.fillRect(x + 2 + k * 5.4, -1.8, 4.8, 3.6); }
+      if (inp.era < 8) smokeDark(g, x + 3, -2, o.t, 3);
+    }
+  }
+  void c; void sn;
+  g.restore();
+}
+
+/** Electric street lamps along the streets, brighter in winter's long nights. */
+function drawLamps(g: CanvasRenderingContext2D, plan: CityPlan, inp: CityInput, o: DrawOpts) {
+  const sea = season(inp.month, inp.site.temp);
+  const glow = 0.35 + (1 - sea.summer) * 0.4;
+  const dots: number[] = [];
+  for (const pts of [...plan.roadPts, ...plan.ringSegs.map((x) => x.pts)]) for (let k = 0; k < pts.length; k += 4) dots.push(pts[k], pts[k + 1]);
+  for (let k = 0; k < dots.length; k += 2) {
+    const x = dots[k], y = dots[k + 1];
+    if (Math.hypot(x, y) > plan.radius + 4 || inWater(x, y, inp, plan.coastD)) continue;
+    const gr = g.createRadialGradient(x, y, 0, x, y, 5);
+    gr.addColorStop(0, `rgba(255,226,150,${glow})`); gr.addColorStop(1, 'rgba(255,226,150,0)');
+    g.fillStyle = gr; g.beginPath(); g.arc(x, y, 5, 0, Math.PI * 2); g.fill();
+    if (o.detail > 0.6) { g.fillStyle = '#fff4cc'; g.beginPath(); g.arc(x, y, 0.6, 0, Math.PI * 2); g.fill(); }
   }
 }
 

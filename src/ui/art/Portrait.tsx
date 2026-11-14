@@ -12,7 +12,7 @@ const SKIN: RGB[] = [[246, 220, 200], [234, 192, 158], [206, 152, 112], [160, 10
 const HAIR: RGB[] = [[24, 18, 16], [52, 34, 24], [96, 62, 38], [140, 76, 40], [196, 150, 84], [226, 196, 128]];
 const EYES: RGB[] = [[46, 30, 20], [84, 54, 30], [90, 110, 60], [70, 110, 150]];
 
-type Kind = 'crown' | 'priest' | 'laurel' | 'helm' | 'feather' | 'circlet' | 'prophet' | null;
+type Kind = 'crown' | 'priest' | 'laurel' | 'helm' | 'feather' | 'circlet' | 'prophet' | 'tophat' | null;
 function headgear(title: string, occ: number, era: number): Kind {
   const t = title.toLowerCase();
   if (t.includes('prophet')) return 'prophet';
@@ -46,8 +46,10 @@ export const Portrait = memo(function Portrait({ look, size = 64, className, tit
   const teen = age >= 14 && age < 18;
   const male = look.sex === 1;
   const old = clamp((age - 40) / 35);
-  const gk = headgear(look.title, look.occ, look.era);
-  const ruler = !!look.title && !['priest', 'prophet'].includes(gk ?? '') ;
+  const gk0 = headgear(look.title, look.occ, look.era);
+  const ruler = !!look.title && !['priest', 'prophet'].includes(gk0 ?? '');
+  // gentlemen of the industrial ages wear a top hat (or a bowler, drawn the same way but lower)
+  const gk: Kind = gk0 ?? (look.era >= 7 && male && !child && !teen && look.status > 0.4 && hash(look.seed, 77) < 0.55 ? 'tophat' : null);
 
   // colouring
   let skin = ramp(SKIN, look.skin);
@@ -88,6 +90,8 @@ export const Portrait = memo(function Portrait({ look, size = 64, className, tit
   else if (era === 1) cloth = mix([176, 160, 128], [138, 124, 100], r());
   else cloth = hsl(hue, 0.25 + status * 0.45, 0.28 + r() * 0.18);
   if (look.occ === 10) cloth = mix(cloth, [40, 40, 56], 0.5);
+  const modern = era >= 6 && look.occ !== 9 && look.occ !== 11 && gk !== 'priest' && gk !== 'prophet' && !child;
+  if (modern && era >= 7) cloth = mix(cloth, male ? [34, 36, 46] : hsl(hue, 0.3, 0.3), male ? 0.65 : 0.3);
   const trim: RGB = status > 0.6 || ruler ? [214, 172, 72] : shade(cloth, 0.25);
   const metal: RGB = era <= 1 ? [140, 104, 72] : era === 2 ? [184, 132, 64] : [160, 166, 172];
   const gold: RGB = [226, 182, 74];
@@ -150,7 +154,15 @@ export const Portrait = memo(function Portrait({ look, size = 64, className, tit
         <path d={`M${child ? 18 : 8},120 C${child ? 20 : 10},${child ? 98 : 94} ${cx - 16},${child ? 92 : 86} ${cx - 8},${child ? 86 : 82} L${cx + 8},${child ? 86 : 82} C${cx + 16},${child ? 92 : 86} ${child ? 80 : 90},${child ? 98 : 94} ${child ? 82 : 92},120 Z`} fill={`url(#cl${uid})`} />
         {era === 0 && look.occ !== 11 && <path d={`M14,108 l4,4 l4,-4 l4,4 l4,-4 l4,4 l4,-4 l4,4 l4,-4 l4,4 l4,-4 l4,4 l4,-4 l4,4 l4,-4 l4,4 l4,-4`} stroke={css(shade(cloth, -0.3))} strokeWidth="1.4" fill="none" />}
         {look.occ === 9 && <path d={`M${cx - 26},104 Q${cx},92 ${cx + 26},104 L${cx + 30},120 L${cx - 30},120 Z`} fill={css(metal)} stroke={css(shade(metal, -0.4))} strokeWidth="1" />}
-        {era >= 4 && look.occ !== 9 && <><path d={`M${cx - 30},120 L${cx - 18},90 L${cx - 4},120 Z`} fill={css(shade(cloth, -0.2))} opacity="0.8" /><circle cx={cx - 14} cy={96} r="2.6" fill={css(gold)} /></>}
+        {modern && <>
+          {/* coat with lapels over a white shirt; a cravat in the age of reason, a necktie after */}
+          <path d={`M${cx - 9},${child ? 86 : 82} L${cx},${108} L${cx + 9},${child ? 86 : 82} Z`} fill="#f2efe8" />
+          <path d={`M${cx - 10},82 L${cx - 2},106 L${cx - 16},96 Z M${cx + 10},82 L${cx + 2},106 L${cx + 16},96 Z`} fill={css(shade(cloth, -0.22))} />
+          {era === 6 && <path d={`M${cx - 5},88 Q${cx},96 ${cx + 5},88 Q${cx + 2},100 ${cx},102 Q${cx - 2},100 ${cx - 5},88 Z`} fill="#fbf9f4" stroke="#d8d2c6" strokeWidth="0.6" />}
+          {era >= 7 && male && <path d={`M${cx - 2.2},88 L${cx + 2.2},88 L${cx + 3},100 L${cx},104 L${cx - 3},100 Z`} fill={css(hsl(look.culHue + 160, 0.5, 0.35))} />}
+          {era >= 7 && !male && <circle cx={cx} cy={92} r="2.4" fill={css(gold)} stroke={css(shade(gold, -0.4))} strokeWidth="0.5" />}
+        </>}
+        {era >= 4 && !modern && look.occ !== 9 && <><path d={`M${cx - 30},120 L${cx - 18},90 L${cx - 4},120 Z`} fill={css(shade(cloth, -0.2))} opacity="0.8" /><circle cx={cx - 14} cy={96} r="2.6" fill={css(gold)} /></>}
         {(ruler || gk === 'crown') && era >= 4 && <path d={`M${cx - 34},120 C${cx - 30},100 ${cx - 20},94 ${cx - 10},92 M${cx + 34},120 C${cx + 30},100 ${cx + 20},94 ${cx + 10},92`} stroke="#f4f0e6" strokeWidth="5" fill="none" />}
         {/* neckline */}
         <path d={`M${cx - 9},${child ? 86 : 82} Q${cx},${child ? 96 : 94} ${cx + 9},${child ? 86 : 82}`} fill={css(skinD)} stroke={css(trim)} strokeWidth={status > 0.6 ? 2.2 : 1.2} />
@@ -220,6 +232,13 @@ function Headgear({ kind, cx, top, fw, era, metal, gold, cloth, hue }: { kind: K
     return <g><path d={`M${cx - fw - 2},${top + 10} C${cx - fw - 2},${top - 8} ${cx + fw + 2},${top - 8} ${cx + fw + 2},${top + 10} Z`} fill={css(metal)} stroke={css(shade(metal, -0.45))} strokeWidth="0.8" />
       <rect x={cx - 1.2} y={top + 6} width="2.4" height="9" fill={css(shade(metal, -0.2))} />
       {era >= 3 && <path d={`M${cx},${top - 4} q-6,-10 -2,-14 q6,4 2,14`} fill={css(hsl(hue, 0.6, 0.4))} />}</g>;
+  }
+  if (kind === 'tophat') {
+    const tall = era >= 8 ? 9 : 15; // a bowler in the electric age
+    const c = hsl(hue, 0.1, 0.12);
+    return <g><ellipse cx={cx} cy={top + 6} rx={fw + 6} ry="3" fill={css(c)} />
+      <path d={`M${cx - fw + 1},${top + 6} L${cx - fw + 2},${top + 6 - tall} ${era >= 8 ? `Q${cx},${top - tall - 6} ${cx + fw - 2},${top + 6 - tall}` : `L${cx + fw - 2},${top + 6 - tall}`} L${cx + fw - 1},${top + 6} Z`} fill={css(c)} />
+      <rect x={cx - fw + 1.5} y={top + 2} width={fw * 2 - 3} height="2.4" fill={css(hsl(hue + 20, 0.4, 0.3))} /></g>;
   }
   if (kind === 'priest') return <path d={`M${cx - fw - 4},${top + 30} C${cx - fw - 6},${top - 10} ${cx + fw + 6},${top - 10} ${cx + fw + 4},${top + 30} L${cx + fw},${top + 18} C${cx + fw},${top + 4} ${cx - fw},${top + 4} ${cx - fw},${top + 18} Z`} fill={css(shade(cloth, -0.1))} />;
   if (kind === 'prophet') return <g><circle cx={cx} cy={top + 14} r={fw + 10} fill="none" stroke={css(gold)} strokeWidth="1.2" opacity="0.6" />
