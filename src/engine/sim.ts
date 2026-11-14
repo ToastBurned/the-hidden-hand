@@ -35,6 +35,10 @@ import { roster } from './roster';
 
 export const ENGINE_VERSION = 1;
 
+/** The eight neighbour steps, straight ones first (diagonals are k >= 4). */
+const STEP_DX = [1, -1, 0, 0, 1, -1, 1, -1];
+const STEP_DY = [0, 0, 1, -1, 1, -1, -1, 1];
+
 class MinHeap {
   k: number[] = [];
   v: number[] = [];
@@ -249,10 +253,8 @@ export class Simulation implements Ctx {
       const x = i % W;
       const y = (i / W) | 0;
       for (let k = 0; k < 8; k++) {
-        const dx = k === 0 ? 1 : k === 1 ? -1 : k === 4 || k === 6 ? 1 : k === 5 || k === 7 ? -1 : 0;
-        const dy = k === 2 ? 1 : k === 3 ? -1 : k === 4 || k === 7 ? 1 : k === 5 || k === 6 ? -1 : 0;
-        const nx = x + dx;
-        const ny = y + dy;
+        const nx = x + STEP_DX[k];
+        const ny = y + STEP_DY[k];
         if (nx < 0 || ny < 0 || nx >= W || ny >= t.h) continue;
         const j = ny * W + nx;
         let cost: number;

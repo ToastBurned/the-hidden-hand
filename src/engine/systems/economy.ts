@@ -107,27 +107,29 @@ function bestClearable(c: Ctx, s: Settlement, field: ClimateField): number {
 export function buildWork(c: Ctx, s: Settlement): SettlementWork {
   const w = c.w;
   const people = c.roster(s);
-  const workers: Person[][] = Array.from({ length: NOCC }, () => []);
-  const labor: number[][] = Array.from({ length: NOCC }, () => []);
+  const workers: Person[][] = [];
+  const labor: number[][] = [];
+  for (let o = 0; o < NOCC; o++) { workers.push([]); labor.push([]); }
   const hhWorkers = new Map<number, number>();
   for (const p of people) {
-    const age = ageOf(w, p);
-    if (p.occ === O_NONE || !isWorker(age, p)) continue;
+    if (p.occ === O_NONE || !isWorker(ageOf(w, p), p)) continue;
     workers[p.occ].push(p);
     hhWorkers.set(p.hh, (hhWorkers.get(p.hh) ?? 0) + p.n);
   }
   for (let o = 0; o < NOCC; o++) {
-    for (const p of workers[o]) {
+    const wo = workers[o];
+    const lo = labor[o];
+    for (let k = 0; k < wo.length; k++) {
+      const p = wo[k];
       const h = w.households.get(p.hh);
-      labor[o].push(laborOf(ageOf(w, p), p, o) * toolMult(h, hhWorkers.get(p.hh) ?? 1) * p.n);
+      lo.push(laborOf(ageOf(w, p), p, o) * toolMult(h, hhWorkers.get(p.hh) ?? 1) * p.n);
     }
+    s.workers[o] = headcount(wo);
   }
-  for (let o = 0; o < NOCC; o++) s.workers[o] = headcount(workers[o]);
-  return {
-    s, people, workers, labor, hhWorkers, pol: w.polities.get(s.polity),
-    sells: Array.from({ length: NG }, () => []),
-    buys: Array.from({ length: NG }, () => []),
-  };
+  const sells: Order[][] = [];
+  const buys: Order[][] = [];
+  for (let g = 0; g < NG; g++) { sells.push([]); buys.push([]); }
+  return { s, people, workers, labor, hhWorkers, pol: w.polities.get(s.polity), sells, buys };
 }
 
 function credit(c: Ctx, p: Person, g: number, q: number) {

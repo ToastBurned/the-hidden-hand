@@ -81,7 +81,9 @@ export function birthsMonth(c: Ctx, s: Settlement): void {
     if (sched <= 0) continue;
     const married = p.spouse >= 0 && w.persons.has(p.spouse);
     // desired family size falls with education and individualism (demographic transition)
-    const living = p.children.reduce((n, id) => n + (w.persons.get(id)?.n ?? 0), 0) / p.n;
+    let kids = 0;
+    for (const id of p.children) kids += w.persons.get(id)?.n ?? 0;
+    const living = kids / p.n;
     const hh = w.households.get(p.hh);
     const desired = desiredFamilySize(p.edu, p.values[V_INDIV], p.values[V_PIETY], fx, hh ? affluence(c, s, hh) : 1);
     const want = living >= desired ? 0.25 : 1;
