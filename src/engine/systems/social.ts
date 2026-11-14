@@ -11,6 +11,7 @@ import { ageOf, clamp, type Ctx } from '../context';
 import { affinity, createHousehold, addToHousehold, householdSize, killPerson, relate, remember, splitAgent, thinAgent } from '../entities';
 import { logEvent } from '../history';
 import { occupationValue } from './economy';
+import { justiceOrder } from './law';
 import type { Person, Settlement } from '../types';
 
 // ------------------------------------------------------------------ occupations
@@ -293,7 +294,7 @@ export function interactionsMonth(c: Ctx, s: Settlement): void {
   let soldiers = 0;
   let heads = 0;
   for (const p of people) { heads += p.n; if (p.occ === O_SOLDIER) soldiers += p.n; }
-  const order = Math.min(1, fx.lawOrder + soldiers / Math.max(10, heads * 0.05) * 0.3 + (pol?.inst.writtenLaw ? 0.2 : 0));
+  const order = Math.min(1, fx.lawOrder + soldiers / Math.max(10, heads * 0.05) * 0.3 + (pol?.inst.writtenLaw ? 0.2 : 0) + justiceOrder(pol));
   const samples = Math.ceil(n / 4);
   for (let k = 0; k < samples; k++) {
     const a = people[c.rng.int(n)];

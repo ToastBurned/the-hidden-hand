@@ -83,6 +83,7 @@ export function computeYearStats(c: Ctx, field: ClimateField): YearStats {
     if (z > 0) { wealth.push(v / z); wsize.push(z); }
   }
   for (const pol of w.polities.values()) if (pol.alive) money += pol.treasury;
+  for (const s of w.settlements.values()) if (s.bank) money += s.bank.reserves;
   // ecology
   let forest = 0, forestCap = 0, game = 0, gameCap = 0, fish = 0, fishCap = 0, soil = 0, soilBase = 0, farmland = 0, rain = 0, land = 0;
   for (let i = 0; i < t.w * t.h; i++) {

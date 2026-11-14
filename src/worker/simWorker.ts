@@ -15,7 +15,7 @@ import { lookOf } from '../engine/query';
 import { OCC_NAMES } from '../engine/constants';
 import { officeTitle } from '../engine/game/offices';
 import type { FromSim, ToSim } from './protocol';
-import { applyGameCommand, foundingStories, gameView, oathFor, previewOperation, stepCampaign } from '../engine/game/campaign';
+import { applyGameCommand, foundingStories, gameView, oathFor, previewOperation, stepCampaign, storyForPerson } from '../engine/game/campaign';
 import { proposeNames } from '../engine/game/founding';
 import { creedFromAnswers } from '../engine/game/creed';
 import { leverDefs } from '../engine/game/levers';
@@ -147,7 +147,7 @@ function answer(kind: string, arg: unknown): unknown {
     case 'chapters': return chapters(sim);
     case 'year': return yearSnapshot(sim, arg as number);
     case 'foundings': return foundingStories(sim, (arg as number) ?? 0);
-    case 'story-for': return null; // choosing any person needs an engine entry point (asked for)
+    case 'story-for': return storyForPerson(sim, arg as number);
     case 'names': { const a = arg as { story: FoundingStory; creed: Creed; salt: number }; const p = sim.w.persons.get(a.story.founder.id); return p ? proposeNames(sim, p, a.creed, a.salt) : a.story.names; }
     case 'creed-answers': { const a = arg as { founder: number; answers: Record<string, string> }; const p = sim.w.persons.get(a.founder); return p ? creedFromAnswers(p, a.answers) : null; }
     case 'oath': { const a = arg as { story: FoundingStory; creed: Creed; name: string }; return oathFor(sim, a.story.id, a.creed, a.name); }

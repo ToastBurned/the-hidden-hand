@@ -16,7 +16,7 @@ import type { Simulation } from '../sim';
 import { closeConclave, conclaveInterval, decide, openConclave } from './conclave';
 import { CRAFTS, mastery } from './crafts';
 import { ESTATE_NAMES, estatePressures, estatesYear } from './estates';
-import { oathScene, proposeNames, searchFoundings, storyOf, traitsOf } from './founding';
+import { candidateForPerson, oathScene, proposeNames, searchFoundings, storyOf, traitsOf } from './founding';
 import { LEVER_BY_KIND, leverForce, leversMonth, leversYear } from './levers';
 import { cellMembers, admit, orderMonth, orderYear, resources, ROOMS, sendMember, removeMember } from './order';
 import { officesYear, officeTitle, seatOf } from './offices';
@@ -33,10 +33,20 @@ import { greatWorkFor, makeGreatWork, makeLesserWorks, peoplePop, worksMonth } f
 /** Founding stories offered for this world (cached on the world until one is chosen). */
 export function foundingStories(sim: Simulation, reroll = 0): FoundingStory[] {
   const cands = searchFoundings(sim, 3, reroll);
-  pending.set(sim.w, cands);
+  pending.set(sim.w, [...cands, ...(pending.get(sim.w) ?? []).filter((c) => c.id >= 100000)]);
   return cands.map((cd) => storyOf(sim, cd));
 }
 const pending = new WeakMap<object, FoundingCandidate[]>();
+
+/** "Choose anyone": a founding story for a person the player picked; it can then be used with oathFor and 'found'. */
+export function storyForPerson(sim: Simulation, personId: number): FoundingStory | null {
+  const cd = candidateForPerson(sim, personId);
+  if (!cd) return null;
+  const list = (pending.get(sim.w) ?? []).filter((c) => c.id !== cd.id);
+  list.push(cd);
+  pending.set(sim.w, list);
+  return storyOf(sim, cd);
+}
 
 function candidate(sim: Simulation, story: number): FoundingCandidate | undefined {
   return pending.get(sim.w)?.find((c) => c.id === story) ?? sim.w.game?.candidates.find((c) => c.id === story);

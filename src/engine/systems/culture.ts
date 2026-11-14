@@ -190,12 +190,12 @@ export function religionYear(c: Ctx, s: Settlement): void {
   }
 
   // persecution: intolerant pious states pressure minority faiths
-  if (pol && pol.inst.stateReligion && pol.religion >= 0 && pol.gov.tolerance < 0.35) {
+  if (pol && pol.inst.stateReligion && pol.religion >= 0 && (pol.gov.tolerance < 0.35 || pol.laws?.faith === 'establishment')) {
     let minority = 0;
     for (const p of people) {
       if (p.religion !== pol.religion) {
         minority += p.n;
-        if (c.rng.chance(0.15 * (0.35 - pol.gov.tolerance) * 4)) remember(p, w.tick, M_PERSECUTED, -0.6, pol.id);
+        if (c.rng.chance(0.15 * Math.max(0.15, 0.35 - pol.gov.tolerance) * 4 * (pol.laws?.faith === 'establishment' ? 1.5 : 1))) remember(p, w.tick, M_PERSECUTED, -0.6, pol.id);
       }
     }
     if (minority > heads * 0.2 && c.rng.chance(0.1)) {

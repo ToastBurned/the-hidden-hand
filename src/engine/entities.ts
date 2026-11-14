@@ -191,9 +191,33 @@ function removeFromHousehold(c: Ctx, p: Person, h: Household, death: boolean, he
   }
 }
 
+/**
+ * Settle a household's bank accounts before it leaves its settlement or ceases to exist: the
+ * deposit is paid out as far as the bank's cash allows (any remainder is a loss to the household),
+ * the debt is repaid from what the household holds and the rest is written off by the bank.
+ */
+export function closeAccounts(c: Ctx, h: Household): void {
+  if (!h.deposit && !h.debt) return;
+  const bank = c.w.settlements.get(h.sid)?.bank;
+  if (bank) {
+    const out = Math.min(h.deposit ?? 0, bank.reserves);
+    bank.reserves -= out;
+    h.money += out;
+    bank.deposits = Math.max(0, bank.deposits - (h.deposit ?? 0));
+    const back = Math.min(h.debt ?? 0, Math.max(0, h.money));
+    h.money -= back;
+    bank.reserves += back;
+    bank.loans = Math.max(0, bank.loans - (h.debt ?? 0));
+  }
+  h.deposit = 0;
+  h.debt = 0;
+}
+
 /** Move all property of household `from` into `to` and delete `from` (members must already have left). */
 export function mergeHouseholdInto(c: Ctx, from: Household, to: Household): void {
   const w = c.w;
+  if (from.sid !== to.sid) closeAccounts(c, from);
+  else { to.deposit = (to.deposit ?? 0) + (from.deposit ?? 0); to.debt = (to.debt ?? 0) + (from.debt ?? 0); }
   for (let g = 0; g < NG; g++) to.goods[g] += from.goods[g];
   to.money += from.money;
   to.land += from.land;
@@ -214,6 +238,7 @@ export function mergeHouseholdInto(c: Ctx, from: Household, to: Household): void
 /** Inheritance: an emptied household's property passes to heirs or to the community. */
 export function dissolveHousehold(c: Ctx, h: Household, deceased: Person | null): void {
   const w = c.w;
+  closeAccounts(c, h);
   const s = w.settlements.get(h.sid);
   const heirs: Household[] = [];
   if (deceased) {
@@ -555,6 +580,8 @@ export function splitHousehold(c: Ctx, h: Household, frac: number, include = -1)
   const land = h.land * f; h.land -= land; nh.land += land;
   const tools = h.tools * f; h.tools -= tools; nh.tools += tools; nh.toolQ = h.toolQ;
   const lab = h.labAcc * f; h.labAcc -= lab; nh.labAcc += lab;
+  const dep = (h.deposit ?? 0) * f; h.deposit = (h.deposit ?? 0) - dep; nh.deposit = dep;
+  const debt = (h.debt ?? 0) * f; h.debt = (h.debt ?? 0) - debt; nh.debt = debt;
   nh.hunger = h.hunger;
   if (!nh.members.length) {
     // nobody left with it: undo

@@ -8,7 +8,7 @@ import {
   O_ARTISAN, O_BUILDER, O_FARMER, O_FISHER, O_MERCHANT, V_INNOV, V_PIETY, isWater,
 } from '../constants';
 import { ageOf, clamp, type Ctx } from '../context';
-import { addToHousehold, createPolity, createSettlement, householdSize, individuate, meanValues, remember, splitHousehold } from '../entities';
+import { addToHousehold, closeAccounts, lostMoney, createPolity, createSettlement, householdSize, individuate, meanValues, remember, splitHousehold } from '../entities';
 import { logEvent } from '../history';
 import { push } from '../pressures';
 import { siteScore } from '../gen/terrain';
@@ -376,6 +376,7 @@ export function newRel(op = 0) {
 
 export function moveHousehold(c: Ctx, h: Household, from: Settlement, to: Settlement, migrant = true): void {
   const w = c.w;
+  closeAccounts(c, h);
   const i = from.households.indexOf(h.id);
   if (i >= 0) from.households.splice(i, 1);
   to.households.push(h.id);
@@ -459,6 +460,7 @@ export function abandonmentCheck(c: Ctx, s: Settlement): void {
   if (s.pop > 0 && target) for (const hid of [...s.households]) { const h = w.households.get(hid); if (h) moveHousehold(c, h, s, target); }
   if (s.pop > 0 && !target) return;
   s.alive = false;
+  if (s.bank) { lostMoney(c, s.bank.reserves); s.bank = undefined; }
   s.abandoned = w.tick;
   const causes = [s.ctx.famine, s.ctx.plague, s.ctx.sacked, s.ctx.disaster].filter((x) => x !== undefined && x >= 0) as number[];
   logEvent(w, {
