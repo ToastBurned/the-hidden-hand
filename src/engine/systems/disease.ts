@@ -32,7 +32,7 @@ export function newDisease(c: Ctx, origin: Settlement, virulence = 1): Disease {
 }
 
 export function seedInfection(c: Ctx, s: Settlement, d: Disease, n: number): number {
-  const people = c.residents(s).filter((p) => !p.inf && !p.immune.includes(d.id));
+  const people = c.roster(s).filter((p) => !p.inf && !p.immune.includes(d.id));
   let k = 0;
   for (let i = 0; i < n && people.length; i++) {
     let p = people.splice(c.rng.int(people.length), 1)[0];
@@ -51,7 +51,7 @@ export function diseaseMonth(c: Ctx): void {
   const infectedBy = new Map<number, Map<number, number>>(); // sid -> disease -> count
   for (const s of w.settlements.values()) {
     if (!s.alive || s.pop === 0) continue;
-    const people = c.residents(s);
+    const people = c.roster(s);
     const counts = new Map<number, number>();
     for (const p of people) if (p.inf) counts.set(p.inf, (counts.get(p.inf) ?? 0) + p.n);
     if (!counts.size) continue;

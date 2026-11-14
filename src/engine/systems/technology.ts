@@ -194,7 +194,7 @@ function genRelevance(T: TechDef, v: SettlementView, momentum = true): number {
 export function technologyYear(c: Ctx, s: Settlement): void {
   const w = c.w;
   if (!s.alive || s.pop === 0) return;
-  const people = c.residents(s);
+  const people = c.roster(s);
   const fx = c.fx(s.id);
   const mean = meanValues(people);
   const v = view(c, s, mean);
@@ -287,7 +287,7 @@ export function technologyYear(c: Ctx, s: Settlement): void {
 /** Whether a discovery deserves a place in the historical record. */
 const notableTech = (T: TechDef) => T.id < NCORE || T.big;
 
-function discover(c: Ctx, s: Settlement, id: number, people: Person[]): void {
+function discover(c: Ctx, s: Settlement, id: number, people: readonly Person[]): void {
   const w = c.w;
   s.techs[id] = 1;
   s.techProgress[id] = 0;
@@ -351,7 +351,7 @@ export function diffusionYear(c: Ctx): void {
   const learned: { s: Settlement; t: number; from: Settlement }[] = [];
   for (const s of w.settlements.values()) {
     if (!s.alive || s.pop === 0) continue;
-    const people = c.residents(s);
+    const people = c.roster(s);
     let open = 0;
     let heads = 0;
     for (const p of people) { open += p.values[V_INNOV] * p.n; heads += p.n; }

@@ -30,9 +30,14 @@ import { consolidateYear } from './systems/scale';
 import { navalYear } from './systems/naval';
 import { bankMonth, bankingYear, stateDebtYear } from './systems/finance';
 import { lawsYear } from './systems/law';
-import { householdSize } from './entities';
+import { householdSize, noteMemories } from './entities';
+import { roster } from './roster';
 
 export const ENGINE_VERSION = 1;
+
+/** The eight neighbour steps, straight ones first (diagonals are k >= 4). */
+const STEP_DX = [1, -1, 0, 0, 1, -1, 1, -1];
+const STEP_DY = [0, 0, 1, -1, 1, -1, -1, 1];
 
 class MinHeap {
   k: number[] = [];
@@ -90,6 +95,7 @@ export class Simulation implements Ctx {
     this.rng = Rng.fromState(w.rng);
     this.field = computeRainField(w);
     if (!w.travelBasis) this.resetTravelBasis();
+    noteMemories(w.persons.values());
   }
 
   static create(over: Partial<WorldConfig> = {}): Simulation {
@@ -157,17 +163,11 @@ export class Simulation implements Ctx {
   invalidateFx(sid: number) { this.fxCache.delete(sid); }
 
   residents(s: Settlement): Person[] {
-    const out: Person[] = [];
-    const w = this.w;
-    for (const hid of s.households) {
-      const h = w.households.get(hid);
-      if (!h) continue;
-      for (const id of h.members) {
-        const p = w.persons.get(id);
-        if (p) out.push(p);
-      }
-    }
-    return out;
+    return roster(this.w, s).slice();
+  }
+
+  roster(s: Settlement): readonly Person[] {
+    return roster(this.w, s);
   }
 
   settlementAt(tile: number): number { return this.w.tiles.owner[tile]; }
@@ -253,10 +253,8 @@ export class Simulation implements Ctx {
       const x = i % W;
       const y = (i / W) | 0;
       for (let k = 0; k < 8; k++) {
-        const dx = k === 0 ? 1 : k === 1 ? -1 : k === 4 || k === 6 ? 1 : k === 5 || k === 7 ? -1 : 0;
-        const dy = k === 2 ? 1 : k === 3 ? -1 : k === 4 || k === 7 ? 1 : k === 5 || k === 6 ? -1 : 0;
-        const nx = x + dx;
-        const ny = y + dy;
+        const nx = x + STEP_DX[k];
+        const ny = y + STEP_DY[k];
         if (nx < 0 || ny < 0 || nx >= W || ny >= t.h) continue;
         const j = ny * W + nx;
         let cost: number;
@@ -298,10 +296,7 @@ export class Simulation implements Ctx {
     let total = 0;
     for (const s of alive) {
       let n = 0;
-      for (const hid of s.households) {
-        const h = w.households.get(hid);
-        if (h) for (const id of h.members) n += w.persons.get(id)?.n ?? 0;
-      }
+      for (const p of roster(w, s)) n += p.n;
       s.pop = n;
       total += n;
     }

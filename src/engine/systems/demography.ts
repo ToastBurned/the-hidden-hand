@@ -27,7 +27,7 @@ export function demographyMonth(c: Ctx, s: Settlement): void {
   const w = c.w;
   const fx = c.fx(s.id);
   const mort = w.config.mortality;
-  const people = c.residents(s);
+  const people = c.roster(s);
   const famineEv = s.ctx.famine ?? -1;
   for (const p of people) {
     const age = ageOf(w, p);
@@ -71,7 +71,7 @@ export function birthsMonth(c: Ctx, s: Settlement): void {
   const w = c.w;
   const fx = c.fx(s.id);
   const fec = w.config.fecundity;
-  const people = c.residents(s);
+  const people = c.roster(s);
   for (const p of people) {
     if (p.sex !== 0) continue;
     const age = ageOf(w, p);
@@ -81,7 +81,9 @@ export function birthsMonth(c: Ctx, s: Settlement): void {
     if (sched <= 0) continue;
     const married = p.spouse >= 0 && w.persons.has(p.spouse);
     // desired family size falls with education and individualism (demographic transition)
-    const living = p.children.reduce((n, id) => n + (w.persons.get(id)?.n ?? 0), 0) / p.n;
+    let kids = 0;
+    for (const id of p.children) kids += w.persons.get(id)?.n ?? 0;
+    const living = kids / p.n;
     const hh = w.households.get(p.hh);
     const desired = desiredFamilySize(p.edu, p.values[V_INDIV], p.values[V_PIETY], fx, hh ? affluence(c, s, hh) : 1);
     const want = living >= desired ? 0.25 : 1;
@@ -179,7 +181,7 @@ export function fosterOrphans(c: Ctx, s: Settlement): void {
 export function skillsYear(c: Ctx, s: Settlement): void {
   const w = c.w;
   const fx = c.fx(s.id);
-  const people = c.residents(s);
+  const people = c.roster(s);
   const schools = s.buildings[BLD_SCHOOL];
   let scholars = 0;
   let heads = 0;
@@ -233,6 +235,6 @@ export function famineCheck(c: Ctx, s: Settlement): void {
     s.ctx.famine = ev;
     s.ctx.famineAt = w.tick;
     s.ctx.famineUntil = w.tick + 12;
-    for (const p of c.residents(s)) remember(p, w.tick, M_FAMINE, -0.6, s.id, ev);
+    for (const p of c.roster(s)) remember(p, w.tick, M_FAMINE, -0.6, s.id, ev);
   }
 }

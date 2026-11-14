@@ -9,22 +9,23 @@
  */
 import {
   BLD_TEMPLE, G_FOOD, M_OFFICE, M_REVOLT, O_PRIEST, O_SCHOLAR, O_SOLDIER, O_BUILDER, V_HIER, V_INDIV, V_INNOV, V_MILIT, V_PIETY,
-  BLD_HOUSING, D_VIOLENCE, NOCC, O_NONE,
+  BLD_HOUSING, D_VIOLENCE, NOCC, O_NONE, M_PERSECUTED,
 } from '../constants';
 import { ageOf, clamp, lerp, type Ctx } from '../context';
 import { justiceOrder } from './law';
-import { closeAccounts, createPolity, govFromValues, headcount, householdSize, individuate, killPerson, meanValues, remember, defaultInstitutions, thinAgent } from '../entities';
+import { memoryBound, closeAccounts, createPolity, govFromValues, headcount, householdSize, individuate, killPerson, meanValues, remember, defaultInstitutions, thinAgent } from '../entities';
 import { logEvent } from '../history';
 import { TECH_BY_KEY } from '../techs';
 import type { Person, Polity, Settlement } from '../types';
 import { newRel } from './settlements';
 import { push } from '../pressures';
+import { rosterOf, touchRoster } from '../roster';
 
 export function polityPeople(c: Ctx, pol: Polity): Person[] {
   const out: Person[] = [];
   for (const sid of pol.settlements) {
     const s = c.w.settlements.get(sid);
-    if (s && s.alive) for (const p of c.residents(s)) out.push(p);
+    if (s && s.alive) for (const p of c.roster(s)) out.push(p);
   }
   return out;
 }
@@ -44,7 +45,7 @@ export function militaryStrength(c: Ctx, pol: Polity, sid = -1): number {
     if (!s || !s.alive) continue;
     const fx = c.fx(id);
     const levy = pol.inst.conscription || s.pop < 150 ? 0.35 : 0.12;
-    for (const p of c.residents(s)) {
+    for (const p of c.roster(s)) {
       if (p.sex !== 1) continue;
       const age = ageOf(w, p);
       if (age < 16 || age > 50) continue;
@@ -88,7 +89,7 @@ export function succession(c: Ctx, pol: Polity, causeEvent = -1): void {
   const prev = prevRec ? (w.persons.get(prevRec.id) ?? w.dead.get(prevRec.id)) : undefined;
   if (prevRec && prevRec.to < 0) prevRec.to = w.tick;
   // candidates from the capital (and elites elsewhere)
-  const pool = c.residents(capital);
+  const pool = c.roster(capital);
   const scored = pool.map((p) => ({ p, s: candidateScore(c, pol, p, prev as Person | undefined) })).filter((x) => x.s >= 0).sort((a, b) => b.s - a.s);
   if (!scored.length) return;
   const top = scored[0];
@@ -128,6 +129,8 @@ export function succession(c: Ctx, pol: Polity, causeEvent = -1): void {
           if (i >= 0) cap.households.splice(i, 1);
           seat.households.push(h.id);
           h.sid = seat.id;
+          touchRoster(w, cap.id);
+          touchRoster(w, seat.id);
           for (const id of h.members) { const m = w.persons.get(id); if (m) m.sid = seat.id; }
         }
         rebel.leader = rival.id;
@@ -315,7 +318,7 @@ export function politicsYear(c: Ctx, pol: Polity): void {
     const s = w.settlements.get(sid)!;
     const share = s.pop / totalPop;
     s.quota = new Array(NOCC).fill(0);
-    const sMean = meanValues(c.residents(s));
+    const sMean = meanValues(c.roster(s));
     // positions are funded by the budget but no society can spare unlimited hands
     s.quota[O_SOLDIER] = Math.min(Math.round(s.pop * 0.12), Math.round(soldiers * share + (s.pop > 40 ? 1 : 0)));
     s.quota[O_PRIEST] = Math.min(Math.round(1 + s.pop * 0.035), Math.round(s.pop * 0.01 * (1 + Math.max(0, sMean[V_PIETY])) + s.buildings[BLD_TEMPLE] * 2 + (budget * g.spendReligion * share) / wage));
@@ -402,9 +405,10 @@ export function unrestMonth(c: Ctx, s: Settlement): void {
   const pol = w.polities.get(s.polity);
   if (!pol) return;
   const fx = c.fx(s.id);
-  const people = c.residents(s);
+  const people = c.roster(s);
   if (!people.length) return;
   const sample = people.length > 60 ? 60 : people.length;
+  const persecScan = w.tick - memoryBound(M_PERSECUTED) < 120;
   let sampleN = 0;
   let unhappy = 0;
   let foreignCulture = 0;
@@ -418,14 +422,18 @@ export function unrestMonth(c: Ctx, s: Settlement): void {
     if (p.culture !== pol.culture) foreignCulture += p.n;
     if (pol.religion >= 0 && p.religion !== pol.religion) foreignFaith += p.n;
     egal += -p.values[V_HIER] * p.n;
-    for (const m of p.mem) if (m.k === 10 && w.tick - m.t < 120) { persecuted += p.n; break; }
+    if (persecScan) for (const m of p.mem) if (m.k === M_PERSECUTED && w.tick - m.t < 120) { persecuted += p.n; break; }
   }
   unhappy /= sampleN; foreignCulture /= sampleN; foreignFaith /= sampleN; egal /= sampleN; persecuted /= sampleN;
   // inequality: share of wealth held by the richest fifth of households
   const ws: { v: number; z: number }[] = [];
-  for (const hid of s.households) {
-    const h = w.households.get(hid);
-    if (h) { const z = Math.max(1, householdSize(w, h)); ws.push({ v: (h.money + h.land * 40 + h.goods[0]) / z, z }); }
+  const ro = rosterOf(w, s);
+  for (let k = 0; k < ro.hhs.length; k++) {
+    const h = ro.hhs[k];
+    let hz = 0;
+    for (let i = ro.start[k], e = ro.start[k + 1]; i < e; i++) hz += ro.people[i].n;
+    const z = Math.max(1, hz);
+    ws.push({ v: (h.money + h.land * 40 + h.goods[0]) / z, z });
   }
   ws.sort((a, b) => b.v - a.v);
   let all = 0;
@@ -479,7 +487,7 @@ function riot(c: Ctx, s: Settlement, pol: Polity, why: { unhappy: number; ineq: 
   s.granary *= 0.8;
   s.buildings[BLD_HOUSING] *= 0.97;
   pol.legitimacy = clamp(pol.legitimacy - 0.04);
-  const people = c.residents(s);
+  const people = c.roster(s);
   const deaths = Math.min(5 + s.pop * 0.002, Math.floor(s.pop * 0.005 + c.rng.next() * 2));
   for (let i = 0; i < deaths; i++) {
     const p = people[c.rng.int(people.length)];
@@ -493,7 +501,7 @@ function riot(c: Ctx, s: Settlement, pol: Polity, why: { unhappy: number; ineq: 
 /** Capital overthrows its government: new leader, government reshaped toward popular values. */
 export function revolution(c: Ctx, pol: Polity, s: Settlement): void {
   const w = c.w;
-  const people = c.residents(s);
+  const people = c.roster(s);
   const rebels = people.filter((p) => p.happiness < 0.45 && ageOf(w, p) >= 18);
   const rebelN = headcount(rebels);
   if (rebelN < 5) return;
@@ -538,7 +546,7 @@ export function secede(c: Ctx, pol: Polity, s: Settlement, reason: string, cause
   const w = c.w;
   if (pol.settlements.length < 2 || s.id === pol.capital) return null;
   pol.settlements = pol.settlements.filter((id) => id !== s.id);
-  const people = c.residents(s);
+  const people = c.roster(s);
   const np = createPolity(c, s, meanValues(people));
   np.gov.participation = clamp(np.gov.participation + 0.1);
   np.relations[pol.id] = newRel(-0.4);

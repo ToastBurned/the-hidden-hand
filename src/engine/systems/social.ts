@@ -51,7 +51,7 @@ export function quotaFor(s: Settlement, occ: number): number {
 
 export function chooseOccupations(c: Ctx, s: Settlement, all: boolean): void {
   const w = c.w;
-  const people = c.residents(s);
+  const people = c.roster(s);
   const allowed = allowedOccupations(c, s);
   const values = new Array(NOCC).fill(0);
   let vmax = 0.1;
@@ -174,7 +174,7 @@ function marriageNeighbours(c: Ctx, s: Settlement): Settlement[] {
 
 export function marriagesMonth(c: Ctx, s: Settlement): void {
   const w = c.w;
-  const people = c.residents(s);
+  const people = c.roster(s);
   const singlesM: Person[] = [];
   const singlesF: Person[] = [];
   for (const p of people) {
@@ -197,7 +197,7 @@ export function marriagesMonth(c: Ctx, s: Settlement): void {
       const neigh = marriageNeighbours(c, s);
       if (neigh.length) {
         const other = c.rng.pick(neigh);
-        pool = c.residents(other).filter((p) => p.sex === 1 && p.spouse < 0 && ageOf(w, p) >= 17 && ageOf(w, p) < 60);
+        pool = c.roster(other).filter((p) => p.sex === 1 && p.spouse < 0 && ageOf(w, p) >= 17 && ageOf(w, p) < 60);
         exo = true;
       }
     }
@@ -286,7 +286,7 @@ export function marry(c: Ctx, s: Settlement, f: Person, m: Person, exo: boolean)
 
 export function interactionsMonth(c: Ctx, s: Settlement): void {
   const w = c.w;
-  const people = c.residents(s);
+  const people = c.roster(s);
   const n = people.length;
   if (n < 2) return;
   const fx = c.fx(s.id);
@@ -347,7 +347,7 @@ export function interactionsMonth(c: Ctx, s: Settlement): void {
 
 export function wellbeingYear(c: Ctx, s: Settlement): void {
   const w = c.w;
-  const people = c.residents(s);
+  const people = c.roster(s);
   if (!people.length) return;
   const housingCap = s.buildings[BLD_HOUSING] * 5;
   const crowd = s.nomadic ? 1 : Math.min(1, housingCap / Math.max(1, s.pop));

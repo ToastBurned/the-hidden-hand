@@ -3,6 +3,7 @@ import { Simulation } from '../src/engine/sim';
 import { deserializeWorld, serializeWorld } from '../src/engine/serialize';
 import { digest, moneyStock } from './helpers';
 import { NV } from '../src/engine/constants';
+import { setRosterChecks } from '../src/engine/roster';
 
 describe('determinism and persistence', () => {
   it('the same seed produces exactly the same history', () => {
@@ -282,6 +283,24 @@ describe('fleets, credit and law', () => {
       if (!p.laws) continue;
       const fields = Object.keys(p.laws).filter((k) => k !== 'land' && k !== 'service');
       if (fields.length) expect(p.inst.writtenLaw || !p.alive).toBe(true);
+    }
+  });
+});
+
+describe('engine caches', () => {
+  it('cached settlement rosters always match their households', () => {
+    // with checks on, every cached roster is compared with a fresh one and a stale one throws
+    setRosterChecks(true);
+    try {
+      const a = Simulation.create({ seed: 7, width: 48, height: 32, agentBudget: 1500 });
+      a.runYears(60);
+      for (let i = 0; i < 5; i++) a.step();
+      a.w.rng = a.rng.state();
+      const b = new Simulation(deserializeWorld(serializeWorld(a.w)));
+      b.runYears(15);
+      expect(b.w.persons.size).toBeGreaterThan(0);
+    } finally {
+      setRosterChecks(false);
     }
   });
 });

@@ -12,13 +12,14 @@
 import {
   BASE_PRICE, BASE_SPOIL, BLD_GRANARY, BLD_HARBOR, BLD_MARKET, BLD_WORKSHOP, G_FOOD, G_LUX, G_METAL, G_STONE, G_TOOLS, G_WOOD,
   NG, NOCC, O_ARTISAN, O_BUILDER, O_FARMER, O_FISHER, O_FORAGER, O_MERCHANT, O_MINER, O_NONE, O_PRIEST, O_SCHOLAR, O_SOLDIER,
-  O_WOODCUTTER, ORE_COPPER, ORE_GOLD, ORE_IRON, V_INDIV, V_PIETY, isWater,
+  O_WOODCUTTER, ORE_COPPER, ORE_GOLD, ORE_IRON, V_INDIV, V_PIETY, isWater, M_FAMINE,
 } from '../constants';
 import { ageOf, clamp, type Ctx } from '../context';
-import { headcount, householdSize } from '../entities';
+import { headcount, householdSize, memoryBound } from '../entities';
 import { tariff } from './law';
 import { cropFactor, wildSeason, type ClimateField } from './environment';
 import type { Household, Person, Polity, Settlement } from '../types';
+import { rosterOf } from '../roster';
 import { planTrade, type Order } from './trade';
 
 export function foodNeed(age: number): number {
@@ -41,7 +42,7 @@ function laborOf(age: number, p: Person, occ: number): number {
 /** Per-settlement working data built each month. */
 export interface SettlementWork {
   s: Settlement;
-  people: Person[];
+  people: readonly Person[];
   workers: Person[][]; // by occupation
   labor: number[][]; // parallel to workers: labour units incl. tools
   hhWorkers: Map<number, number>;
@@ -105,28 +106,30 @@ function bestClearable(c: Ctx, s: Settlement, field: ClimateField): number {
 
 export function buildWork(c: Ctx, s: Settlement): SettlementWork {
   const w = c.w;
-  const people = c.residents(s);
-  const workers: Person[][] = Array.from({ length: NOCC }, () => []);
-  const labor: number[][] = Array.from({ length: NOCC }, () => []);
+  const people = c.roster(s);
+  const workers: Person[][] = [];
+  const labor: number[][] = [];
+  for (let o = 0; o < NOCC; o++) { workers.push([]); labor.push([]); }
   const hhWorkers = new Map<number, number>();
   for (const p of people) {
-    const age = ageOf(w, p);
-    if (p.occ === O_NONE || !isWorker(age, p)) continue;
+    if (p.occ === O_NONE || !isWorker(ageOf(w, p), p)) continue;
     workers[p.occ].push(p);
     hhWorkers.set(p.hh, (hhWorkers.get(p.hh) ?? 0) + p.n);
   }
   for (let o = 0; o < NOCC; o++) {
-    for (const p of workers[o]) {
+    const wo = workers[o];
+    const lo = labor[o];
+    for (let k = 0; k < wo.length; k++) {
+      const p = wo[k];
       const h = w.households.get(p.hh);
-      labor[o].push(laborOf(ageOf(w, p), p, o) * toolMult(h, hhWorkers.get(p.hh) ?? 1) * p.n);
+      lo.push(laborOf(ageOf(w, p), p, o) * toolMult(h, hhWorkers.get(p.hh) ?? 1) * p.n);
     }
+    s.workers[o] = headcount(wo);
   }
-  for (let o = 0; o < NOCC; o++) s.workers[o] = headcount(workers[o]);
-  return {
-    s, people, workers, labor, hhWorkers, pol: w.polities.get(s.polity),
-    sells: Array.from({ length: NG }, () => []),
-    buys: Array.from({ length: NG }, () => []),
-  };
+  const sells: Order[][] = [];
+  const buys: Order[][] = [];
+  for (let g = 0; g < NG; g++) { sells.push([]); buys.push([]); }
+  return { s, people, workers, labor, hhWorkers, pol: w.polities.get(s.polity), sells, buys };
 }
 
 function credit(c: Ctx, p: Person, g: number, q: number) {
@@ -418,9 +421,12 @@ export function householdOrders(c: Ctx, sw: SettlementWork): void {
   const month = w.tick % 12;
   const coldK = cold(c, s);
   const monthsToHarvest = month <= 7 ? 8 - month : 20 - month;
-  for (const hid of s.households) {
-    const h = w.households.get(hid);
-    if (!h || !h.members.length) continue;
+  const { people, hhs, start } = rosterOf(w, s);
+  // famine memories younger than 20 years raise reserves; skip the scan when none can exist
+  const famineScan = w.tick - memoryBound(M_FAMINE) < 240;
+  for (let k = 0; k < hhs.length; k++) {
+    const h = hhs[k];
+    if (!h.members.length) continue;
     let F = 0;
     let consc = 0;
     let famine = 0;
@@ -432,15 +438,14 @@ export function householdOrders(c: Ctx, sw: SettlementWork): void {
     let piety = 0;
     let size = 0;
     let artisans = 0;
-    for (const id of h.members) {
-      const m = w.persons.get(id);
-      if (!m) continue;
+    for (let i = start[k], e = start[k + 1]; i < e; i++) {
+      const m = people[i];
       const age = ageOf(w, m);
       F += foodNeed(age) * m.n;
       consc += m.consc * m.n;
       piety += m.values[V_PIETY] * m.n;
       size += m.n;
-      for (const mm of m.mem) if (mm.k === 1 && w.tick - mm.t < 240) famine = 1;
+      if (famineScan && !famine) for (const mm of m.mem) if (mm.k === M_FAMINE && w.tick - mm.t < 240) { famine = 1; break; }
       if (m.occ === O_FARMER) farmer = true;
       if (m.occ === O_ARTISAN) { artisan = true; artisans += m.n; }
       if (m.occ === O_MINER) miner = true;
@@ -682,19 +687,13 @@ export function consume(c: Ctx, sw: SettlementWork): void {
   const pol = sw.pol;
   const people = sw.people;
   // per household need
-  const hhs: Household[] = [];
+  const { people: res, hhs, start } = rosterOf(w, s);
   const needs: number[] = [];
   const sizes: number[] = [];
-  for (const hid of s.households) {
-    const h = w.households.get(hid);
-    if (!h) continue;
+  for (let k = 0; k < hhs.length; k++) {
     let F = 0;
     let z = 0;
-    for (const id of h.members) {
-      const m = w.persons.get(id);
-      if (m) { F += foodNeed(ageOf(w, m)) * m.n; z += m.n; }
-    }
-    hhs.push(h);
+    for (let i = start[k], e = start[k + 1]; i < e; i++) { const m = res[i]; F += foodNeed(ageOf(w, m)) * m.n; z += m.n; }
     needs.push(F);
     sizes.push(z);
   }
@@ -764,9 +763,8 @@ export function consume(c: Ctx, sw: SettlementWork): void {
     const luxPer = h.goods[G_LUX] / Math.max(1, sizes[k]);
     const luxUse = h.goods[G_LUX] * 0.15;
     h.goods[G_LUX] -= luxUse;
-    for (const id of h.members) {
-      const m = w.persons.get(id);
-      if (!m) continue;
+    for (let i = start[k], e = start[k + 1]; i < e; i++) {
+      const m = res[i];
       const age = ageOf(w, m);
       const vuln = age < 5 || age > 60 ? 1.35 : 1;
       const cap = age < 45 ? 1 : Math.max(0.35, 1 - (age - 45) * 0.012);

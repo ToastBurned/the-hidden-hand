@@ -14,6 +14,7 @@ import { push } from '../pressures';
 import { siteScore } from '../gen/terrain';
 import { invalidateFarmCache } from './economy';
 import type { Household, Person, Settlement } from '../types';
+import { touchRoster } from '../roster';
 
 // ------------------------------------------------------------------ territory
 
@@ -80,7 +81,7 @@ export function updateTerritories(c: Ctx): void {
 function chooseProject(c: Ctx, s: Settlement): number {
   const w = c.w;
   const fx = c.fx(s.id);
-  const people = c.residents(s);
+  const people = c.roster(s);
   const mean = meanValues(people);
   const pol = w.polities.get(s.polity);
   const housing = s.buildings[BLD_HOUSING] * 5;
@@ -146,7 +147,7 @@ export function constructionMonth(c: Ctx, s: Settlement): void {
   }
   const cost = BLD_COST[s.project];
   const labor = cost[0] * fx.buildCost;
-  const builders = c.residents(s).filter((p) => p.occ === O_BUILDER);
+  const builders = c.roster(s).filter((p) => p.occ === O_BUILDER);
   let effort = 0;
   for (const b of builders) effort += (0.5 + b.skills[O_BUILDER]) * b.health * b.n;
   if (effort <= 0) return;
@@ -258,7 +259,7 @@ export function moveCamp(c: Ctx, s: Settlement, gameShare: number): boolean {
 export function fissionYear(c: Ctx, s: Settlement): void {
   const w = c.w;
   const t = w.tiles;
-  const people = c.residents(s);
+  const people = c.roster(s);
   if (s.pop < 24) return;
   const housing = s.buildings[BLD_HOUSING] * 5;
   const reasons: string[] = [];
@@ -348,7 +349,7 @@ export function fissionYear(c: Ctx, s: Settlement): void {
     pol.settlements.push(ns.id);
     polityText = ` as a colony of ${pol.name}`;
   } else {
-    const np = createPolity(c, ns, meanValues(c.residents(ns)));
+    const np = createPolity(c, ns, meanValues(c.roster(ns)));
     np.leader = leader.id;
     np.dynasty = leader.family;
     np.leaders.push({ id: leader.id, from: w.tick, to: -1, name: `${leader.name} ${leader.family}` });
@@ -381,6 +382,8 @@ export function moveHousehold(c: Ctx, h: Household, from: Settlement, to: Settle
   if (i >= 0) from.households.splice(i, 1);
   to.households.push(h.id);
   h.sid = to.id;
+  touchRoster(w, from.id);
+  touchRoster(w, to.id);
   // land cannot be carried; it returns to the community
   h.land = 0;
   h.cargo = null;
