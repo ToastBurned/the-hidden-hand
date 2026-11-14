@@ -72,7 +72,7 @@ async function saveCampaign(page, count) {
   await page.getByLabel('History length').selectOption('120');
   await page.getByRole('button', { name: 'Done' }).click();
   const settingsOnDisk = () => JSON.parse(prefsOnDisk()['hiddenhand.settings.v1'] || '{}');
-  assert(await until(() => settingsOnDisk().textScale === 1.12 && settingsOnDisk().historyYears === 120, 'settings in preferences.json', 10000), 'changed settings are written to preferences.json');
+  assert(await until(() => settingsOnDisk().textScale === 1.12 && settingsOnDisk().historyYears === 120, 'settings in preferences.json'), 'changed settings are written to preferences.json');
 
   // Found an Order in a small world.
   await page.getByRole('button', { name: /New campaign/ }).click();
@@ -122,7 +122,7 @@ async function saveCampaign(page, count) {
   assert(after.length === 1 && after[0].tick === firstWorld.tick, 'the campaign save is listed after restarting the app');
   assert(await page.evaluate(() => window.hiddenHandDesktop.prefs.get('hiddenhand.settings.v1')).then((v) => JSON.parse(v).textScale === 1.12), 'settings are back after restarting the app');
   const cont = page.getByRole('button', { name: /^Continue/ });
-  await until(() => cont.isEnabled(), 'Continue to be offered', 10000);
+  await until(() => cont.isEnabled(), 'Continue to be offered');
 
   // Saved campaigns: load a save from the list.
   await page.getByRole('button', { name: /^Saved campaigns/ }).click();
@@ -146,8 +146,8 @@ async function saveCampaign(page, count) {
   if (shots) await page.screenshot({ path: path.join(shots, 'desktop-saved-campaigns.png') });
   await dialog.getByRole('button', { name: /^Delete / }).first().click();
   await dialog.getByRole('button', { name: 'Delete', exact: true }).click();
-  await until(() => saves().length === 2, 'delete from Saved campaigns', 10000);
-  assert(await until(async () => (await dialog.getByRole('button', { name: /^Load / }).count()) === 2, 'list refresh', 10000), 'deleting from Saved campaigns removes the file and the row');
+  await until(() => saves().length === 2, 'delete from Saved campaigns');
+  assert(await until(async () => (await dialog.getByRole('button', { name: /^Load / }).count()) === 2, 'list refresh'), 'deleting from Saved campaigns removes the file and the row');
   await app.close();
   fs.rmSync(tmp, { recursive: true, force: true });
   console.log('\nDesktop smoke test passed.');
