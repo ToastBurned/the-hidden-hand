@@ -150,7 +150,7 @@ function defend(sim: Simulation, g: GameState, style: BotStyle): void {
     const target = Number(top[0]);
     const m = g.members.get(target);
     if (!m || m.imprisoned >= 0) continue;
-    if (g.order.quietUntil < w.tick && top[1] > 0.45) applyGameCommand(sim, { type: 'response', kind: 'go-quiet', target: 0 });
+    if (g.order.quietUntil < w.tick && top[1] > 0.7) applyGameCommand(sim, { type: 'response', kind: 'go-quiet', target: 0 });
     const ip = w.persons.get(inv.pid);
     if (!ip) continue;
     // silence the investigator if we can, else hide or run
@@ -252,7 +252,7 @@ export function focusPolity(sim: Simulation, g: GameState, work: WorkKind): numb
     if (!p) return false;
     switch (work) {
       case 'peace': return p.gov.spendMilitary > 0.15;
-      case 'no-starving': return p.gov.spendWelfare < 0.18;
+      case 'no-starving': return p.gov.spendWelfare < 0.16;
       case 'voice': return p.gov.participation <= 0.5;
       case 'faith-free': return p.gov.tolerance <= 0.6;
       case 'knowledge': return p.gov.spendLearning < 0.12;
@@ -269,7 +269,7 @@ function expand(sim: Simulation, g: GameState, work: WorkKind): void {
   const cells = [...g.cells.values()];
   const towns = new Set(cells.map((c) => c.sid));
   const big = cells.map((c) => ({ c, ms: cellMembers(g, c.id).filter((m) => m.imprisoned < 0 && !m.travel) })).sort((a, b) => b.ms.length - a.ms.length)[0];
-  if (!big || big.ms.length < 5) return;
+  if (!big || big.ms.length < 3) return;
   const from = w.settlements.get(big.c.sid);
   if (!from) return;
   let dest = -1;
