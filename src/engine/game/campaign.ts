@@ -78,7 +78,7 @@ export function foundOrder(sim: Simulation, opt: FoundOptions): GameState {
     push: {}, pressures: [], boosts: [], allies: [], offices: [], estates: {},
     order: {
       name: opt.name ?? names[0].name, meaning: opt.meaning ?? (opt.name ? '' : names[0].meaning), founded: w.tick, home: cd.sid,
-      founder: founder.id, culture: founder.culture, posture: 'measured', wealth: 0, cohesion: 0.8, quietUntil: -1, basePop: 0,
+      founder: founder.id, culture: founder.culture, posture: 'measured', wealth: 0, cohesion: 0.8, quietUntil: -1, basePop: 0, baseShare: 0,
     },
     creed: { ...creed, direction: [...creed.direction], vows: [...creed.vows], focus: [...creed.focus] as [number, number] },
     practice: { families: {}, dark: 0, good: 0 },
@@ -94,8 +94,11 @@ export function foundOrder(sim: Simulation, opt: FoundOptions): GameState {
   g.greatWork = makeGreatWork(gw);
   g.lesserWorks = makeLesserWorks(gw);
   g.order.basePop = Math.max(1, peoplePop(w));
+  g.order.baseShare = g.order.basePop / Math.max(1, w.population);
   const f = admit(sim, founder, -1, true);
   const comp = admit(sim, companion, f.pid);
+  // a founder or companion drawn from a represented group becomes their own person here
+  g.order.founder = f.pid;
   comp.standing = 'adept';
   g.log.recruits = 0;
   // the founder's household gives the Order its first coin
@@ -105,8 +108,8 @@ export function foundOrder(sim: Simulation, opt: FoundOptions): GameState {
   officesYear(sim);
   estatesYear(sim);
   localOf(g, cd.sid);
-  logEvent(w, { type: 'founding', imp: 1, text: `${founder.name} ${founder.family} and ${companion.name} ${companion.family} met in secret in ${placeOf(w, cd.sid)}.`, persons: [founder.id, companion.id], settlements: [cd.sid] });
-  notice(w, 'info', 3, 'The First Oath', `${g.order.name} is founded. Your first task: find a third.`, [{ kind: 'member', id: founder.id }]);
+  logEvent(w, { type: 'founding', imp: 1, text: `${fullName(w, f.pid)} and ${fullName(w, comp.pid)} met in secret in ${placeOf(w, cd.sid)}.`, persons: [f.pid, comp.pid], settlements: [cd.sid] });
+  notice(w, 'info', 3, 'The First Oath', `${g.order.name} is founded. Your first task: find a third.`, [{ kind: 'member', id: f.pid }]);
   recomputePush(sim);
   return g;
 }

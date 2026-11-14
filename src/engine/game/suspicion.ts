@@ -80,7 +80,11 @@ export function suspicionMonth(c: Ctx, r: Rng): void {
   }
   // indiscreet members talk
   for (const [sid, ms] of memberTowns) {
-    for (const m of ms) if (r.chance((1 - m.discretion) * 0.02)) trace(c, sid, 0.012);
+    for (const m of ms) if (r.chance((1 - m.discretion) * 0.03)) trace(c, sid, 0.015);
+    // a large circle in one town is hard to hide, more so in a small town
+    const s = w.settlements.get(sid);
+    const crowd = Math.pow(ms.length, 1.4) / Math.sqrt(Math.max(50, s?.pop ?? 50));
+    trace(c, sid, crowd * 0.0025);
   }
   // inquiries open where suspicion runs high
   for (const [sid] of memberTowns) {
@@ -107,7 +111,7 @@ export function suspicionMonth(c: Ctx, r: Rng): void {
     notice(w, 'investigator', 3, 'An inquiry opens', `${fullName(w, inv.id)}${inv.title ? `, ${inv.title},` : ''} has begun asking questions in ${placeOf(w, sid)}.`, [{ kind: 'person', id: inv.id }, { kind: 'settlement', id: sid }]);
     if (k) trace(c, sid, 0.02, k);
   }
-  for (const inv of g.investigations) if (!inv.closed) investigate(c, r, inv, quiet);
+  for (const inv of g.investigations) if (!inv.closed) investigate(c, r, inv, g.order.quietUntil > w.tick);
   g.investigations = g.investigations.filter((i) => !i.closed || w.tick - i.started < 600);
 }
 
@@ -142,7 +146,7 @@ function investigate(c: Ctx, r: Rng, inv: Investigation, quiet: boolean): void {
     const hidden = m.hiddenUntil > w.tick ? 0.25 : 1;
     const known = inv.found.some((f) => g.members.get(f)?.knows.includes(m.pid)) ? 2.5 : 1;
     const localLv = here ? l.level : (g.local[p.sid]?.level ?? 0) * 0.6;
-    const rate = 0.06 * skill * (0.25 + localLv) * (1 - m.discretion * 0.6) * safe * hidden * known * (quiet ? 0.45 : 1) * (here ? 1 : 0.4);
+    const rate = 0.09 * skill * (0.25 + localLv) * (1 - m.discretion * 0.6) * safe * hidden * known * (quiet ? 0.45 : g.order.posture === 'cautious' ? 0.75 : 1) * (here ? 1 : 0.4);
     const before = inv.trail[m.pid] ?? 0;
     const after = before + rate * (0.6 + r.next() * 0.8);
     inv.trail[m.pid] = after;
@@ -154,7 +158,7 @@ function investigate(c: Ctx, r: Rng, inv: Investigation, quiet: boolean): void {
     if (after >= 1) arrest(c, r, inv, m);
   }
   inv.stalled = quiet || !any ? inv.stalled + 1 : Math.max(0, inv.stalled - 1);
-  if (inv.stalled > 36) closeInquiry(c, inv, 'it found nothing more');
+  if (inv.stalled > 48) closeInquiry(c, inv, 'it found nothing more');
   else if (w.tick - inv.started > 240) closeInquiry(c, inv, 'the investigator gave up');
 }
 

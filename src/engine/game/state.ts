@@ -214,6 +214,8 @@ export interface GameState {
     quietUntil: number;
     /** Founding snapshot for the Great Work measures. */
     basePop: number;
+    /** Our people's share of the world's population at the founding. */
+    baseShare: number;
   };
   creed: Creed;
   practice: Practice;

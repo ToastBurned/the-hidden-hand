@@ -39,13 +39,15 @@ export function founderCreed(p: Person, motive: Motive): Creed {
   if (n) direction[n[0]] = clamp(direction[n[0]] + n[1], -1, 1);
   const order = [...direction.keys()].sort((a, b) => Math.abs(direction[b]) - Math.abs(direction[a]));
   const focus: [number, number] = [order[0], order[1]];
-  const vows = [MOTIVE_VOW[motive]];
+  // a wound with a clear answer gives the first vow; a vaguer grief or ambition lets the founder's values speak first
+  const vows = motive === 'loss' || motive === 'ambition' || motive === 'plague' ? [] as string[] : [MOTIVE_VOW[motive]];
   const byValue: [number, number, string][] = [
     [V_HIER, -1, 'voice'], [V_MILIT, -1, 'peace'], [V_INNOV, 1, 'knowledge'], [V_PIETY, -1, 'faith-free'], [V_INDIV, -1, 'no-starving'],
   ];
   for (const k of order) {
     for (const [axis, sign, vow] of byValue) if (axis === k && direction[k] * sign > 0.1 && !vows.includes(vow) && vows.length < 2) vows.push(vow);
   }
+  if (!vows.length) vows.push(MOTIVE_VOW[motive]);
   if (vows.length < 2) vows.push(vows[0] === 'endure' ? 'knowledge' : 'endure');
   vows.push(p.consc + (1 - p.extra) > 1.1 ? 'unseen' : vows.includes('endure') ? 'unseen' : 'endure');
   const creed: Creed = { direction, focus, vows, oath: '', gap: 0 };

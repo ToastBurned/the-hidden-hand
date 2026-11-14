@@ -5,7 +5,8 @@
  * and each story is played to a horizon by the automated player (src/engine/game/bot.ts) and,
  * as a control, by an idle Order that founds and then does nothing. The report gives the win
  * rate (target: about one in three for the competent bot, near zero for the idle Order) and
- * how campaigns end.
+ * how campaigns end. A passive control (an Order that recruits and wins seats but never
+ * pulls a lever or runs a dark operation) shows how much the world would have done anyway.
  *
  *   npx tsx tools/campaigns.ts [seeds=12] [horizon=200] [pre=250] [threads]
  */
@@ -16,12 +17,14 @@ import { fileURLToPath } from 'node:url';
 import { Simulation } from '../src/engine/sim';
 import { deserializeWorld, serializeWorld } from '../src/engine/serialize';
 import { foundingStories, foundOrder, stepCampaign } from '../src/engine/game/campaign';
-import { botTurn, DEFAULT_BOT, type BotStyle } from '../src/engine/game/bot';
+import { botTurn, DEFAULT_BOT, PASSIVE_BOT, type BotStyle } from '../src/engine/game/bot';
 import { peoplePop } from '../src/engine/game/works';
 import type { WorldConfig } from '../src/engine/config';
 
+export type Player = 'bot' | 'passive' | 'idle';
+
 export interface CampaignResult {
-  seed: number; story: number; player: 'bot' | 'idle'; work: string; difficulty: string;
+  seed: number; story: number; player: Player; work: string; difficulty: string;
   ending: string; won: boolean; years: number; wonYear: number;
   maxMembers: number; members: number; seats: number; arrests: number; ops: number; opsOk: number; dark: number;
   lesser: number; bestProgress: number; pop0: number; pop1: number; ms: number;
@@ -30,7 +33,7 @@ export interface CampaignResult {
 /** The world used for balancing: a small map, so a campaign runs at town-to-people scale. */
 export const BALANCE_WORLD: Partial<WorldConfig> = { width: 64, height: 40, agentBudget: 2000, density: 6, bands: 8 };
 
-export function playSeed(seed: number, pre: number, horizon: number, players: ('bot' | 'idle')[], style: BotStyle = DEFAULT_BOT, world = BALANCE_WORLD): CampaignResult[] {
+export function playSeed(seed: number, pre: number, horizon: number, players: Player[], style: BotStyle = DEFAULT_BOT, world = BALANCE_WORLD): CampaignResult[] {
   const sim0 = Simulation.create({ ...world, seed });
   sim0.runYears(pre);
   sim0.w.rng = sim0.rng.state();
@@ -48,6 +51,7 @@ export function playSeed(seed: number, pre: number, horizon: number, players: ('
       const end = sim.w.tick + horizon * 12;
       while (sim.w.tick < end && g.phase === 'play') {
         if (player === 'bot') botTurn(sim, style);
+        else if (player === 'passive') botTurn(sim, PASSIVE_BOT);
         else if (g.conclave) { g.conclave = null; g.nextConclave = sim.w.tick + 60; }
         stepCampaign(sim);
         maxMembers = Math.max(maxMembers, g.members.size);
@@ -68,7 +72,7 @@ export function playSeed(seed: number, pre: number, horizon: number, players: ('
 
 if (!isMainThread && (workerData as { __camp?: boolean })?.__camp) {
   const d = workerData as { seeds: number[]; pre: number; horizon: number };
-  for (const s of d.seeds) for (const r of playSeed(s, d.pre, d.horizon, ['bot', 'idle'])) parentPort!.postMessage(r);
+  for (const s of d.seeds) for (const r of playSeed(s, d.pre, d.horizon, ['bot', 'passive', 'idle'])) parentPort!.postMessage(r);
 }
 
 export async function runCampaigns(seeds: number[], pre: number, horizon: number, threads: number, log = true): Promise<CampaignResult[]> {
@@ -81,7 +85,7 @@ export async function runCampaigns(seeds: number[], pre: number, horizon: number
     const wk = new Worker(boot, { eval: true, workerData: { __camp: true, seeds: b, pre, horizon } });
     wk.on('message', (r: CampaignResult) => {
       results.push(r);
-      if (log) console.log(`seed ${r.seed} story ${r.story} ${r.player.padEnd(4)} ${r.work.padEnd(11)} ${r.difficulty.padEnd(9)} -> ${r.ending.padEnd(9)} y${r.years} members max ${r.maxMembers} now ${r.members} seats ${r.seats} arrests ${r.arrests} ops ${r.opsOk}/${r.ops} dark ${r.dark} lesser ${r.lesser} best ${r.bestProgress} (${(r.ms / 1000).toFixed(0)} s)`);
+      if (log) console.log(`seed ${r.seed} story ${r.story} ${r.player.padEnd(7)} ${r.work.padEnd(11)} ${r.difficulty.padEnd(9)} -> ${r.ending.padEnd(9)} y${r.years} members max ${r.maxMembers} now ${r.members} seats ${r.seats} arrests ${r.arrests} ops ${r.opsOk}/${r.ops} dark ${r.dark} lesser ${r.lesser} best ${r.bestProgress} (${(r.ms / 1000).toFixed(0)} s)`);
     });
     wk.on('error', reject);
     wk.on('exit', () => resolve());
@@ -91,7 +95,7 @@ export async function runCampaigns(seeds: number[], pre: number, horizon: number
 
 export function summarise(rs: CampaignResult[]): string {
   const lines: string[] = [];
-  for (const player of ['bot', 'idle'] as const) {
+  for (const player of ['bot', 'passive', 'idle'] as const) {
     const xs = rs.filter((r) => r.player === player);
     if (!xs.length) continue;
     const won = xs.filter((r) => r.won).length;

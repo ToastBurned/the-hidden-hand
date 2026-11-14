@@ -73,10 +73,6 @@ export function opProblem(c: Ctx, cmd: Cmd): string | null {
   if (m.travel) return 'the agent is travelling';
   if (m.hiddenUntil > w.tick) return 'the agent is in hiding';
   if ([...g.ops.values()].some((o) => o.status === 'running' && o.agent === cmd.agent)) return 'the agent is already on an operation';
-  for (const n of spec.needs) if (mastery(g, n) < 0.25) return `the Order lacks the craft of ${n}`;
-  if (!unlocked(g, spec.kind)) return 'not yet unlocked';
-  if (spec.cost.wealth > g.order.wealth) return 'not enough coin';
-  if (spec.cost.influence > m.influence + 0.001) return `${ap.name} lacks the influence`;
   if (spec.target === 'person') {
     const t = w.persons.get(cmd.target.id);
     if (!t) return 'no such person';
@@ -100,6 +96,10 @@ export function opProblem(c: Ctx, cmd: Cmd): string | null {
     if (!pol || !pol.alive) return 'no such realm';
     if (w.settlements.get(ap.sid)?.polity !== pol.id) return 'the agent must live in that realm';
   }
+  for (const n of spec.needs) if (mastery(g, n) < 0.25) return `the Order lacks the craft of ${n}`;
+  if (!unlocked(g, spec.kind)) return 'not yet unlocked';
+  if (spec.cost.wealth > g.order.wealth) return 'not enough coin';
+  if (spec.cost.influence > m.influence + 0.001) return `${ap.name} lacks the influence`;
   return null;
 }
 
