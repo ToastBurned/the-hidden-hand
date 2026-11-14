@@ -3,7 +3,7 @@
 // src/platform/desktop.ts; the page itself gets no Node.js or file-system access.
 const { contextBridge, ipcRenderer } = require('electron');
 
-contextBridge.exposeInMainWorld('noosphereDesktop', {
+contextBridge.exposeInMainWorld('hiddenHandDesktop', {
   isDesktop: true,
   version: ipcRenderer.sendSync('app:version'),
   listSaves: () => ipcRenderer.invoke('saves:list'),

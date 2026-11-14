@@ -1,12 +1,12 @@
 {
-  "name": "noosphere",
+  "name": "the-hidden-hand",
   "version": "0.1.0",
   "private": true,
-  "description": "An autonomous civilisation simulation with built-in experiment tooling.",
+  "description": "The Hidden Hand: steer a living, procedurally generated civilisation from the shadows as a secret order.",
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc --noEmit && vite build && node -e \"require('fs').mkdirSync('app',{recursive:true});require('fs').copyFileSync('dist/index.html','app/Noosphere.html')\"",
+    "build": "tsc --noEmit && vite build && node -e \"require('fs').mkdirSync('app',{recursive:true});require('fs').copyFileSync('dist/index.html','app/HiddenHand.html')\"",
     "start": "node launcher/serve.mjs",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",

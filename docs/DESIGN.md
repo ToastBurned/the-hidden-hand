@@ -1,6 +1,6 @@
 # Design
 
-This document explains how the Noosphere is built and how each part of the world works, and states plainly where
+This document explains how the simulation engine behind The Hidden Hand (originally The Noosphere) is built and how each part of the world works, and states plainly where
 the model is simplified. Numbers in parentheses are default parameters; all of them live in the code next to the
 mechanism they control.
 

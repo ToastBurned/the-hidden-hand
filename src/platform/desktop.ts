@@ -1,16 +1,16 @@
 /**
  * The bridge the Windows desktop app (desktop/, Electron) exposes to the page.
  *
- * In a browser (app\Noosphere.html opened from disk, or the local server) `window.noosphereDesktop`
+ * In a browser (app\HiddenHand.html opened from disk, or the local server) `window.hiddenHandDesktop`
  * is undefined and saves keep using IndexedDB. Inside the desktop app the preload script defines it,
- * and saved worlds become real files in a folder on disk (by default Documents\Noosphere\Saves).
+ * and saved worlds become real files in a folder on disk (by default Documents\The Hidden Hand\Saves).
  *
  * The page never gets Node or file-system access of its own: only these calls, which the desktop
  * app's main process implements and restricts to the saves folder and to files the user picks.
  */
 import type { SaveMeta } from '../ui/saves';
 
-export interface NoosphereDesktop {
+export interface HiddenHandDesktop {
   /** Always true; lets the page tell it is running in the desktop app. */
   readonly isDesktop: true;
   readonly version: string;
@@ -29,9 +29,9 @@ export interface NoosphereDesktop {
 }
 
 declare global {
-  interface Window { noosphereDesktop?: NoosphereDesktop }
+  interface Window { hiddenHandDesktop?: HiddenHandDesktop }
 }
 
-export function desktop(): NoosphereDesktop | undefined {
-  return typeof window !== 'undefined' && window.noosphereDesktop?.isDesktop ? window.noosphereDesktop : undefined;
+export function desktop(): HiddenHandDesktop | undefined {
+  return typeof window !== 'undefined' && window.hiddenHandDesktop?.isDesktop ? window.hiddenHandDesktop : undefined;
 }
