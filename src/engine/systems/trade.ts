@@ -62,6 +62,8 @@ export function planTrade(c: Ctx, works: Map<number, SettlementWork>): void {
         const d = w.settlements.get(did);
         if (!d || !d.alive || d.pop <= 0) continue;
         if (atWar(c, s.polity, d.polity)) continue;
+        // a blockade closes sea routes: only overland partners on the same landmass can be reached
+        if (((s.ctx.blockadeUntil ?? -1) >= w.tick || (d.ctx.blockadeUntil ?? -1) >= w.tick) && w.tiles.region[s.y * w.tiles.w + s.x] !== w.tiles.region[d.y * w.tiles.w + d.x]) continue;
         const travel = c.travel(s.id, did);
         if (!isFinite(travel) || travel > range) continue;
         const pd = d.market.price;

@@ -47,6 +47,7 @@ export const EVENT_TYPE_LABELS: Record<string, string> = {
   genesis: 'Origins', founding: 'Founding', sedentary: 'Settling down', camp_moved: 'Camp moved', abandoned: 'Abandoned', rename: 'Renamed',
   famine: 'Famine', drought: 'Drought', fire: 'Fire', flood: 'Flood', earthquake: 'Earthquake', eruption: 'Eruption',
   epidemic: 'Epidemic', disease_end: 'Epidemic ends', invention: 'Invention', tech_spread: 'Knowledge spreads', tech_lost: 'Knowledge lost',
+  naval_battle: 'Sea battle', landing: 'Landing', blockade: 'Blockade', fleet: 'Fleet', bank: 'Bank', bank_failure: 'Bank failure', default: 'State default', debt_relief: 'Debt relief', law: 'Law',
   war_declared: 'War', war_join: 'Joins war', war_end: 'Peace', battle: 'Battle', conquest: 'Conquest', sack: 'Sack',
   alliance: 'Alliance', alliance_end: 'Alliance ends', union: 'Union', secession: 'Secession', revolution: 'Revolution', riot: 'Riot',
   succession: 'Succession', succession_crisis: 'Succession crisis', polity_end: 'Polity falls', institution: 'Institution',

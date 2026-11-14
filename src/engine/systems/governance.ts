@@ -12,7 +12,8 @@ import {
   BLD_HOUSING, D_VIOLENCE, NOCC, O_NONE,
 } from '../constants';
 import { ageOf, clamp, lerp, type Ctx } from '../context';
-import { createPolity, govFromValues, headcount, householdSize, individuate, killPerson, meanValues, remember, defaultInstitutions, thinAgent } from '../entities';
+import { justiceOrder } from './law';
+import { closeAccounts, createPolity, govFromValues, headcount, householdSize, individuate, killPerson, meanValues, remember, defaultInstitutions, thinAgent } from '../entities';
 import { logEvent } from '../history';
 import { TECH_BY_KEY } from '../techs';
 import type { Person, Polity, Settlement } from '../types';
@@ -121,6 +122,7 @@ export function succession(c: Ctx, pol: Polity, causeEvent = -1): void {
         const h = w.households.get(rival.hh);
         if (h) {
           const cap = w.settlements.get(pol.capital)!;
+          closeAccounts(c, h);
           const i = cap.households.indexOf(h.id);
           if (i >= 0) cap.households.splice(i, 1);
           seat.households.push(h.id);
@@ -446,7 +448,7 @@ export function unrestMonth(c: Ctx, s: Settlement): void {
   const repression = Math.min(0.25, (soldiers / Math.max(1, s.pop)) * 3) * pol.gov.centralization;
   const raw = unhappy * 0.6 + s.hungerShare * 0.5 + Math.max(0, pol.gov.taxRate - 0.1) * 1.2 + Math.max(0, ineq - 0.4) * Math.max(0, egal) * 1.2
     + foreignCulture * 0.18 * (1 - pol.gov.tolerance) + foreignFaith * 0.25 * (1 - pol.gov.tolerance) + persecuted * 0.4
-    + pol.warWeariness * 0.25 + (1 - pol.legitimacy) * 0.3 + overextension - fx.lawOrder - repression - s.cohesion * 0.15 - 0.32;
+    + pol.warWeariness * 0.25 + (1 - pol.legitimacy) * 0.3 + (s.ctx.debtShare ?? 0) * 0.25 + overextension - fx.lawOrder - justiceOrder(pol) * 0.5 - repression - s.cohesion * 0.15 - 0.32;
   s.unrest = clamp(s.unrest * 0.85 + clamp(raw) * 0.15);
   s.cohesion = clamp(s.cohesion * 0.98 + (1 - foreignCulture - foreignFaith * 0.5) * 0.02 + (s.buildings[BLD_TEMPLE] > 0 ? 0.004 : 0));
 

@@ -27,6 +27,9 @@ import { diffusionYear, technologyYear } from './systems/technology';
 import { computeYearStats, emptyAcc } from './systems/stats';
 import { applyInterventions } from './systems/interventions';
 import { consolidateYear } from './systems/scale';
+import { navalYear } from './systems/naval';
+import { bankMonth, bankingYear, stateDebtYear } from './systems/finance';
+import { lawsYear } from './systems/law';
 import { householdSize } from './entities';
 
 export const ENGINE_VERSION = 1;
@@ -304,6 +307,7 @@ export class Simulation implements Ctx {
     });
     this.time('trade', () => planTrade(this, works));
     this.time('markets', () => {
+      for (const s of alive) if (s.bank) bankMonth(this, s);
       for (const sw of works.values()) householdOrders(this, sw);
       for (const sw of works.values()) clearMarket(this, sw);
       for (const sw of works.values()) payWages(this, sw);
@@ -357,6 +361,10 @@ export class Simulation implements Ctx {
     }
     for (const s of alive) if (s.alive) fissionYear(this, s);
     for (const p of [...w.polities.values()]) politicsYear(this, p);
+    for (const p of [...w.polities.values()]) navalYear(this, p);
+    for (const p of [...w.polities.values()]) lawsYear(this, p);
+    for (const s of alive) bankingYear(this, s);
+    for (const p of [...w.polities.values()]) stateDebtYear(this, p);
     unionsYear(this);
     diplomacyYear(this);
     warDecisionsYear(this);

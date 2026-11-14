@@ -109,6 +109,23 @@ export interface Household {
   cargoDest: number; // settlement id
   cargoArrive: number; // tick
   labAcc: number; // farm labour accumulated toward the next harvest
+  /** Money on deposit at the settlement's bank (a claim, not cash). */
+  deposit?: number;
+  /** Money owed to the settlement's bank. */
+  debt?: number;
+}
+
+/** A settlement's bank: takes deposits, lends to households and to the state. */
+export interface Bank {
+  founded: number;
+  /** Cash held. This is money and counts toward the money supply. */
+  reserves: number;
+  /** Totals of household deposits and debts, recounted monthly. */
+  deposits: number;
+  loans: number;
+  /** Lent to the polity that rules the settlement. */
+  stateLoans: number;
+  failures: number;
 }
 
 export interface Market {
@@ -168,6 +185,7 @@ export interface Settlement {
   outbreakDeaths: number;
   tradeVol: number; // smoothed monthly trade value
   wage: number; // public wage last paid
+  bank?: Bank;
   lowFoodYears: number;
   foodProd: number; // smoothed monthly food production
   need: number[]; // materials needed by the current construction project
@@ -249,6 +267,12 @@ export interface Polity {
   spending: number;
   lastRevenue?: number; // previous year's totals, for display
   lastSpending?: number;
+  /** Warships. */
+  fleet?: number;
+  /** Owed to the bank of the capital. */
+  debt?: number;
+  /** The law code: one choice per field of law, enacted over time. */
+  laws?: Record<string, string>;
 }
 
 export interface Culture {
@@ -305,6 +329,10 @@ export interface War {
   score: number; // positive = attackers winning
   outcome: string;
   active: boolean;
+  /** Event id of the first amphibious landing, for wars fought across the sea. */
+  ctxLanding?: number;
+  /** True when the attackers must cross the sea to reach the target. */
+  naval?: boolean;
 }
 
 export interface HistEvent {
