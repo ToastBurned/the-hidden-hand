@@ -76,7 +76,15 @@ export function searchFoundings(sim: Simulation, count = 3, reroll = 0): Foundin
         const st = Math.abs(m.v) * (mo === 'ambition' ? 0.5 : 1);
         if (st > strength) { strength = st; motive = mo; ev = m.e; }
       }
+      // a believer of a faith the realm does not keep, under a hard law, is persecuted without needing a memory of it
+      const pol = w.polities.get(s.polity);
+      if (pol && pol.inst.stateReligion && pol.gov.tolerance < 0.5 && p.religion >= 0 && p.religion !== pol.religion) {
+        const st = 0.35 + (0.5 - pol.gov.tolerance) * 0.8;
+        if (st > strength) { strength = st; motive = 'persecution'; ev = -1; }
+      }
       if (!motive && (p.occ === O_SCHOLAR || p.occ === O_PRIEST) && p.open > 0.55) { motive = 'learning'; strength = 0.4; }
+      // the ambitious few near power, who have watched how it is really held
+      if (p.ambition > 0.6 && p.status > 0.55 && strength < 0.35) { motive = 'ambition'; strength = 0.35; ev = -1; }
       if (!motive) continue;
       const occBonus = p.occ === O_SCHOLAR || p.occ === O_PRIEST || p.occ === O_MERCHANT ? 0.25 : 0;
       const score = strength * 0.6 + p.intel * 0.4 + p.ambition * 0.3 + p.status * 0.2 + occBonus + Math.log10(s.pop) * 0.1 + r.next() * 0.35;
@@ -84,17 +92,26 @@ export function searchFoundings(sim: Simulation, count = 3, reroll = 0): Foundin
     }
   }
   cands.sort((a, b) => b.score - a.score);
-  // pick diverse stories: different towns and, where possible, different motives
+  // pick diverse stories: different towns and, where the history allows, three different Great
+  // Works. Which works a world favours varies with the seed, so across many worlds every work
+  // comes up, not just the ones the commonest wounds propose.
+  const workOf = (cd: FoundingCandidate) => greatWorkFor({ creed: founderCreed(w.persons.get(cd.founder)!, cd.motive as Motive) });
+  const bestByWork = new Map<string, FoundingCandidate[]>();
+  for (const cd of cands) { const k = workOf(cd); const l = bestByWork.get(k) ?? []; if (l.length < 8) l.push(cd); bestByWork.set(k, l); }
+  const rank = (k: string) => bestByWork.get(k)![0].score * 0.2 + hash3(w.config.seed, reroll, k.length * 31 + k.charCodeAt(0));
+  const works = [...bestByWork.keys()].sort((a, b) => rank(b) - rank(a));
   const out: FoundingCandidate[] = [];
-  for (const cd of cands) {
-    if (out.length >= count) break;
-    if (out.some((o) => o.sid === cd.sid || (o.motive === cd.motive && out.length < 2 && cands.length > 20))) continue;
+  const take = (cd: FoundingCandidate) => {
+    if (out.length >= count || out.some((o) => o.sid === cd.sid || o.founder === cd.founder)) return false;
     const p = w.persons.get(cd.founder)!;
     cd.companion = companionFor(sim, p);
-    if (cd.companion < 0) continue;
+    if (cd.companion < 0) return false;
     cd.id = out.length + 1 + reroll * 10;
     out.push(cd);
-  }
+    return true;
+  };
+  for (const k of works) for (const cd of bestByWork.get(k)!) if (take(cd)) break;
+  for (const cd of cands) { if (out.length >= count) break; take(cd); }
   return out;
 }
 

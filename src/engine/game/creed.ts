@@ -33,14 +33,16 @@ export function founderCreed(p: Person, motive: Motive): Creed {
   const direction = p.values.map((v) => clamp(v * 1.6, -1, 1));
   const nudge: Partial<Record<Motive, [number, number]>> = {
     famine: [V_INDIV, -0.35], persecution: [V_PIETY, -0.3], learning: [V_INNOV, 0.45], war: [V_MILIT, -0.5],
-    tyranny: [V_HIER, -0.5], plague: [V_INNOV, 0.25], ambition: [V_HIER, 0.3],
+    tyranny: [V_HIER, -0.5], plague: [V_INNOV, 0.25], ambition: [V_HIER, 0.5],
   };
   const n = nudge[motive];
   if (n) direction[n[0]] = clamp(direction[n[0]] + n[1], -1, 1);
+  // one who has learned how power is really held wants it held by the Order, whatever their people believe
+  if (motive === 'ambition') direction[V_HIER] = Math.max(direction[V_HIER], 0.72);
   const order = [...direction.keys()].sort((a, b) => Math.abs(direction[b]) - Math.abs(direction[a]));
   const focus: [number, number] = [order[0], order[1]];
   // a wound with a clear answer gives the first vow; a vaguer grief or ambition lets the founder's values speak first
-  const vows = motive === 'loss' || motive === 'ambition' || motive === 'plague' ? [] as string[] : [MOTIVE_VOW[motive]];
+  const vows = motive === 'loss' || motive === 'ambition' ? [] as string[] : [MOTIVE_VOW[motive]];
   const byValue: [number, number, string][] = [
     [V_HIER, -1, 'voice'], [V_MILIT, -1, 'peace'], [V_INNOV, 1, 'knowledge'], [V_PIETY, -1, 'faith-free'], [V_INDIV, -1, 'no-starving'],
   ];

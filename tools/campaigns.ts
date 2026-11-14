@@ -11,7 +11,7 @@
  *   npx tsx tools/campaigns.ts [seeds=12] [horizon=200] [pre=250] [threads]
  */
 import { cpus } from 'node:os';
-import { writeFileSync, mkdirSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { Worker, isMainThread, parentPort, workerData } from 'node:worker_threads';
 import { fileURLToPath } from 'node:url';
 import { Simulation } from '../src/engine/sim';
@@ -33,11 +33,22 @@ export interface CampaignResult {
 /** The world used for balancing: a small map, so a campaign runs at town-to-people scale. */
 export const BALANCE_WORLD: Partial<WorldConfig> = { width: 64, height: 40, agentBudget: 2000, density: 6, bands: 8 };
 
-export function playSeed(seed: number, pre: number, horizon: number, players: Player[], style: BotStyle = DEFAULT_BOT, world = BALANCE_WORLD): CampaignResult[] {
+/** A seed's generated history, cached in tools/out/ (balance world only) so repeated batches skip it. */
+export function prehistory(seed: number, pre: number, world = BALANCE_WORLD): string {
+  const f = `tools/out/pre-${seed}-${pre}.json`;
+  const cache = world === BALANCE_WORLD;
+  if (cache && existsSync(f)) return readFileSync(f, 'utf8');
   const sim0 = Simulation.create({ ...world, seed });
   sim0.runYears(pre);
   sim0.w.rng = sim0.rng.state();
   const snap = serializeWorld(sim0.w);
+  if (cache) { mkdirSync('tools/out', { recursive: true }); writeFileSync(f, snap); }
+  return snap;
+}
+
+export function playSeed(seed: number, pre: number, horizon: number, players: Player[], style: BotStyle = DEFAULT_BOT, world = BALANCE_WORLD): CampaignResult[] {
+  const snap = prehistory(seed, pre, world);
+  const sim0 = new Simulation(deserializeWorld(snap));
   const stories = foundingStories(sim0);
   const out: CampaignResult[] = [];
   for (const st of stories) {

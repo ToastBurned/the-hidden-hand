@@ -193,7 +193,7 @@ export function leversYear(c: Ctx, r: Rng): void {
     const people = c.residents(s);
     if (lv.kind === 'endow-school') {
       if (s.buildings[BLD_SCHOOL] < 2) s.buildings[BLD_SCHOOL] = Math.min(2, s.buildings[BLD_SCHOOL] + 0.35 * k * str);
-      for (const p of people) { const a = ageOf(w, p); if (a >= 6 && a < 30) p.edu = clamp(p.edu + 0.04 * k * str * (1 - p.edu)); }
+      for (const p of people) { const a = ageOf(w, p); if (a >= 6 && a < 30) p.edu = clamp(p.edu + 0.06 * k * str * (1 - p.edu)); }
       g.practice.good += 0.2 * k;
     } else if (lv.kind === 'preach') {
       for (const p of people) {

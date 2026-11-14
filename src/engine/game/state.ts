@@ -216,6 +216,8 @@ export interface GameState {
     basePop: number;
     /** Our people's share of the world's population at the founding. */
     baseShare: number;
+    /** Our people at the founding: literacy, and the population-weighted say and tolerance of their states (older saves lack it). */
+    base?: { lit: number; part: number; tol: number };
   };
   creed: Creed;
   practice: Practice;
