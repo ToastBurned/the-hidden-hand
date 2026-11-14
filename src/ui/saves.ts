@@ -7,6 +7,7 @@ import { desktop } from '../platform/desktop';
 
 export interface SaveMeta { id: string; name: string; tick: number; savedAt: number; size: number; note?: string }
 
+// Storage name kept from before the rename (The Noosphere) so worlds already saved in this browser stay listed.
 const DB = 'noosphere';
 const META = 'meta';
 const DATA = 'data';
@@ -65,7 +66,7 @@ export function downloadText(filename: string, text: string, type = 'application
   setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
 }
 
-export function pickFile(accept = '.json,.noosphere'): Promise<string | null> {
+export function pickFile(accept = '.json'): Promise<string | null> {
   const d = desktop(); if (d) return d.importFile();
   return new Promise((res) => {
     const i = document.createElement('input');

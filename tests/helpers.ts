@@ -7,6 +7,7 @@ export function moneyStock(w: World): number {
   let m = 0;
   for (const h of w.households.values()) m += h.money;
   for (const p of w.polities.values()) m += p.treasury;
+  for (const s of w.settlements.values()) if (s.bank) m += s.bank.reserves;
   return m;
 }
 export const digest = (w: World) => createHash('sha256').update(serializeWorld(w)).digest('hex');

@@ -19,7 +19,7 @@ export function SavesDialog({ onClose, onToast }: { onClose: () => void; onToast
   const exportNow = async () => {
     setBusy(true);
     const s = await sim.save();
-    downloadText(`${s.name.replace(/[^\w-]+/g, '_')}-year${Math.floor(s.tick / 12)}.noosphere.json`, s.data);
+    downloadText(`${s.name.replace(/[^\w-]+/g, '_')}-year${Math.floor(s.tick / 12)}.hiddenhand.json`, s.data);
     setBusy(false);
   };
   const importFile = async () => {
@@ -27,7 +27,7 @@ export function SavesDialog({ onClose, onToast }: { onClose: () => void; onToast
     if (!text) return;
     try {
       const head = JSON.parse(text);
-      if (!head.version || !head.tiles) throw new Error('This file is not a Noosphere world.');
+      if (!head.version || !head.tiles) throw new Error('This file is not a saved world.');
       sim.load(text);
       onToast('World loaded from file');
       onClose();
@@ -40,7 +40,7 @@ export function SavesDialog({ onClose, onToast }: { onClose: () => void; onToast
     onToast(`Loaded “${m.name}”`);
     onClose();
   };
-  const exportSave = async (m: SaveMeta) => { const d = await getSave(m.id); if (d) downloadText(`${m.name.replace(/[^\w-]+/g, '_')}-year${Math.floor(m.tick / 12)}.noosphere.json`, d); };
+  const exportSave = async (m: SaveMeta) => { const d = await getSave(m.id); if (d) downloadText(`${m.name.replace(/[^\w-]+/g, '_')}-year${Math.floor(m.tick / 12)}.hiddenhand.json`, d); };
   return (
     <Modal title="Library" onClose={onClose} footer={<>
       <button onClick={importFile}>Import from file…</button>
