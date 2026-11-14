@@ -435,3 +435,7 @@
 .hh .tut-min { position: fixed; left: 80px; bottom: 58px; z-index: 30; display: flex; gap: 6px; align-items: center; }
 @media (prefers-reduced-motion: reduce) { .hh .tut { animation: none; } }
 @keyframes hh-tut-rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+
+/* sound settings */
+.hh input.hh-range { width: 150px; accent-color: var(--lamp, #e0b062); vertical-align: middle; }
+.hh input.hh-range:disabled { opacity: 0.4; }

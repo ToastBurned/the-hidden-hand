@@ -91,7 +91,20 @@ export const ARTICLES: CodexEntry[] = [
       '- **Esc**: close what is open; with nothing open, the menu.',
       '- **F1** or **?**: the encyclopaedia, from anywhere. Inside it, **/** jumps to the search box and **Backspace** goes back.',
     ],
-    see: ['guide:screens', 'guide:time'], tags: ['keyboard', 'shortcuts', 'hotkeys', 'controls'],
+    see: ['guide:screens', 'guide:time', 'guide:sound'], tags: ['keyboard', 'shortcuts', 'hotkeys', 'controls'],
+  }),
+  guide({
+    id: 'guide:sound', title: 'Sound and music', sub: 'Ambience, event bells and a soundtrack that darkens when you are hunted.',
+    body: [
+      'Everything you hear is made by the game as it plays; there are no recordings. Sound starts the first time you click or press a key, because browsers do not allow a page to play sound before that.',
+      '- **Ambience** follows the seasons: wind all year, strongest in winter, a hearth crackling through the cold months, birds in spring, crickets on summer nights and spells of rain in autumn.',
+      '- **Music** is a slow drone with chords and scattered bells. It changes with the danger to the Order: as [[order:secrecy|secrecy]] is lost or an [[shadow:inquiries|inquiry]] opens, it turns darker and lower, and a faint heartbeat comes in when an investigator is close.',
+      '- **Effects** mark what matters: two deep tolls when the [[order:conclave|conclave]] sits, bells for an operation that succeeds, a heavy door for an [[shadow:purges|arrest]], a single low bell for a death, rising bells when the [[guide:winning|Great Work]] moves on.',
+      '## Settings',
+      'Open **Settings** from the start screen or the menu (Esc). There are separate volumes for master, music, ambience and effects, a **Mute** switch, and **Sound in the background** to keep playing while the window is minimised. The speaker button in the top bar mutes and unmutes at once. Your choices are kept between sessions; in the desktop app they are saved with your other preferences.',
+      'When the game is paused, the music and ambience drop to about half volume. Minimising the window or switching to another tab silences the game, unless you turned on sound in the background.',
+    ],
+    see: ['guide:keys', 'guide:time'], tags: ['audio', 'sound', 'music', 'volume', 'mute', 'soundtrack', 'ambience', 'settings', 'quiet'],
   }),
   guide({
     id: 'guide:winning', title: 'Winning and losing', sub: 'Hold the Great Work long enough to last.',

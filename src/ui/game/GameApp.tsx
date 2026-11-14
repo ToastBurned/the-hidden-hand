@@ -16,6 +16,7 @@ import { SettingsDialog } from './SettingsDialog';
 import { CampaignSetup, type CampaignStart } from './CampaignSetup';
 import { useSettings } from './settings';
 import { CodexProvider, useCodex } from './codex/Codex';
+import { useGameAudio } from '../audio';
 
 /** The tutorial's world: small, fixed, and predictable enough to teach from. */
 export const TUTORIAL_WORLD = { setup: { size: 'small' as const, temperament: 'temperate' as const, seed: 4127, years: 150 }, name: 'The Lantern Coast' };
@@ -29,6 +30,7 @@ export function GameApp() {
   const [savesVersion, setSavesVersion] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const st = useSim();
+  useGameAudio(screen.id);
   // a loaded campaign save opens straight into play
   useEffect(() => { if (screen.id === 'loading' && st.ready && st.game) setScreen({ id: 'play', tutorial: false }); }, [screen.id, st.ready, st.game]);
   const begin = async (start: CampaignStart, tutorial: boolean) => {

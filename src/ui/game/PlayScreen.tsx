@@ -27,7 +27,7 @@ import { AssignDialog, type AssignIntent } from './dialogs/AssignDialog';
 import { ConclaveDialog } from './dialogs/ConclaveDialog';
 import { EndingScreen } from './dialogs/EndingScreen';
 import { PauseMenu } from './dialogs/PauseMenu';
-import { useSettings } from './settings';
+import { setSettings, useSettings } from './settings';
 import { useCodex } from './codex/Codex';
 
 export type Tab = 'map' | 'order' | 'ops' | 'lodges' | 'crafts' | 'shadow' | 'work' | 'chronicle';
@@ -152,6 +152,7 @@ export function PlayScreen({ onTitle, tutorial }: { onTitle: () => void; tutoria
           ))}
         </div>
         <Resources g={g} />
+        <SoundButton />
         <CodexButton />
         <button className="conclave-btn" onClick={() => act({ type: 'conclave-call' })} disabled={!!g.conclave} title={`Call the conclave now. Next one: ${dateOf(g.nextConclave)}`}><Icon name="candle" size={16} /> Conclave</button>
       </header>
@@ -206,6 +207,11 @@ export function PlayScreen({ onTitle, tutorial }: { onTitle: () => void; tutoria
       {toast && <div className="hh-toast" role="status">{toast}</div>}
     </div>
   );
+}
+
+function SoundButton() {
+  const muted = useSettings().audio.muted;
+  return <button className="ghost" onClick={() => setSettings((x) => ({ ...x, audio: { ...x.audio, muted: !muted } }))} title={muted ? 'Sound is off. Click to turn it on (volumes in Settings).' : 'Sound is on. Click to mute (volumes in Settings).'} aria-label={muted ? 'Unmute' : 'Mute'} aria-pressed={muted}><Icon name={muted ? 'muted' : 'sound'} size={18} /></button>;
 }
 
 function CodexButton() {

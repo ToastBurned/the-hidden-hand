@@ -20,14 +20,29 @@ export interface GameSettings {
   tutorialDone: boolean;
   /** Orders the player has led, newest first (for Chronicles). */
   chronicles: { name: string; world: string; founded: number; ended: number; ending: string }[];
+  /** Sound: volumes 0..1 (see ui/audio). */
+  audio: AudioSettings;
 }
+export interface AudioSettings {
+  master: number;
+  music: number;
+  ambience: number;
+  effects: number;
+  muted: boolean;
+  /** Keep playing while the window is minimised or in a background tab. */
+  background: boolean;
+}
+export const AUDIO_DEFAULTS: AudioSettings = { master: 0.8, music: 0.55, ambience: 0.6, effects: 0.75, muted: false, background: false };
 const KEY = 'hiddenhand.settings.v1';
-const DEFAULTS: GameSettings = { interrupts: 'important', textScale: 1, reducedMotion: false, historyYears: 200, hints: true, tutorialDone: false, chronicles: [] };
+const DEFAULTS: GameSettings = { interrupts: 'important', textScale: 1, reducedMotion: false, historyYears: 200, hints: true, tutorialDone: false, chronicles: [], audio: AUDIO_DEFAULTS };
 
 function load(): GameSettings {
   try {
     const raw = readPref(KEY);
-    if (raw) return { ...DEFAULTS, ...(JSON.parse(raw) as Partial<GameSettings>) };
+    if (raw) {
+      const p = JSON.parse(raw) as Partial<GameSettings>;
+      return { ...DEFAULTS, ...p, audio: { ...AUDIO_DEFAULTS, ...(p.audio ?? {}) } };
+    }
   } catch { /* storage unavailable */ }
   const reduce = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
   return { ...DEFAULTS, reducedMotion: reduce };
