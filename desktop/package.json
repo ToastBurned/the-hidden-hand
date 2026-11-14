@@ -1,11 +1,11 @@
 {
-  "name": "noosphere-desktop",
-  "productName": "The Noosphere",
+  "name": "hidden-hand-desktop",
+  "productName": "The Hidden Hand",
   "version": "0.1.0",
   "private": true,
-  "description": "The Noosphere civilisation simulation as a Windows desktop app.",
-  "author": "The Noosphere",
-  "repository": "github:ToastBurned/noosphere",
+  "description": "The Hidden Hand as a Windows desktop app.",
+  "author": "The Hidden Hand",
+  "repository": "github:ToastBurned/the-hidden-hand",
   "main": "main.cjs",
   "scripts": {
     "prepare-app": "node scripts/prepare-app.cjs",

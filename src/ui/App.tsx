@@ -20,20 +20,22 @@ import { TimelineBar } from './components/Timeline';
 import { Onboarding } from './components/Onboarding';
 import { useQuery } from './hooks';
 import { getPrefs } from './prefs';
+import { setDevMode, useDevMode } from './devmode';
 import type { PastSnapshot } from './map/MapView';
 
 export type Selection =
   | { kind: 'settlement' | 'polity' | 'person' | 'event' | 'culture' | 'religion' | 'tile' | 'war'; id: number };
 
 type Tab = 'story' | 'world' | 'chronicle' | 'stats' | 'societies' | 'people' | 'experiments';
-const TABS: { id: Tab; label: string; key: string }[] = [
+/** Tabs marked `dev` are simulation tools, shown only in developer mode (see devmode.ts). */
+const ALL_TABS: { id: Tab; label: string; key: string; dev?: boolean }[] = [
   { id: 'story', label: 'Story', key: '1' },
   { id: 'world', label: 'World', key: '2' },
   { id: 'chronicle', label: 'Chronicle', key: '3' },
   { id: 'stats', label: 'Statistics', key: '4' },
   { id: 'societies', label: 'Societies', key: '5' },
   { id: 'people', label: 'People', key: '6' },
-  { id: 'experiments', label: 'Experiments', key: '7' },
+  { id: 'experiments', label: 'Experiments', key: '7', dev: true },
 ];
 export const SPEEDS = [
   { mps: 2, label: '1×', title: '2 months per second' },
@@ -45,6 +47,8 @@ export const SPEEDS = [
 
 export function App() {
   const st = useSim();
+  const dev = useDevMode();
+  const TABS = dev ? ALL_TABS : ALL_TABS.filter((t) => !t.dev);
   const [tab, setTab] = useState<Tab>('story');
   const [city, setCity] = useState<number | null>(null);
   const [family, setFamily] = useState<number | null>(null);
@@ -70,6 +74,9 @@ export function App() {
   const sel = stack.length ? stack[stack.length - 1] : null;
 
   useEffect(() => { sim.speed(SPEEDS[speed].mps); }, [speed]);
+  useEffect(() => {
+    if (!dev) { if (tab === 'experiments') setTab('story'); if (dialog === 'intervene') setDialog(null); }
+  }, [dev]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { setStack([]); setCity(null); setPast(null); setFamily(null); }, [st.version]);
   useEffect(() => { if (st.ready && !getPrefs().toured) setTour(true); }, [st.ready]);
   useEffect(() => { if (st.running) setPast(null); }, [st.running]);
@@ -100,6 +107,7 @@ export function App() {
       else if (e.key === '-') setSpeed((s) => Math.max(0, s - 1));
       else if (e.key === 'Escape') { if (dialog) setDialog(null); else if (family !== null) setFamily(null); else if (city !== null) setCity(null); else if (past !== null) setPast(null); else back(); }
       else if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); quickSave(); }
+      else if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'D' || e.key === 'd')) { e.preventDefault(); setDevMode(!dev); setToast(dev ? 'Developer tools hidden' : 'Developer tools shown'); }
       else { const tb = TABS.find((x) => x.key === e.key); if (tb && !e.ctrlKey && !e.metaKey && !e.altKey) setTab(tb.id); }
     };
     window.addEventListener('keydown', onKey);
@@ -111,9 +119,10 @@ export function App() {
   return (
     <div className="app">
       <header className="topbar">
-        <div className="brand" title="The Noosphere">
-          <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" strokeWidth="1.6" /><ellipse cx="12" cy="12" rx="9" ry="3.6" fill="none" stroke="currentColor" strokeWidth="1.2" /><ellipse cx="12" cy="12" rx="3.6" ry="9" fill="none" stroke="currentColor" strokeWidth="1.2" /></svg>
-          <span>Noosphere</span>
+        <div className="brand" title="The Hidden Hand">
+          <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden><path d="M2.5 12c2.6-4.2 5.8-6.3 9.5-6.3s6.9 2.1 9.5 6.3c-2.6 4.2-5.8 6.3-9.5 6.3S5.1 16.2 2.5 12z" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" /><circle cx="12" cy="12" r="3.2" fill="currentColor" /></svg>
+          <span>The Hidden Hand</span>
+          {dev && <span className="dev-badge" title="Developer mode (Ctrl+Shift+D to hide)">dev</span>}
         </div>
         <div className="world-name" title={f ? `Seed ${f.seed}` : ''}>{f?.name ?? '…'}</div>
         <div className="date">{f ? f.date : 'Generating…'}</div>
@@ -136,7 +145,7 @@ export function App() {
           {f && f.wars.length > 0 && <span className="war" title="Active wars"><b>{f.wars.length}</b> at war</span>}
         </div>
         <div className="actions">
-          <button onClick={() => setDialog('intervene')} disabled={!st.ready} title="Intervene in this world">Intervene</button>
+          {dev && <button onClick={() => setDialog('intervene')} disabled={!st.ready} title="Developer tool: intervene directly in this world">Intervene</button>}
           <button onClick={quickSave} disabled={!st.ready} title="Save to the library (Ctrl+S)">Save</button>
           <button onClick={() => setDialog('saves')} title="Saved worlds, import and export">Library</button>
           <button onClick={() => setDialog('new')} title="Create a new world">New world</button>
@@ -185,7 +194,7 @@ export function App() {
           {st.ready && tab === 'stats' && <StatsView />}
           {st.ready && tab === 'societies' && <Societies onOpen={open} />}
           {st.ready && tab === 'people' && <PeopleView onOpen={open} />}
-          {tab === 'experiments' && <Experiments />}
+          {dev && tab === 'experiments' && <Experiments />}
         </section>
         {sel && (
           <aside className="inspector">
@@ -195,8 +204,8 @@ export function App() {
       </main>
       {dialog === 'new' && <NewWorldDialog onClose={() => setDialog(null)} />}
       {dialog === 'saves' && <SavesDialog onClose={() => setDialog(null)} onToast={setToast} />}
-      {dialog === 'intervene' && <InterveneDialog onClose={() => setDialog(null)} onToast={setToast} />}
-      {dialog === 'help' && <HelpDialog onClose={() => setDialog(null)} onTour={() => { setDialog(null); setTour(true); }} />}
+      {dev && dialog === 'intervene' && <InterveneDialog onClose={() => setDialog(null)} onToast={setToast} />}
+      {dialog === 'help' && <HelpDialog dev={dev} onClose={() => setDialog(null)} onTour={() => { setDialog(null); setTour(true); }} />}
       {family !== null && <FamilyTreeDialog id={family} onClose={() => setFamily(null)} onOpen={open} />}
       {st.ready && <Alerts onOpen={open} onLocate={locate} />}
       {tour && st.ready && <Onboarding onClose={() => setTour(false)} onTab={(t) => setTab(t as Tab)} />}

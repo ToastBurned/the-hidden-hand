@@ -59,7 +59,7 @@ export function serializeWorld(w: World): string {
 
 export function deserializeWorld(s: string): World {
   const w = JSON.parse(s, reviver) as World;
-  if (!w.version) throw new Error('Not a Noosphere world file');
+  if (!w.version) throw new Error('Not a saved world file');
   // worlds saved before representative agents: everyone is an individual
   let pop = 0;
   for (const p of w.persons.values()) { if (!p.n) p.n = 1; pop += p.n; }

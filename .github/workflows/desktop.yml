@@ -32,12 +32,12 @@ jobs:
       - name: Test the packaged app (start, save, load, restart)
         working-directory: desktop
         env:
-          NOOSPHERE_EXE: ${{ github.workspace }}\desktop\release\win-unpacked\The Noosphere.exe
+          HIDDENHAND_EXE: ${{ github.workspace }}\desktop\release\win-unpacked\The Hidden Hand.exe
         run: npm test
       - uses: actions/upload-artifact@v4
         with:
-          name: Noosphere-Windows
+          name: HiddenHand-Windows
           path: |
-            desktop/release/Noosphere-Setup-*.exe
-            desktop/release/Noosphere-*-portable.exe
+            desktop/release/HiddenHand-Setup-*.exe
+            desktop/release/HiddenHand-*-portable.exe
           if-no-files-found: error
