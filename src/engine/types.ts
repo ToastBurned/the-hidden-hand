@@ -193,6 +193,8 @@ export interface Settlement {
   tradeVol: number; // smoothed monthly trade value
   wage: number; // public wage last paid
   bank?: Bank;
+  /** This year's ranking of farm tiles, best first (see economy.ts farmTiles). */
+  farmPlan?: { key: number; tiles: number[]; q: number[] };
   lowFoodYears: number;
   foodProd: number; // smoothed monthly food production
   need: number[]; // materials needed by the current construction project
@@ -474,6 +476,8 @@ export interface World {
   population: number;
   /** The Hidden Hand game layer's state, when a campaign is running on this world. */
   game?: GameState;
+  /** Roads and seafaring that routes are computed against until the next five-yearly reset. */
+  travelBasis?: { roads: Uint8Array; sea: Map<number, [number, number]> };
 }
 
 export interface YearAccumulator {

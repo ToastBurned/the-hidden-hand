@@ -36,6 +36,20 @@ describe('determinism and persistence', () => {
     expect(digest(b.w)).toBe(digest(a.w));
   });
 
+  it('a world saved partway through a year continues identically', () => {
+    const a = Simulation.create({ seed: 5 });
+    // by year 122 roads, fleets and field rankings have all changed since the last reset
+    a.runYears(122);
+    for (let i = 0; i < 7; i++) a.step();
+    a.w.rng = a.rng.state();
+    const b = new Simulation(deserializeWorld(serializeWorld(a.w)));
+    a.runYears(2);
+    b.runYears(2);
+    a.w.rng = a.rng.state();
+    b.w.rng = b.rng.state();
+    expect(digest(b.w)).toBe(digest(a.w));
+  });
+
   it('rejects files that are not worlds', () => {
     expect(() => deserializeWorld('{"hello":1}')).toThrow();
   });

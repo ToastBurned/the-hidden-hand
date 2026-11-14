@@ -79,4 +79,3 @@ Run it with `npx tsx tools/campaigns.ts [seeds] [horizon] [prehistory] [threads]
 - Rival hands, schisms, successive Orders, the archive and difficulty levels are after the first milestone. State holds one Order; turning `order` into a list is the change needed later.
 - Arranging marriages, chartering trade ventures and keeping the archive are not yet levers.
 - Balancing used small worlds for speed; full-size worlds should be re-checked once the interface can play them.
-- The simulation's travel-cost cache is not saved, so a world loaded mid-way through its five-year cache period can diverge slightly from one never saved. This is an engine property, reported to the engine thread.

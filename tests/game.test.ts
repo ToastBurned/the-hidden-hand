@@ -64,10 +64,9 @@ describe('the Hidden Hand game layer', () => {
   }, 120000);
 
   it('is deterministic and survives save and load mid-campaign', () => {
-    // saved just after the engine's five-yearly reset of its travel-cost cache (history of 150
-    // years + 15 = year 165), because that cache is not part of the save file
-    const a = campaign(15);
-    const b = campaign(15);
+    // saved mid-way through the engine's five-yearly travel period, which the save file now carries
+    const a = campaign(12);
+    const b = campaign(12);
     expect(digest(a.w)).toBe(digest(b.w));
     const c = new Simulation(deserializeWorld(serializeWorld(a.w)));
     for (let m = 0; m < 24; m++) { botTurn(a); stepCampaign(a); botTurn(c); stepCampaign(c); }
