@@ -19,6 +19,7 @@ import { TECH_BY_KEY } from '../techs';
 import type { Person, Polity, Settlement } from '../types';
 import { newRel } from './settlements';
 import { push } from '../pressures';
+import { rosterOf, touchRoster } from '../roster';
 
 export function polityPeople(c: Ctx, pol: Polity): Person[] {
   const out: Person[] = [];
@@ -128,6 +129,8 @@ export function succession(c: Ctx, pol: Polity, causeEvent = -1): void {
           if (i >= 0) cap.households.splice(i, 1);
           seat.households.push(h.id);
           h.sid = seat.id;
+          touchRoster(w, cap.id);
+          touchRoster(w, seat.id);
           for (const id of h.members) { const m = w.persons.get(id); if (m) m.sid = seat.id; }
         }
         rebel.leader = rival.id;
@@ -423,9 +426,13 @@ export function unrestMonth(c: Ctx, s: Settlement): void {
   unhappy /= sampleN; foreignCulture /= sampleN; foreignFaith /= sampleN; egal /= sampleN; persecuted /= sampleN;
   // inequality: share of wealth held by the richest fifth of households
   const ws: { v: number; z: number }[] = [];
-  for (const hid of s.households) {
-    const h = w.households.get(hid);
-    if (h) { const z = Math.max(1, householdSize(w, h)); ws.push({ v: (h.money + h.land * 40 + h.goods[0]) / z, z }); }
+  const ro = rosterOf(w, s);
+  for (let k = 0; k < ro.hhs.length; k++) {
+    const h = ro.hhs[k];
+    let hz = 0;
+    for (let i = ro.start[k], e = ro.start[k + 1]; i < e; i++) hz += ro.people[i].n;
+    const z = Math.max(1, hz);
+    ws.push({ v: (h.money + h.land * 40 + h.goods[0]) / z, z });
   }
   ws.sort((a, b) => b.v - a.v);
   let all = 0;

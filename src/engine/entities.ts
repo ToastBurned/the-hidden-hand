@@ -4,6 +4,7 @@ import { cultureName, deityName, familyName, personName, placeName, driftPhon } 
 import { logEvent } from './history';
 import { NTECH } from './techs';
 import type { Culture, DeadPerson, GovParams, Household, Institutions, Person, Polity, Religion, Settlement } from './types';
+import { touchRoster } from './roster';
 
 // ------------------------------------------------------------------ cultures & religions
 
@@ -169,7 +170,7 @@ export function createHousehold(c: Ctx, sid: number): Household {
   };
   c.w.households.set(id, h);
   const s = c.w.settlements.get(sid);
-  if (s) s.households.push(id);
+  if (s) { s.households.push(id); touchRoster(c.w, sid); }
   return h;
 }
 
@@ -178,12 +179,12 @@ export function addToHousehold(c: Ctx, p: Person, h: Household): void {
   if (old && old !== h) removeFromHousehold(c, p, old, false, h);
   p.hh = h.id;
   p.sid = h.sid;
-  if (!h.members.includes(p.id)) h.members.push(p.id);
+  if (!h.members.includes(p.id)) { h.members.push(p.id); touchRoster(c.w, h.sid); }
 }
 
 function removeFromHousehold(c: Ctx, p: Person, h: Household, death: boolean, heir?: Household): void {
   const i = h.members.indexOf(p.id);
-  if (i >= 0) h.members.splice(i, 1);
+  if (i >= 0) { h.members.splice(i, 1); touchRoster(c.w, h.sid); }
   if (h.members.length === 0) {
     // the last member moving out takes the household's property along
     if (heir && heir !== h) mergeHouseholdInto(c, h, heir);
@@ -230,6 +231,8 @@ export function mergeHouseholdInto(c: Ctx, from: Household, to: Household): void
   }
   for (const id of from.members) { const m = w.persons.get(id); if (m) { m.hh = to.id; m.sid = to.sid; if (!to.members.includes(id)) to.members.push(id); } }
   from.members = [];
+  touchRoster(w, to.sid);
+  touchRoster(w, from.sid);
   w.households.delete(from.id);
   const s = w.settlements.get(from.sid);
   if (s) { const i = s.households.indexOf(from.id); if (i >= 0) s.households.splice(i, 1); }
@@ -296,6 +299,7 @@ export function dissolveHousehold(c: Ctx, h: Household, deceased: Person | null)
   h.goods.fill(0);
   h.land = 0;
   w.households.delete(h.id);
+  touchRoster(w, h.sid);
   if (s) {
     const i = s.households.indexOf(h.id);
     if (i >= 0) s.households.splice(i, 1);
@@ -380,6 +384,7 @@ export function killPerson(c: Ctx, p: Person, cause: number, causeEvent = -1): v
     const spouse = w.persons.get(p.spouse);
     if (spouse && spouse.spouse === p.id) spouse.spouse = -1;
     w.persons.delete(p.id);
+    touchRoster(w, p.sid);
     if (hh) removeFromHousehold(c, p, hh, true);
     return;
   }
@@ -406,6 +411,7 @@ export function killPerson(c: Ctx, p: Person, cause: number, causeEvent = -1): v
   const keep = p.notable || !!p.title || p.deeds.length > 0 || kinOfNotable(p.mother) || kinOfNotable(p.father) || kinOfNotable(p.spouse) || w.dead.size < 20000;
   if (!keep) {
     w.persons.delete(p.id);
+    touchRoster(w, p.sid);
     if (hh) removeFromHousehold(c, p, hh, true);
     return;
   }
@@ -446,6 +452,7 @@ export function killPerson(c: Ctx, p: Person, cause: number, causeEvent = -1): v
     });
   }
   w.persons.delete(p.id);
+  touchRoster(w, p.sid);
   // polity leadership vacancy is detected by governance
   if (hh) removeFromHousehold(c, p, hh, true);
 }
@@ -530,7 +537,7 @@ function rawSplit(c: Ctx, p: Person, k: number, individual: boolean): Person {
   };
   w.persons.set(id, q);
   const h = w.households.get(p.hh);
-  if (h) h.members.push(id);
+  if (h) { h.members.push(id); touchRoster(w, h.sid); }
   return q;
 }
 
@@ -567,6 +574,7 @@ export function splitHousehold(c: Ctx, h: Household, frac: number, include = -1)
     if (qs) moved.push(qs);
   }
   let out = 0;
+  if (moved.length) touchRoster(w, h.sid);
   for (const p of moved) {
     const i = h.members.indexOf(p.id);
     if (i >= 0) h.members.splice(i, 1);
@@ -586,6 +594,7 @@ export function splitHousehold(c: Ctx, h: Household, frac: number, include = -1)
   if (!nh.members.length) {
     // nobody left with it: undo
     w.households.delete(nh.id);
+    touchRoster(w, h.sid);
     const s = w.settlements.get(h.sid);
     if (s) { const i = s.households.indexOf(nh.id); if (i >= 0) s.households.splice(i, 1); }
     return h;

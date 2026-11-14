@@ -19,6 +19,7 @@ import { headcount, householdSize } from '../entities';
 import { tariff } from './law';
 import { cropFactor, wildSeason, type ClimateField } from './environment';
 import type { Household, Person, Polity, Settlement } from '../types';
+import { rosterOf } from '../roster';
 import { planTrade, type Order } from './trade';
 
 export function foodNeed(age: number): number {
@@ -418,9 +419,10 @@ export function householdOrders(c: Ctx, sw: SettlementWork): void {
   const month = w.tick % 12;
   const coldK = cold(c, s);
   const monthsToHarvest = month <= 7 ? 8 - month : 20 - month;
-  for (const hid of s.households) {
-    const h = w.households.get(hid);
-    if (!h || !h.members.length) continue;
+  const { people, hhs, start } = rosterOf(w, s);
+  for (let k = 0; k < hhs.length; k++) {
+    const h = hhs[k];
+    if (!h.members.length) continue;
     let F = 0;
     let consc = 0;
     let famine = 0;
@@ -432,15 +434,14 @@ export function householdOrders(c: Ctx, sw: SettlementWork): void {
     let piety = 0;
     let size = 0;
     let artisans = 0;
-    for (const id of h.members) {
-      const m = w.persons.get(id);
-      if (!m) continue;
+    for (let i = start[k], e = start[k + 1]; i < e; i++) {
+      const m = people[i];
       const age = ageOf(w, m);
       F += foodNeed(age) * m.n;
       consc += m.consc * m.n;
       piety += m.values[V_PIETY] * m.n;
       size += m.n;
-      for (const mm of m.mem) if (mm.k === 1 && w.tick - mm.t < 240) famine = 1;
+      if (!famine) for (const mm of m.mem) if (mm.k === 1 && w.tick - mm.t < 240) { famine = 1; break; }
       if (m.occ === O_FARMER) farmer = true;
       if (m.occ === O_ARTISAN) { artisan = true; artisans += m.n; }
       if (m.occ === O_MINER) miner = true;
@@ -682,19 +683,13 @@ export function consume(c: Ctx, sw: SettlementWork): void {
   const pol = sw.pol;
   const people = sw.people;
   // per household need
-  const hhs: Household[] = [];
+  const { people: res, hhs, start } = rosterOf(w, s);
   const needs: number[] = [];
   const sizes: number[] = [];
-  for (const hid of s.households) {
-    const h = w.households.get(hid);
-    if (!h) continue;
+  for (let k = 0; k < hhs.length; k++) {
     let F = 0;
     let z = 0;
-    for (const id of h.members) {
-      const m = w.persons.get(id);
-      if (m) { F += foodNeed(ageOf(w, m)) * m.n; z += m.n; }
-    }
-    hhs.push(h);
+    for (let i = start[k], e = start[k + 1]; i < e; i++) { const m = res[i]; F += foodNeed(ageOf(w, m)) * m.n; z += m.n; }
     needs.push(F);
     sizes.push(z);
   }
@@ -764,9 +759,8 @@ export function consume(c: Ctx, sw: SettlementWork): void {
     const luxPer = h.goods[G_LUX] / Math.max(1, sizes[k]);
     const luxUse = h.goods[G_LUX] * 0.15;
     h.goods[G_LUX] -= luxUse;
-    for (const id of h.members) {
-      const m = w.persons.get(id);
-      if (!m) continue;
+    for (let i = start[k], e = start[k + 1]; i < e; i++) {
+      const m = res[i];
       const age = ageOf(w, m);
       const vuln = age < 5 || age > 60 ? 1.35 : 1;
       const cap = age < 45 ? 1 : Math.max(0.35, 1 - (age - 45) * 0.012);

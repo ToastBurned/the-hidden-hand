@@ -14,6 +14,7 @@ import { NV, NOCC } from '../constants';
 import { ageOf, type Ctx } from '../context';
 import { householdSize, isProtected, mergeHouseholdInto } from '../entities';
 import type { Household, Person, Settlement, World } from '../types';
+import { touchRoster } from '../roster';
 
 /** People per ordinary agent implied by the current population and the agent budget. */
 export function agentScale(w: World): number {
@@ -49,7 +50,8 @@ export function mergeAgents(w: World, a: Person, b: Person): void {
   a.n = t;
   w.persons.delete(b.id);
   const h = w.households.get(b.hh);
-  if (h) { const i = h.members.indexOf(b.id); if (i >= 0) h.members.splice(i, 1); }
+  if (h) { const i = h.members.indexOf(b.id); if (i >= 0) h.members.splice(i, 1); touchRoster(w, h.sid); }
+  touchRoster(w, b.sid);
 }
 
 function ageBand(age: number, coarse: number): number {

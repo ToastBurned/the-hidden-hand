@@ -14,6 +14,7 @@ import { push } from '../pressures';
 import { siteScore } from '../gen/terrain';
 import { invalidateFarmCache } from './economy';
 import type { Household, Person, Settlement } from '../types';
+import { touchRoster } from '../roster';
 
 // ------------------------------------------------------------------ territory
 
@@ -381,6 +382,8 @@ export function moveHousehold(c: Ctx, h: Household, from: Settlement, to: Settle
   if (i >= 0) from.households.splice(i, 1);
   to.households.push(h.id);
   h.sid = to.id;
+  touchRoster(w, from.id);
+  touchRoster(w, to.id);
   // land cannot be carried; it returns to the community
   h.land = 0;
   h.cargo = null;

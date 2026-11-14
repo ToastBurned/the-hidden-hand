@@ -31,6 +31,7 @@ import { navalYear } from './systems/naval';
 import { bankMonth, bankingYear, stateDebtYear } from './systems/finance';
 import { lawsYear } from './systems/law';
 import { householdSize } from './entities';
+import { roster } from './roster';
 
 export const ENGINE_VERSION = 1;
 
@@ -157,17 +158,7 @@ export class Simulation implements Ctx {
   invalidateFx(sid: number) { this.fxCache.delete(sid); }
 
   residents(s: Settlement): Person[] {
-    const out: Person[] = [];
-    const w = this.w;
-    for (const hid of s.households) {
-      const h = w.households.get(hid);
-      if (!h) continue;
-      for (const id of h.members) {
-        const p = w.persons.get(id);
-        if (p) out.push(p);
-      }
-    }
-    return out;
+    return roster(this.w, s).slice();
   }
 
   settlementAt(tile: number): number { return this.w.tiles.owner[tile]; }
@@ -298,10 +289,7 @@ export class Simulation implements Ctx {
     let total = 0;
     for (const s of alive) {
       let n = 0;
-      for (const hid of s.households) {
-        const h = w.households.get(hid);
-        if (h) for (const id of h.members) n += w.persons.get(id)?.n ?? 0;
-      }
+      for (const p of roster(w, s)) n += p.n;
       s.pop = n;
       total += n;
     }
