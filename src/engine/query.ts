@@ -190,7 +190,7 @@ export function settlementDetail(sim: Simulation, id: number) {
     foodRatio: s.foodRatio, hungerShare: s.hungerShare, unrest: s.unrest, cohesion: s.cohesion, prosperity: s.prosperity,
     farmland, forest, gameShare: gameCap ? game / gameCap : 0, soil: fertBase ? fert / fertBase : 1, territory: s.territory.length,
     techs: s.techs.map((v, i) => (v ? TECHS[i].name : '')).filter(Boolean),
-    research: s.techProgress.map((v, i) => ({ name: TECHS[i].name, p: v / TECHS[i].cost })).filter((r) => r.p > 0.05 && !s.techs[TECHS.findIndex((t) => t.name === r.name)]).sort((a, b) => b.p - a.p).slice(0, 5),
+    research: s.techProgress.map((v, i) => ({ name: TECHS[i].name, p: v / TECHS[i].cost, known: s.techs[i] })).filter((r) => r.p > 0.05 && !r.known).map(({ name, p }) => ({ name, p })).sort((a, b) => b.p - a.p).slice(0, 5),
     effects: { farmYield: fx.farmYield, farmArea: fx.farmArea, toolQ: fx.toolQ, weapon: fx.weapon, transport: fx.transport, disease: fx.disease, research: fx.research },
     history: s.history.slice(-300),
     notable,
@@ -385,11 +385,17 @@ export function overview(sim: Simulation) {
     polities: [...w.polities.values()].map((p) => ({ id: p.id, name: p.name, alive: p.alive, founded: p.founded, ended: p.ended, hue: p.color, label: p.govLabel, peak: Math.max(0, ...p.history.map((h) => h.pop)) })),
     wars: [...w.wars.values()].map((x) => warSummary(sim, x.id)),
     diseases: [...w.diseases.values()].map((d) => ({ ...d })),
-    techs: TECHS.map((T) => {
-      const first = w.events.find((e) => e.type === 'invention' && e.data?.tech === T.id);
-      const knownBy = [...w.settlements.values()].filter((s) => s.alive && s.techs[T.id]).length;
-      return { id: T.id, name: T.name, desc: T.desc, prereq: T.prereq, first: first ? { t: first.t, text: first.text, id: first.id } : null, knownBy };
-    }),
+    techs: (() => {
+      // one pass over events and settlements (the tree has ~1,000 techs)
+      const firstBy = new Map<number, (typeof w.events)[number]>();
+      for (const e of w.events) if (e.type === 'invention' && typeof e.data?.tech === 'number' && !firstBy.has(e.data.tech)) firstBy.set(e.data.tech, e);
+      const knownBy = new Array(TECHS.length).fill(0);
+      for (const s of w.settlements.values()) if (s.alive) s.techs.forEach((v, i) => { if (v) knownBy[i]++; });
+      return TECHS.map((T) => {
+        const first = firstBy.get(T.id);
+        return { id: T.id, name: T.name, desc: T.desc, prereq: T.prereq, era: T.era, domain: T.domain, first: first ? { t: first.t, text: first.text, id: first.id } : null, knownBy: knownBy[T.id] };
+      });
+    })(),
     settlements: [...w.settlements.values()].map((s) => ({ id: s.id, name: s.name, alive: s.alive, founded: s.founded, abandoned: s.abandoned, peak: Math.max(0, ...s.history.map((h) => h.pop)) })),
   };
 }

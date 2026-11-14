@@ -13,6 +13,7 @@ import { analyse, type ExperimentSpec, type RunResult } from '../src/engine/anal
 import { mean, quantile, summarize } from '../src/engine/analysis/statistics';
 import { DEATH_NAMES } from '../src/engine/constants';
 import { Simulation } from '../src/engine/sim';
+import { NTECH } from '../src/engine/techs';
 import { defaultThreads, runSpec } from './runner';
 
 const quick = process.argv.includes('--quick');
@@ -63,7 +64,7 @@ add('Cultural divergence', 'more than one culture survives in every run', range(
 const relig = B.map((r) => r.events.religion_founded ?? 0);
 add('New faiths', 'new religions are founded in most runs', range(relig), relig.filter((x) => x > 0).length >= B.length * 0.6);
 const techs = fin('techs');
-add('Technology advances', 'at least 10 of 30 technologies known somewhere at the end', range(techs), techs.every((t) => t >= (quick ? 4 : 10)));
+add('Technology advances', `at least ${quick ? 10 : 100} of ${NTECH} technologies known somewhere at the end`, range(techs), techs.every((t) => t >= (quick ? 10 : 100)));
 const lost = B.map((r) => r.events.tech_lost ?? 0);
 add('Knowledge can be lost', 'loss of technologies occurs in at least some runs (Tasmanian effect)', range(lost), lost.some((x) => x > 0));
 const forest = fin('forest');

@@ -4,11 +4,13 @@
  * desired family size), childbirth, orphan fostering, and skill development.
  */
 import {
+  G_FOOD,
   D_AGE, D_ACCIDENT, D_CHILDBIRTH, D_INFANT, D_STARVATION, M_BIRTH, M_FAMINE, NOCC, O_NONE, O_SCHOLAR, BLD_SCHOOL, V_INDIV, V_PIETY,
 } from '../constants';
 import { ageOf, clamp, type Ctx } from '../context';
 import { addToHousehold, agentDeaths, createPerson, killPerson, remember, movePersonToNewHousehold, thinAgent } from '../entities';
 import { logEvent } from '../history';
+import { desiredFamilySize } from '../transition';
 import type { Person, Settlement } from '../types';
 
 const FERT_SCHEDULE = [0, 0, 0, 0.45, 0.95, 1.0, 0.9, 0.7, 0.35, 0.08]; // by 5-year age group
@@ -58,6 +60,13 @@ export function demographyMonth(c: Ctx, s: Settlement): void {
   }
 }
 
+/** Household market income relative to the cost of feeding its members (1 ≈ subsistence). */
+function affluence(c: Ctx, s: Settlement, hh: { members: number[]; income: number }): number {
+  let heads = 0;
+  for (const id of hh.members) heads += c.w.persons.get(id)?.n ?? 0;
+  return hh.income / Math.max(1e-6, Math.max(0.05, s.market.price[G_FOOD]) * Math.max(1, heads) * 0.8);
+}
+
 export function birthsMonth(c: Ctx, s: Settlement): void {
   const w = c.w;
   const fx = c.fx(s.id);
@@ -73,9 +82,9 @@ export function birthsMonth(c: Ctx, s: Settlement): void {
     const married = p.spouse >= 0 && w.persons.has(p.spouse);
     // desired family size falls with education and individualism (demographic transition)
     const living = p.children.reduce((n, id) => n + (w.persons.get(id)?.n ?? 0), 0) / p.n;
-    const desired = 7 - 3.5 * p.edu - 1.2 * Math.max(0, p.values[V_INDIV]) + 1 * Math.max(0, p.values[V_PIETY]);
-    const want = living >= desired ? 0.25 : 1;
     const hh = w.households.get(p.hh);
+    const desired = desiredFamilySize(p.edu, p.values[V_INDIV], p.values[V_PIETY], fx, hh ? affluence(c, s, hh) : 1);
+    const want = living >= desired ? 0.25 : 1;
     // fertility responds to the community's food security, not only to the mother's own condition
     const security = clamp((s.foodRatio - 0.82) / 0.15, 0.1, 1);
     const stress = (hh ? Math.max(0, 1 - hh.hunger * 2) : 1) * security;
@@ -169,6 +178,7 @@ export function fosterOrphans(c: Ctx, s: Settlement): void {
 /** Yearly: skills grow with practice, education from schools and scholarly parents. */
 export function skillsYear(c: Ctx, s: Settlement): void {
   const w = c.w;
+  const fx = c.fx(s.id);
   const people = c.residents(s);
   const schools = s.buildings[BLD_SCHOOL];
   let scholars = 0;
@@ -183,7 +193,7 @@ export function skillsYear(c: Ctx, s: Settlement): void {
     }
     for (let o = 1; o < NOCC; o++) if (o !== p.occ) p.skills[o] *= 0.985;
     if (age >= 6 && age < 18 && literacyBoost > 0) {
-      p.edu = clamp(p.edu + literacyBoost * 0.08 * (0.5 + p.intel) * (0.6 + p.consc * 0.6));
+      p.edu = clamp(p.edu + literacyBoost * 0.08 * fx.schooling * (0.5 + p.intel) * (0.6 + p.consc * 0.6));
     }
     // apprenticeship: children pick up a parent's craft
     if (age >= 10 && age < 16) {
