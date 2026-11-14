@@ -45,7 +45,8 @@ async function launch() {
 /** Opens the pause menu in a campaign and saves; returns the new save file's name. */
 async function saveCampaign(page, count) {
   await page.keyboard.press('Escape');
-  await page.getByRole('button', { name: 'Save the campaign' }).click();
+  // A freshly loaded campaign can keep the page busy for a while on a slow machine: allow time.
+  await page.getByRole('button', { name: 'Save the campaign' }).click({ timeout: 120000 });
   const files = await until(() => saves().length === count && saves(), `save number ${count}`);
   return files;
 }
@@ -119,6 +120,8 @@ async function saveCampaign(page, count) {
   const cont = page.getByRole('button', { name: /^Continue/ });
   await until(() => cont.isEnabled(), 'Continue to be offered', 10000);
   await cont.click();
+  // Wait for the play screen of the loaded campaign before opening the pause menu.
+  await page.getByRole('button', { name: /Conclave/ }).waitFor({ timeout: 120000 });
   await page.waitForTimeout(3000);
   const both = await saveCampaign(page, 2);
   const second = both.find((f) => f !== first);
