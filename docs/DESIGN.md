@@ -198,19 +198,49 @@ Every enactment is an event with its reasons and causes, so laws show up in the 
 
 ## Technology
 
-Thirty technologies, from agriculture, animal husbandry, pottery and boats through bronze, writing, the wheel,
-irrigation, iron, currency, mathematics and medicine to printing, form a prerequisite graph but no fixed sequence.
+The tree has **1,009 technologies** in ten domains (subsistence, materials, craft, building, transport, military,
+health, knowledge, society, energy) and nine eras, from fire mastery and the bow through agriculture, bronze, writing
+and iron, the heavy plough, the compass and printing, to the steam engine, railways, germ theory, the telegraph and
+electrification. The 30 original technologies (ids 0-29) keep their hand-tuned effects and relevance rules; the other
+979 are written as compact rows in `src/engine/techtree/data/*.ts` (see the format in `techtree/schema.ts`).
+
 Research effort comes from scholars, artisans, priests and merchants and the population at large, scaled by
-education, values (innovation), institutions (schools) and a cultural affinity. Effort is directed by **relevance**:
-a technology is only pursued where the environment and needs make it useful (boats on coasts, irrigation in dry
-farmland, metallurgy near ore, herding on grassland). So different societies follow different paths.
+education, values (innovation), institutions (schools) and a cultural affinity. The original 30 keep their own share
+of effort, so the broad pace of early history is unchanged; the generated tree gets a parallel budget that grows with
+effort^0.72 (researchers in large populations duplicate each other) and with the number of open problems. Effort
+is directed by **relevance**, built from each technology's tags:
 
-Knowledge diffuses through trade contacts, proximity, migration and conquest, and is shared within a polity. It
-can be **lost** when the community that carries it becomes too small to sustain it, unless a strong contact or the
-wider polity still knows it (as in Tasmania). Each technology has concrete effects on yields, land, tools, weapons,
-transport, disease, storage and research.
+- **Environment.** Hard requirements (`@coast`, `@arid`, `@iron`...) and soft affinities (`~forest`, `~cold`...):
+  terraces on hills, paddies by rivers, reindeer in the cold, camel caravans in deserts.
+- **Culture.** Values pull research: devout societies pursue theology and temple building, martial ones arms,
+  individualist ones commerce and contracts, hierarchical ones bureaucracy.
+- **Need.** Famine, plague, war, trade, unrest, soil exhaustion and crowding raise matching technologies.
+- **Path dependence.** Each known technology in a domain makes that domain more attractive (specialisation).
+- **Exclusive alternatives.** Logograms or an alphabet; base-60 or decimal numbers; customary, civil or religious
+  law; horse archers or legions. Once one is known, its rivals lose most of their appeal.
 
-**Simplification:** technology is a set of discrete items with fixed effects, not open-ended invention.
+Knowledge diffuses through trade contacts, proximity, migration and conquest, and is shared within a polity, but a
+neighbour only **adopts** a generated technology that suits its land, values and existing practice. That keeps rival
+states in one world distinct (they share about 60-77% of their generated technologies after 300 years, against
+about 90% when everything diffused freely). Knowledge can be **lost** when the community that carries it becomes too
+small to sustain it, unless a strong contact or the wider polity still knows it (as in Tasmania).
+
+Effects are concrete (yields, land, tools, weapons, transport, disease, storage, research, administration, order,
+fertility, schooling) and **bounded**: each generated technology adds points to a channel, and the channel's total
+saturates (for example farm yield at most x3.5 from generated technologies, infant mortality at least x0.15), so
+hundreds of small advances cannot compound without limit. Production effects are halved (`GEN_EFFECT_SCALE`) so
+pre-industrial populations stay near the calibration.
+
+**Demographic transition.** Medicine, sanitation, vaccination, germ theory and public health lower mortality.
+Desired family size (`transition.ts`) falls with education, individualism, household affluence and contraception
+(`fx.fertility`), and schooling technologies speed up literacy (`fx.schooling`).
+
+On default worlds the leading societies reach the Renaissance around year 300, industrial technology around year 400
+and electricity around year 450, with wide variation between seeds.
+
+**Simplification:** technology is a set of discrete items with fixed effects, not open-ended invention. Generated
+technologies influence the world only through the shared effect channels; a railway is a large transport bonus, not
+a railway network on the map.
 
 ## Culture and religion
 
