@@ -18,6 +18,7 @@ import { logEvent } from '../history';
 import { TECH_BY_KEY } from '../techs';
 import type { Person, Polity, Settlement } from '../types';
 import { newRel } from './settlements';
+import { push } from '../pressures';
 
 export function polityPeople(c: Ctx, pol: Polity): Person[] {
   const out: Person[] = [];
@@ -75,7 +76,7 @@ function candidateScore(c: Ctx, pol: Polity, p: Person, prev: Person | { id: num
   const force = (p.occ === O_SOLDIER ? 0.5 + p.skills[O_SOLDIER] * 0.5 : 0) * (0.5 + p.ambition);
   const sum = g.heredity + g.consent + g.merit + g.sacral + g.force + 1e-6;
   let sc = (g.heredity * heir * (age < 70 ? 1 : 0.5) + g.consent * popularity + g.merit * merit + g.sacral * sacral + g.force * force) / sum;
-  sc += p.ambition * 0.15 + p.status * 0.1 - (age > 65 ? 0.2 : 0);
+  sc += p.ambition * 0.15 + p.status * 0.1 - (age > 65 ? 0.2 : 0) + push(w, `p${p.id}:claim`);
   return sc;
 }
 
@@ -250,13 +251,13 @@ export function politicsYear(c: Ctx, pol: Polity): void {
   const atWar = Object.values(pol.relations).some((r) => r.war >= 0);
   const threat = Object.values(pol.relations).some((r) => r.opinion < -0.35);
   const admin = fxCap.admin + (pol.inst.bureaucracy ? 2 : 0) + (pol.inst.writtenLaw ? 1 : 0);
-  const taxTarget = clamp(0.03 + 0.06 * g.centralization + 0.07 * greed + (atWar ? 0.05 : 0) - g.participation * unrest * 0.15 + (fxCap.currency ? 0.02 : 0), 0.02, 0.35);
+  const taxTarget = clamp(0.03 + 0.06 * g.centralization + 0.07 * greed + (atWar ? 0.05 : 0) - g.participation * unrest * 0.15 + (fxCap.currency ? 0.02 : 0) + push(w, `pol${pol.id}:tax`), 0.02, 0.35);
   g.taxRate = lerp(g.taxRate, taxTarget, 0.3);
-  const milTarget = clamp(0.1 + (atWar ? 0.35 : threat ? 0.15 : 0) + Math.max(0, mean[V_MILIT]) * 0.2 + (L ? Math.max(0, L.values[V_MILIT]) * 0.15 : 0), 0.05, 0.7);
+  const milTarget = clamp(0.1 + (atWar ? 0.35 : threat ? 0.15 : 0) + Math.max(0, mean[V_MILIT]) * 0.2 + (L ? Math.max(0, L.values[V_MILIT]) * 0.15 : 0) + push(w, `pol${pol.id}:military`), 0.05, 0.7);
   g.spendMilitary = lerp(g.spendMilitary, milTarget, 0.4);
-  g.spendWelfare = lerp(g.spendWelfare, clamp(0.08 + famine * 0.6 + Math.max(0, -mean[V_INDIV]) * 0.2), 0.3);
-  g.spendLearning = lerp(g.spendLearning, clamp(0.03 + Math.max(0, mean[V_INNOV]) * 0.2 + (L ? (L.open - 0.5) * 0.1 : 0)), 0.3);
-  g.spendReligion = lerp(g.spendReligion, clamp(0.03 + Math.max(0, mean[V_PIETY]) * 0.25), 0.3);
+  g.spendWelfare = lerp(g.spendWelfare, clamp(0.08 + famine * 0.6 + Math.max(0, -mean[V_INDIV]) * 0.2 + push(w, `pol${pol.id}:welfare`)), 0.3);
+  g.spendLearning = lerp(g.spendLearning, clamp(0.03 + Math.max(0, mean[V_INNOV]) * 0.2 + (L ? (L.open - 0.5) * 0.1 : 0) + push(w, `pol${pol.id}:learning`)), 0.3);
+  g.spendReligion = lerp(g.spendReligion, clamp(0.03 + Math.max(0, mean[V_PIETY]) * 0.25 + push(w, `pol${pol.id}:religion`)), 0.3);
   g.spendBuild = Math.max(0.05, 1 - g.spendMilitary - g.spendWelfare - g.spendLearning - g.spendReligion);
   // government drift toward the values of those who hold power
   const elite = people.filter((p) => p.status > 0.6);
@@ -270,9 +271,9 @@ export function politicsYear(c: Ctx, pol: Polity): void {
   g.consent = lerp(g.consent, want.consent, k);
   g.force = lerp(g.force, want.force + (atWar ? 0.15 : 0), k);
   g.merit = lerp(g.merit, want.merit + (pol.inst.bureaucracy ? 0.15 : 0), k);
-  g.participation = lerp(g.participation, want.participation - (pop > 1500 ? 0.1 : 0), k);
+  g.participation = clamp(lerp(g.participation, want.participation - (pop > 1500 ? 0.1 : 0) + push(w, `pol${pol.id}:participation`), k));
   g.centralization = lerp(g.centralization, clamp(0.15 + ((v[V_HIER] + 1) / 2) * 0.35 + ambition * 0.2 + Math.min(0.25, pol.settlements.length * 0.03)), k);
-  g.tolerance = lerp(g.tolerance, want.tolerance, k);
+  g.tolerance = clamp(lerp(g.tolerance, want.tolerance + push(w, `pol${pol.id}:tolerance`), k));
 
   // --- institutions emerge from conditions and values
   const inst = pol.inst;

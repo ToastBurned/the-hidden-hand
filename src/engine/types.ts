@@ -1,4 +1,5 @@
 import type { WorldConfig } from './config';
+import type { GameState } from './game/state';
 
 /** A remembered experience that shapes later behaviour. */
 export interface Memory {
@@ -67,6 +68,12 @@ export interface Person {
   notable: boolean;
   title: string;
   deeds: number[]; // notable event ids
+  /**
+   * Set by the game layer when it needs this person kept as a full individual (members of
+   * the Order, office holders, investigators, recruits being approached). Kept people are
+   * never folded into a representative agent. Absent in plain simulation runs.
+   */
+  keep?: boolean;
 }
 
 /** Compact record of a dead person, kept for genealogy and history. */
@@ -465,6 +472,8 @@ export interface World {
   moneyLost: number;
   /** Total number of living people (sum of agent weights), maintained by the simulation. */
   population: number;
+  /** The Hidden Hand game layer's state, when a campaign is running on this world. */
+  game?: GameState;
 }
 
 export interface YearAccumulator {

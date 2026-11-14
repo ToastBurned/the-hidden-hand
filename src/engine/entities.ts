@@ -601,7 +601,7 @@ export function individuate(c: Ctx, p: Person): Person {
 
 /** People who must never be folded into a representative agent. */
 export function isProtected(w: { persons: Map<number, Person> }, p: Person): boolean {
-  if (p.notable || p.title || p.deeds.length) return true;
+  if (p.notable || p.title || p.deeds.length || p.keep) return true;
   const k = (id: number) => { const x = w.persons.get(id); return !!x && (x.notable || !!x.title); };
   return k(p.mother) || k(p.father) || k(p.spouse);
 }
