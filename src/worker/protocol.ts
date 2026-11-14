@@ -1,6 +1,7 @@
 import type { WorldConfig, Intervention } from '../engine/config';
 import type { RunResult, RunSpec } from '../engine/analysis/experiment';
 import type { DynamicLayers, Frame, StaticMap } from '../engine/query';
+import type { AgeHighlight } from '../game/view';
 
 /** Messages from the UI to the simulation worker. */
 export type ToSim =
@@ -13,9 +14,13 @@ export type ToSim =
   | { type: 'intervene'; iv: Intervention }
   | { type: 'query'; id: number; kind: QueryKind; arg?: unknown }
   | { type: 'save'; id: number }
-  | { type: 'layers' };
+  | { type: 'layers' }
+  /** Run history forward `years` without frames, reporting progress (campaign world creation). */
+  | { type: 'generate'; years: number }
+  | { type: 'cancel-generate' };
 
-export type QueryKind = 'settlement' | 'polity' | 'person' | 'event' | 'events' | 'people' | 'tile' | 'culture' | 'religion' | 'overview' | 'stats' | 'war' | 'family' | 'story' | 'timeline' | 'year' | 'chapters';
+export type QueryKind = 'settlement' | 'polity' | 'person' | 'event' | 'events' | 'people' | 'tile' | 'culture' | 'religion' | 'overview' | 'stats' | 'war' | 'family' | 'story' | 'timeline' | 'year' | 'chapters'
+  | 'foundings' | 'story-for' | 'oath' | 'names';
 
 /** Messages from the simulation worker to the UI. */
 export type FromSim =
@@ -24,6 +29,7 @@ export type FromSim =
   | { type: 'layers'; layers: DynamicLayers }
   | { type: 'reply'; id: number; data: unknown }
   | { type: 'saved'; id: number; data: string; name: string; tick: number }
+  | { type: 'progress'; year: number; done: number; total: number; highlights: AgeHighlight[]; pop: number; finished: boolean }
   | { type: 'error'; message: string };
 
 /** Experiment worker: runs one run at a time. */

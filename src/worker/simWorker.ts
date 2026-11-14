@@ -12,6 +12,8 @@ import {
 } from '../engine/query';
 import { applyOne } from '../engine/systems/interventions';
 import type { FromSim, ToSim } from './protocol';
+import { foundingStories, oathScene, orderNames, storyForPerson } from '../game/founding';
+import type { Creed, FoundingStory } from '../game/view';
 
 declare const self: DedicatedWorkerGlobalScope;
 
@@ -113,8 +115,33 @@ function answer(kind: string, arg: unknown): unknown {
     case 'timeline': return timeline(sim);
     case 'chapters': return chapters(sim);
     case 'year': return yearSnapshot(sim, arg as number);
+    case 'foundings': return foundingStories(sim, (arg as number) ?? 0);
+    case 'story-for': return storyForPerson(sim, arg as number);
+    case 'names': { const a = arg as { story: FoundingStory; creed: Creed; salt: number }; return orderNames(sim, a.story, a.creed, a.salt); }
+    case 'oath': { const a = arg as { story: FoundingStory; creed: Creed; name: string }; return oathScene(sim, a.story, a.creed, a.name); }
   }
   return null;
+}
+
+/** Campaign world creation: run history in slices so progress and cancels get through. */
+let gen: { total: number; done: number; lastEvent: number } | null = null;
+function generateSlice() {
+  if (!sim || !gen) return;
+  const t0 = performance.now();
+  while (gen.done < gen.total && performance.now() - t0 < 120) {
+    for (let m = 0; m < 12; m++) sim.step();
+    gen.done++;
+    if (sim.extinct()) { gen.done = gen.total; break; }
+  }
+  const evs = sim.w.events;
+  const highlights = [];
+  for (let i = evs.length - 1; i >= 0 && evs[i].id > gen.lastEvent; i--) if (evs[i].imp >= 4) highlights.push({ year: Math.floor(evs[i].t / 12), text: evs[i].text, imp: evs[i].imp });
+  if (evs.length) gen.lastEvent = evs[evs.length - 1].id;
+  highlights.reverse();
+  const finished = gen.done >= gen.total;
+  post({ type: 'progress', year: sim.year, done: gen.done, total: gen.total, highlights: highlights.slice(-6), pop: sim.w.stats.length ? sim.w.stats[sim.w.stats.length - 1].pop : 0, finished });
+  if (finished) { gen = null; sendLayers(); sendFrame(); return; }
+  setTimeout(generateSlice, 0);
 }
 
 self.onmessage = (e: MessageEvent<ToSim>) => {
@@ -129,6 +156,8 @@ self.onmessage = (e: MessageEvent<ToSim>) => {
       case 'step': advance(m.months, 60000); sendFrame(); sendLayers(); break;
       case 'intervene': if (sim) { sim.w.config.interventions.push({ ...m.iv, year: sim.year }); sim.w.interventionsDone.push(sim.w.config.interventions.length - 1); applyOne(sim, m.iv); sendFrame(); sendLayers(); } break;
       case 'layers': sendLayers(); break;
+      case 'generate': if (sim) { running = false; gen = { total: m.years, done: 0, lastEvent: sim.w.events.length ? sim.w.events[sim.w.events.length - 1].id : 0 }; generateSlice(); } break;
+      case 'cancel-generate': gen = null; break;
       case 'query': post({ type: 'reply', id: m.id, data: answer(m.kind, m.arg) }); break;
       case 'save': if (sim) { sim.w.rng = sim.rng.state(); post({ type: 'saved', id: m.id, data: serializeWorld(sim.w), name: sim.w.config.name, tick: sim.w.tick }); } break;
     }

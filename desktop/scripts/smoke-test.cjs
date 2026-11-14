@@ -34,6 +34,9 @@ async function launch() {
   });
   const page = await app.firstWindow();
   page.on('pageerror', (e) => console.error('page error:', e.message));
+  // The game opens on its start screen; the save round-trip below runs in the developer sandbox.
+  await page.getByRole('button', { name: /New campaign/ }).waitFor();
+  await page.evaluate(() => { location.hash = 'sandbox'; location.reload(); });
   await page.getByRole('button', { name: '+1 yr' }).waitFor();
   await until(() => page.getByRole('button', { name: '+1 yr' }).isEnabled(), 'world generation');
   return { app, page };
