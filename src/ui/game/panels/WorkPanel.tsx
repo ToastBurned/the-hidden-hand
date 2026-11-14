@@ -2,13 +2,14 @@
 import { VOWS } from '../../../game/view';
 import { VALUE_POLES } from '../../../engine/constants';
 import type { PlayApi } from '../PlayScreen';
+import { HelpMark } from '../codex/Codex';
 
 export function WorkPanel({ api }: { api: PlayApi }) {
   const g = api.g;
   const w = g.greatWork;
   return (
     <div className="screen">
-      <header className="screen-head"><span className="label">The Great Work</span><h2>{w.title}</h2><p className="italic">{w.text}</p></header>
+      <header className="screen-head"><span className="label">The Great Work</span><h2>{w.title}<HelpMark id={`work:${w.id.replace(/^great-/, "")}`} label={w.title} /></h2><p className="italic">{w.text}</p></header>
       <section className="work-hero panel">
         <div className="work-ring" style={{ ['--p' as string]: `${w.progress * 360}deg` }}><span>{Math.round(w.progress * 100)}%</span></div>
         <div className="col grow" style={{ gap: 6 }}>
@@ -19,7 +20,7 @@ export function WorkPanel({ api }: { api: PlayApi }) {
         </div>
       </section>
       <section>
-        <h3>Lesser Works</h3>
+        <h3>Lesser Works<HelpMark id="guide:winning" label="Winning and losing" /></h3>
         <div className="op-list">
           {g.lesserWorks.map((l) => (
             <div key={l.id} className={`op panel ${l.done ? 'done' : ''}`}>

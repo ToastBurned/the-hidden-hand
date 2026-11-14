@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { Portrait } from '../../art/Portrait';
 import { Icon } from '../Icons';
 import { dateOf, type PlayApi } from '../PlayScreen';
+import { HelpMark } from '../codex/Codex';
 
 export function ConclaveDialog({ api }: { api: PlayApi }) {
   const g = api.g;
@@ -16,7 +17,7 @@ export function ConclaveDialog({ api }: { api: PlayApi }) {
         <div className="candle" />
         <header className="conclave-head">
           <span className="gold"><Icon name="candle" size={26} /></span>
-          <div className="grow"><span className="label">{dateOf(c.tick)}</span><h2>The conclave of {g.order.name}</h2><div className="italic dim">{c.reason}</div></div>
+          <div className="grow"><span className="label">{dateOf(c.tick)}</span><h2>The conclave of {g.order.name}<HelpMark id="order:conclave" label="The conclave" /></h2><div className="italic dim">{c.reason}</div></div>
           <div className="row" style={{ gap: 6 }}>{g.members.filter((m) => m.standing === 'elder' || m.flags.includes('founder')).slice(0, 6).map((m) => <Portrait key={m.id} look={m.look} size={38} title={m.name} />)}</div>
         </header>
         <div className="conclave-body">

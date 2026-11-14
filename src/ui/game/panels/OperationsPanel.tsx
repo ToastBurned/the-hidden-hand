@@ -2,6 +2,7 @@
 import type { Contest } from '../../../game/view';
 import { Icon } from '../Icons';
 import { dateOf, type PlayApi } from '../PlayScreen';
+import { HelpMark } from '../codex/Codex';
 
 export function ContestView({ c }: { c: Contest }) {
   const max = Math.max(0.01, ...c.forces.map((f) => Math.abs(f.pull)));
@@ -33,7 +34,7 @@ export function OperationsPanel({ api }: { api: PlayApi }) {
   return (
     <div className="screen">
       <header className="screen-head">
-        <h2>Operations and levers</h2>
+        <h2>Operations and levers<HelpMark id="order:operations" label="Operations" /><HelpMark id="order:levers" label="Levers" /></h2>
         <p className="dim italic">Operations are short missions: weeks or months, a clear result, and a trace left behind. Levers are standing pressures through a seat: slow, quiet, and only ever a push on what people already decide.</p>
       </header>
       <section>

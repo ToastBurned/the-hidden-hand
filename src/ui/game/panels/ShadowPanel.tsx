@@ -3,6 +3,7 @@ import { Portrait } from '../../art/Portrait';
 import { Icon } from '../Icons';
 import { levelWord } from '../veil';
 import type { PlayApi } from '../PlayScreen';
+import { HelpMark } from '../codex/Codex';
 
 export function ShadowPanel({ api }: { api: PlayApi }) {
   const g = api.g;
@@ -10,11 +11,11 @@ export function ShadowPanel({ api }: { api: PlayApi }) {
   return (
     <div className="screen">
       <header className="screen-head">
-        <h2>The Shadow</h2>
+        <h2>The Shadow<HelpMark id="shadow:suspicion" label="Suspicion" /></h2>
         <p className="dim italic">Every action leaves a trace. Suspicion falls slowly with time and quiet, faster behind a harmless front. Past a point, someone acts on it.</p>
       </header>
       <section>
-        <h3>Investigators</h3>
+        <h3>Investigators<HelpMark id="shadow:responses" label="Answering an inquiry" /></h3>
         {!g.investigators.length && <p className="dim small italic">No one is hunting the Order, as far as it knows.</p>}
         {g.investigators.map((i) => (
           <div key={i.id} className="investigator panel">

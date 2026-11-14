@@ -4,7 +4,7 @@ import { Icon } from './Icons';
 /** A dialog in the game's style. Escape and a click outside close it. */
 export function GameModal(props: { title: ReactNode; onClose: () => void; children: ReactNode; footer?: ReactNode; wide?: boolean; label?: string }) {
   useEffect(() => {
-    const k = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.stopPropagation(); props.onClose(); } };
+    const k = (e: KeyboardEvent) => { if (e.key === 'Escape' && !document.querySelector('.codex-back')) { e.stopPropagation(); props.onClose(); } };
     window.addEventListener('keydown', k, true);
     return () => window.removeEventListener('keydown', k, true);
   });

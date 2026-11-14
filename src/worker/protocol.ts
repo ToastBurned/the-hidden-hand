@@ -22,7 +22,7 @@ export type ToSim =
   | { type: 'game'; id: number; cmd: GameCommand };
 
 export type QueryKind = 'settlement' | 'polity' | 'person' | 'event' | 'events' | 'people' | 'tile' | 'culture' | 'religion' | 'overview' | 'stats' | 'war' | 'family' | 'story' | 'timeline' | 'year' | 'chapters'
-  | 'foundings' | 'story-for' | 'oath' | 'names' | 'creed-answers' | 'op-preview' | 'catalogue' | 'game' | 'residents';
+  | 'foundings' | 'story-for' | 'oath' | 'names' | 'creed-answers' | 'op-preview' | 'catalogue' | 'game' | 'residents' | 'codex';
 
 /** Messages from the simulation worker to the UI. */
 export type FromSim =

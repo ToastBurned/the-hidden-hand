@@ -5,6 +5,7 @@ import { putSave } from '../../saves';
 import { GameModal } from '../Modal';
 import { SettingsDialog } from '../SettingsDialog';
 import { useSim } from '../../hooks';
+import { useCodex } from '../codex/Codex';
 
 export async function saveCampaign(): Promise<string> {
   const s = await sim.save();
@@ -16,6 +17,7 @@ export async function saveCampaign(): Promise<string> {
 
 export function PauseMenu({ onClose, onTitle, onToast }: { onClose: () => void; onTitle: () => void; onToast: (s: string) => void }) {
   const st = useSim();
+  const codex = useCodex();
   const [settings, setSettings] = useState(false);
   if (settings) return <SettingsDialog onClose={() => setSettings(false)} />;
   const save = async () => { const n = await saveCampaign(); onToast(`Saved “${n}”.`); onClose(); };
@@ -25,8 +27,9 @@ export function PauseMenu({ onClose, onTitle, onToast }: { onClose: () => void; 
         <button onClick={onClose}>Return to the game</button>
         <button onClick={save}>Save the campaign</button>
         <button onClick={() => setSettings(true)}>Settings</button>
+        <button onClick={() => { onClose(); codex.open(); }}>Encyclopaedia</button>
         <button onClick={async () => { await saveCampaign(); onTitle(); }}>Save and return to the start screen</button>
-        <p className="tiny faint">Keys: Space pauses and resumes, 1 2 3 set the speed, M O P L C S G H open the screens, Esc closes.</p>
+        <p className="tiny faint">Keys: Space pauses and resumes, 1 2 3 set the speed, M O P L C S G H open the screens, Esc closes, F1 opens the encyclopaedia.</p>
       </div>
     </GameModal>
   );
