@@ -21,12 +21,12 @@ import { LEVER_BY_KIND, leverForce, leversMonth, leversYear } from './levers';
 import { cellMembers, admit, orderMonth, orderYear, resources, ROOMS, sendMember, removeMember } from './order';
 import { officesYear, officeTitle, seatOf } from './offices';
 import { OP_BY_KIND, opsMonth, previewOp, startOp } from './operations';
-import type { FoundingCandidate, GameState } from './state';
+import type { FoundingCandidate, GameState, WorkKind } from './state';
 import { ESTATES } from './state';
 import { localOf, prisonsMonth, secrecy, suspicionMonth } from './suspicion';
 import { fullName, game, nid, notice, ourSettlements, placeOf } from './util';
 import type { Clarity, Creed, Ending, FoundingStory, GameCommand, GameView, OathScene, OperationPreview } from './view';
-import { greatWorkFor, makeGreatWork, makeLesserWorks, peoplePop, worksMonth } from './works';
+import { baselines, greatWorkFor, makeGreatWork, makeLesserWorks, peoplePop, worksMonth } from './works';
 
 // ---------------------------------------------------------------- founding
 
@@ -59,7 +59,7 @@ export function oathFor(sim: Simulation, story: number, creed?: Creed, name?: st
   return oathScene(sim, cd, creed ?? st.creed, name ?? st.names[0].name);
 }
 
-export interface FoundOptions { story: number; name?: string; meaning?: string; creed?: Creed; seed?: number }
+export interface FoundOptions { story: number; name?: string; meaning?: string; creed?: Creed; seed?: number; /** Choose the Great Work instead of the one the creed proposes. */ work?: WorkKind }
 
 /** The First Oath: create the Order with its founder and the companion they persuaded. */
 export function foundOrder(sim: Simulation, opt: FoundOptions): GameState {
@@ -90,11 +90,12 @@ export function foundOrder(sim: Simulation, opt: FoundOptions): GameState {
     log: { recruits: 0, refusals: 0, purges: 0, arrests: 0, seats: 0, ops: 0, opsOk: 0, levers: 0 },
   };
   w.game = g;
-  const gw = greatWorkFor(g);
+  const gw = opt.work ?? greatWorkFor(g);
   g.greatWork = makeGreatWork(gw);
   g.lesserWorks = makeLesserWorks(gw);
   g.order.basePop = Math.max(1, peoplePop(w));
   g.order.baseShare = g.order.basePop / Math.max(1, w.population);
+  g.order.base = baselines(sim);
   const f = admit(sim, founder, -1, true);
   const comp = admit(sim, companion, f.pid);
   // a founder or companion drawn from a represented group becomes their own person here

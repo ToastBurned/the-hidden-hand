@@ -15,6 +15,7 @@ import { OFFICES, officeScore, officesHeldBy } from './offices';
 import { OP_BY_KIND, opOdds, opProblem } from './operations';
 import type { GameState, Member, WorkKind } from './state';
 import { game, ourSettlements } from './util';
+import { PEACE_ARMS, RELIEF_FUNDED, toleranceBar, voiceBar } from './works';
 import type { GameCommand, RoomKind } from './view';
 
 export interface BotStyle {
@@ -38,7 +39,7 @@ const WORK_LEVERS: Record<WorkKind, [string, number][]> = {
   voice: [['open-council', 1], ['preach', 1], ['ease-taxes', 1]],
   peace: [['tilt-army', -1], ['preach', 1], ['tilt-welfare', 1]],
   'faith-free': [['counsel-tolerance', 1], ['preach', 1], ['tilt-temples', -1]],
-  power: [['back-candidate', 1], ['preach', 1]],
+  power: [['back-candidate', 1]],
   endure: [['encourage-settlement', 1], ['lean-years', 1], ['tilt-welfare', 1]],
 };
 
@@ -199,16 +200,24 @@ function levers(sim: Simulation, g: GameState, style: BotStyle, work: WorkKind):
     if (susp > 0.38) continue;
     const str = susp > 0.25 ? 1 : style.push;
     const mine = [...g.levers.values()].filter((l) => l.member === m.pid).length;
-    if (mine >= 2 || m.influence < 3) continue;
+    // the Hidden Throne is won with seats: keep favours for winning them, and spend only on backing a claim
+    if (mine >= 2 || m.influence < (work === 'power' ? 6 : 3)) continue;
     for (const [kind, sign] of wanted) {
       const spec = LEVER_BY_KIND[kind];
       let target: { kind: 'settlement' | 'polity' | 'person'; id: number } | null = null;
       if (spec.target === 'settlement') target = { kind: 'settlement', id: p.sid };
       else if (spec.target === 'polity') target = { kind: 'polity', id: w.settlements.get(p.sid)?.polity ?? -1 };
       else {
-        // back a fellow member's claim, preferring one in the capital
-        const ally = [...g.members.values()].find((x) => x !== m && w.persons.get(x.pid)?.sid === p.sid && x.imprisoned < 0);
-        if (ally) target = { kind: 'person', id: ally.pid };
+        // back the claim of the member in this realm's capital best placed to rise (the throne is filled from the capital)
+        const pol = w.polities.get(w.settlements.get(p.sid)?.polity ?? -1);
+        let best = -1, bs = -1;
+        for (const x of g.members.values()) {
+          const xp = w.persons.get(x.pid);
+          if (!xp || x.imprisoned >= 0 || x.travel || !pol || xp.sid !== pol.capital || pol.leader === x.pid || ageOf(w, xp) < 25 || ageOf(w, xp) > 62) continue;
+          const sc = xp.status + xp.intel * 0.5 + xp.ambition * 0.3 + xp.extra * 0.3;
+          if (sc > bs) { bs = sc; best = x.pid; }
+        }
+        if (best >= 0) target = { kind: 'person', id: best };
       }
       if (!target || target.id < 0) continue;
       if ([...g.levers.values()].some((l) => l.kind === kind && l.target.id === target!.id)) continue;
@@ -251,10 +260,10 @@ export function focusPolity(sim: Simulation, g: GameState, work: WorkKind): numb
     const p = w.polities.get(id);
     if (!p) return false;
     switch (work) {
-      case 'peace': return p.gov.spendMilitary > 0.15;
-      case 'no-starving': return p.gov.spendWelfare < 0.16;
-      case 'voice': return p.gov.participation <= 0.5;
-      case 'faith-free': return p.gov.tolerance <= 0.6;
+      case 'peace': return p.gov.spendMilitary > PEACE_ARMS;
+      case 'no-starving': return p.gov.spendWelfare < RELIEF_FUNDED;
+      case 'voice': return p.gov.participation <= voiceBar(g);
+      case 'faith-free': return p.gov.tolerance <= toleranceBar(g);
       case 'knowledge': return p.gov.spendLearning < 0.12;
       default: return true;
     }

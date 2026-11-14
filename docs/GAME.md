@@ -30,8 +30,8 @@ All game state is on `World.game`, so saving, loading and branching a world carr
 | Levers | `levers.ts` | 12 standing pressures through seats (tilt the budget four ways, ease taxes, counsel tolerance, open the council, back a candidate, endow a school, patronise thinkers, encourage settlement, prepare for the lean years). Each is a contest: the Order's pull against the estates that oppose it and the inertia of the realm, scaled by the realm's size. That contest is what the interface shows as the tug of war. |
 | Suspicion | `suspicion.ts` | Per-town suspicion from traces, crowding, talk, crises and patterns of seats. Inquiries are opened by real office holders, work along the trail of members in reach, and arrest; the arrested may name those they know, so purges spread through the web and stop where knowledge stops. Prisoners are executed or released broken. |
 | Creed | `creed.ts` | Direction on the five value axes, two focus axes, three vows. Proposed from the founder and their wound, from five dilemmas, or edited freely. A gap between word and deed builds from dark deeds; the conclave can amend the creed to "the end justifies the means". |
-| Great and Lesser Works | `works.ts` | Seven Great Works, each a condition that must be met and then held (10 to 40 years), with three Lesser Works each. The clock only runs once the Order has four members and a seat. |
-| Founding | `founding.ts` | Searches the generated history for adults with a wound (famine, persecution, war, plague, a beaten revolt, a loss) or a calling, pairs each with a companion, and proposes a creed, three names in the founder's own language, a Great Work and a difficulty. `storyForPerson` does the same for anyone the player picks. Composes the First Oath scene. |
+| Great and Lesser Works | `works.ts` | Seven Great Works, each a condition that must be met and then held (12 to 30 years), with three Lesser Works each. The policy works are measured against the world at the founding (`g.order.base`), so what the world would have done anyway does not count. A month the condition fails costs four months held (`GRACE`) rather than the whole count. The clock only runs once the Order has four members and a seat. |
+| Founding | `founding.ts` | Searches the generated history for adults with a wound (famine, persecution, including belonging to a faith a hard realm does not keep, war, plague, a beaten revolt, a loss), a calling, or ambition near power, pairs each with a companion, and proposes a creed, three names in the founder's own language, a Great Work and a difficulty. The three stories offered propose three different Great Works where the history allows, and which works a world favours varies with the seed. `storyForPerson` does the same for anyone the player picks. Composes the First Oath scene. |
 | Conclaves | `conclave.ts` | Adaptive rhythm (yearly, then five-yearly, then ten-yearly) plus a conclave after an elder's death. Items: promotions, an amendment, expulsions, the posture. |
 | Campaign | `campaign.ts` | Entry points: `foundingStories`, `storyForPerson`, `oathFor`, `foundOrder`, `stepCampaign`, `applyGameCommand`, `previewOperation`, `gameView`. Endings: won, destroyed, withered, people gone. |
 | The Veil | `campaign.ts` (`veil`) | Clarity per settlement and polity: known where members live, sit in office or have scouted; rumour across the realm and along contacts; otherwise unknown. |
@@ -52,24 +52,38 @@ Two fixed content limits are enforced in code: no operation or lever can target 
 
 The target is that a competent player wins about one campaign in three, that levers clearly beat the passive Order, and that the idle Order almost never wins.
 
-### Results so far (batch 6: 12 seeds, 36 founding stories, 108 campaigns)
+### The Great Works and their measures
+
+| Great Work | Condition, held | Why levers are needed |
+| --- | --- | --- |
+| The Full Granary | Our towns fed and half our people under states giving relief at least 14% of the budget, 20 years | Realms give 8% unprompted outside a famine |
+| The Lamp Kept Lit | Schools in three towns in five (at least three) and literacy a quarter above the founding (at least 55%), 30 years | Literacy rises on its own, so the bar moves with it |
+| The Voice of the Many | Over half our people under governments whose participation is 8 points above our people's at the founding (at least 0.5), 25 years | These worlds are mostly republics already at 0.6 |
+| The Long Peace | Six in ten of our people in states at peace spending under 9% on arms, 20 years | Realms at peace with no threat spend 10% unprompted |
+| The Open Temple | Six in ten under tolerance 10 points above the founding (at least 0.6), 30 years | Tolerance drifts down on its own |
+| The Hidden Throne | A member on the throne of the greatest state of our people and another in its temple, treasury or chancery, 12 years | The bot backs a member's claim in the capital |
+| The Enduring People | Our people 60% more numerous, a tenth larger share of the world, no town hungry, three in ten under states funding relief, 30 years | Growth alone does not count |
+
+### Results (batch 7: 12 seeds, 36 founding stories, 108 campaigns)
 
 | Player | Won | Destroyed | Withered | Still going at 150 years |
 | --- | --- | --- | --- | --- |
-| bot | 12 of 36 (33%) | 0 | 0 | 24 |
-| passive | 9 of 36 (25%) | 1 | 0 | 26 |
+| bot | 9 of 36 (25%) | 0 | 1 | 26 |
+| passive | 1 of 36 (3%) | 1 | 0 | 34 |
 | idle | 0 of 36 | 0 | 36 | 0 |
 
-By Great Work (bot vs passive): The Lamp Kept Lit (knowledge) 8 of 18 vs 8 of 18; The Long Peace 4 of 12 vs 1 of 12; The Full Granary 0 of 6 vs 0 of 6. Members were arrested in 5 of the bot's 36 campaigns and 6 of the passive Order's.
+By Great Work (bot, passive): The Full Granary 1 of 6, 0; The Long Peace 2 of 8, 0; The Hidden Throne 0 of 7, 1; The Lamp Kept Lit 3 of 8, 0; The Voice of the Many 2 of 4, 0; The Enduring People 1 of 3, 0. Members were arrested in 6 of the bot's campaigns.
 
-What this says, honestly:
+What this says:
 
-- The overall target is met: a competent automated player wins one campaign in three, and an Order that does nothing never wins.
-- Levers clearly matter for The Long Peace, but not yet for The Lamp Kept Lit, where literacy and schools still rise about as far on their own as with the Order's help. The Full Granary is currently out of reach. These two need the next tuning pass.
-- The danger is real but mild: purges happen, but a competent Order is rarely destroyed. The earlier batches had no arrests at all.
-- Only three of the seven Great Works came up across these seeds, because the founders' wounds were mostly war, famine and learning. Voice, faith, power and endurance are built and tested in code, but not yet balanced.
+- Levers now decide the game: the same Order without levers or dark operations went from 25% to 3%, and the idle Order still never wins.
+- The bot wins one campaign in four (batch 6: one in three, but most of that the world would have done anyway). A good human player should beat it.
+- Six of the seven Great Works came up across these seeds (batch 6: three). The Open Temple needs a founder persecuted for their faith, which these republics rarely produce; it was tuned with `tools/works.ts`, where the bot won it and the passive Order did not.
+- The Hidden Throne is the weak spot: it is won through seats and successions more than levers, the passive Order won it once and the bot not at all in this batch. The bot's succession play is simple and a player can do better.
 
-How the numbers moved across the six batches: bot 67% then 54%, 25%, 38%, 39% and 33%; the passive control was added from batch 2. The changes that mattered were measuring endurance as a share of the world (so ordinary growth doesn't count), requiring the Order to be at work before the Great Work clock runs, making peace and plenty require disarmament and funded relief rather than a lucky lull, and making inquiries progress fast enough to reach an arrest.
+`tools/works.ts` is a quicker per-work bench: it plays every Great Work (or a chosen list) from one founding story per seed, for the bot and the passive Order, so each work can be tuned on its own. Both tools cache each seed's history in `tools/out/`.
+
+How the numbers moved: batch 6 bot 33%, passive 25%. Batch 7 rounds: measuring the policy works against the founding (bot 17%, passive 14%: endure and power still out of reach), then tighter arms and relief bars (11%, 3%), then the grace on lapses and shorter holds (22%, 6%; 19%, 0%; 25%, 3%).
 
 Run it with `npx tsx tools/campaigns.ts [seeds] [horizon] [prehistory] [threads]`; 12 seeds take about 25 minutes on four cores.
 

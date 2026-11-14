@@ -19,19 +19,21 @@ export interface WorkDef {
 }
 
 export const GREAT_WORKS: Record<WorkKind, WorkDef> = {
-  'no-starving': { kind: 'no-starving', title: 'The Full Granary', text: 'Our towns fed, and seven in ten of our people under states that fund relief, for forty years.', need: 480 },
-  knowledge: { kind: 'knowledge', title: 'The Lamp Kept Lit', text: 'Schools in three towns of our people in five (at least three), and nearly half of us lettered, for thirty years.', need: 360 },
-  voice: { kind: 'voice', title: 'The Voice of the Many', text: 'Most of our people living under governments that heed the many, for twenty-five years.', need: 300 },
-  peace: { kind: 'peace', title: 'The Long Peace', text: 'Seven in ten of our people living in states at peace that spend little on arms, for forty years.', need: 480 },
-  'faith-free': { kind: 'faith-free', title: 'The Open Temple', text: 'Seven in ten of our people under tolerant rule, for thirty years.', need: 360 },
-  power: { kind: 'power', title: 'The Hidden Throne', text: 'Members of the Order holding the throne, the temple and the treasury of the greatest state of our people at once, for ten years.', need: 120 },
-  endure: { kind: 'endure', title: 'The Enduring People', text: 'Our people grown to twice their share of the world at the founding, and held there for thirty years.', need: 360 },
+  'no-starving': { kind: 'no-starving', title: 'The Full Granary', text: 'Our towns fed, and half of our people under states that fund relief, for twenty years.', need: 240 },
+  knowledge: { kind: 'knowledge', title: 'The Lamp Kept Lit', text: 'Schools in three towns of our people in five (at least three), and far more of us lettered than at the founding (a quarter more of us, and at least 55 in a hundred), for thirty years.', need: 360 },
+  voice: { kind: 'voice', title: 'The Voice of the Many', text: 'More than half of our people living under governments that give the many a greater say than at the founding, for twenty-five years.', need: 300 },
+  peace: { kind: 'peace', title: 'The Long Peace', text: 'Six in ten of our people living in states at peace that spend less on arms than any realm does unprompted (under a tenth of the budget), for twenty years.', need: 240 },
+  'faith-free': { kind: 'faith-free', title: 'The Open Temple', text: 'Six in ten of our people under rule clearly more tolerant than at the founding, for thirty years.', need: 360 },
+  power: { kind: 'power', title: 'The Hidden Throne', text: 'A member of the Order on the throne of the greatest state of our people, and another holding its temple, treasury or chancery, for twelve years.', need: 144 },
+  endure: { kind: 'endure', title: 'The Enduring People', text: 'Our people three-fifths more numerous than at the founding, a tenth larger share of the world than then, none of our towns going hungry, and three in ten of us under states that fund relief, for twenty-five years.', need: 300 },
 };
 
 /** Which Great Work a creed proposes: its first vow, unless the creed leans towards rule. */
 export function greatWorkFor(g: Pick<GameState, 'creed'>): WorkKind {
   const v = g.creed.vows.find((x) => x in GREAT_WORKS && x !== 'unseen') as WorkKind | undefined;
-  if ((g.creed.direction[4] ?? 0) > 0.55 && g.creed.direction[3] > 0.2) return 'power';
+  // a creed that holds the few should rule (strongly, or with a martial bent) wants the throne itself
+  const hier = g.creed.direction[4] ?? 0;
+  if (hier > 0.55 && ((g.creed.direction[3] ?? 0) > 0.2 || hier > 0.7)) return 'power';
   return v ?? 'endure';
 }
 
@@ -82,7 +84,7 @@ export const LESSER: Record<WorkKind, LesserDef[]> = {
   ],
   endure: [
     { id: 'second', title: 'A second city', text: 'Cells in two cities.', reward: 'cohesion', need: 1, test: (_c, g) => new Set([...g.cells.values()].map((x) => x.sid)).size >= 2 },
-    { id: 'grown', title: 'A growing people', text: 'Our people a third larger share of the world than at the founding.', reward: 'wealth', need: 1, test: (c, g) => peoplePop(c.w) / Math.max(1, c.w.population) >= Math.min(0.9, g.order.baseShare * 1.33) },
+    { id: 'grown', title: 'A growing people', text: 'Our people a quarter more numerous than at the founding.', reward: 'wealth', need: 1, test: (c, g) => peoplePop(c.w) >= g.order.basePop * 1.25 },
     { id: 'lodges', title: 'Three lodges', text: 'Lodges standing in three cities.', reward: 'influence', need: 1, test: (_c, g) => [...g.lodges.values()].filter((l) => !l.found).length >= 3 },
   ],
 };
@@ -108,6 +110,23 @@ function literacy(c: Ctx, ss: Settlement[]): number {
   return n ? e / n : 0;
 }
 
+/** The most of its budget a realm at peace may spend on arms for The Long Peace: below what any realm spends unprompted. */
+export const PEACE_ARMS = 0.09;
+/** The share of its budget a realm must give to relief for The Full Granary: above the 8% any realm gives unprompted outside a famine. */
+export const RELIEF_FUNDED = 0.14;
+/** The say in government The Voice of the Many needs: more than at the founding. */
+export const voiceBar = (g: GameState) => Math.min(0.85, Math.max(0.5, (g.order.base?.part ?? 0.4) + 0.08));
+/** The tolerance The Open Temple needs: more than at the founding. */
+export const toleranceBar = (g: GameState) => Math.min(0.85, Math.max(0.6, (g.order.base?.tol ?? 0.5) + 0.1));
+
+/** Our people at the founding, for the Great Works measured against it. */
+export function baselines(c: Ctx): { lit: number; part: number; tol: number } {
+  const ours = ourSettlements(c.w);
+  let all = 0, part = 0, tol = 0;
+  for (const s of ours) { const p = c.w.polities.get(s.polity); if (!p) continue; all += s.pop; part += s.pop * p.gov.participation; tol += s.pop * p.gov.tolerance; }
+  return { lit: literacy(c, ours), part: all ? part / all : 0, tol: all ? tol / all : 0 };
+}
+
 /** Share of our people living in polities that satisfy `ok`. */
 function shareUnder(c: Ctx, ok: (polity: number) => boolean): number {
   let yes = 0, all = 0;
@@ -125,52 +144,70 @@ export function greatCondition(c: Ctx, g: GameState): [boolean, number, string |
       const all = ours.reduce((a, x) => a + x.pop, 0) || 1;
       const hungry = ours.filter((s) => s.foodRatio < 0.85 || s.hungerShare > 0.25);
       const hungryShare = hungry.reduce((a, x) => a + x.pop, 0) / all;
-      const funded = shareUnder(c, (pid) => (w.polities.get(pid)?.gov.spendWelfare ?? 0) >= 0.16);
-      const ok = hungryShare <= 0.05 && funded >= 0.7 && ours.length > 0;
-      const close = (1 - Math.min(1, hungryShare * 4)) * 0.5 + Math.min(1, funded / 0.7) * 0.5;
-      return [ok, close, hungryShare > 0.05 ? `${hungry[0].name} is going hungry.` : funded < 0.7 ? `Only ${Math.round(funded * 100)}% of our people live under states that fund relief.` : null];
+      const funded = shareUnder(c, (pid) => (w.polities.get(pid)?.gov.spendWelfare ?? 0) >= RELIEF_FUNDED);
+      const ok = hungryShare <= 0.05 && funded >= 0.5 && ours.length > 0;
+      const close = (1 - Math.min(1, hungryShare * 4)) * 0.5 + Math.min(1, funded / 0.5) * 0.5;
+      return [ok, close, hungryShare > 0.05 ? `${hungry[0].name} is going hungry.` : funded < 0.5 ? `Only ${Math.round(funded * 100)}% of our people live under states that fund relief.` : null];
     }
     case 'knowledge': {
       const schools = ours.filter((s) => s.buildings[BLD_SCHOOL] >= 1).length;
       const want = Math.max(3, Math.ceil(ours.length * 0.6));
       const lit = literacy(c, ours);
-      const ok = schools >= want && lit >= 0.45;
-      return [ok, Math.min(1, schools / want) * 0.5 + Math.min(1, lit / 0.45) * 0.5, ok ? null : schools < want ? `Only ${schools} of our towns keep a school; the work needs ${want}.` : `Only ${Math.round(lit * 100)}% of our people can read.`];
+      // measured against the founding, so literacy the world would have reached anyway does not count
+      const needLit = Math.min(0.8, Math.max(0.55, (g.order.base?.lit ?? 0.3) + 0.25));
+      const ok = schools >= want && lit >= needLit;
+      return [ok, Math.min(1, schools / want) * 0.5 + Math.min(1, lit / needLit) * 0.5, ok ? null : schools < want ? `Only ${schools} of our towns keep a school; the work needs ${want}.` : `Only ${Math.round(lit * 100)}% of our people can read.`];
     }
     case 'voice': {
-      const sh = shareUnder(c, (pid) => (w.polities.get(pid)?.gov.participation ?? 0) > 0.5);
-      return [sh > 0.5, Math.min(1, sh / 0.5), sh > 0.5 ? null : `${Math.round(sh * 100)}% of our people have a say in their government.`];
+      // a greater say than at the founding: a realm that already heeded the many must go further
+      const bar = voiceBar(g);
+      const sh = shareUnder(c, (pid) => (w.polities.get(pid)?.gov.participation ?? 0) > bar);
+      return [sh >= 0.55, Math.min(1, sh / 0.55), sh >= 0.55 ? null : `${Math.round(sh * 100)}% of our people have the say the work needs in their government.`];
     }
     case 'peace': {
       // a lull between wars is not peace: most of our people must live in states at peace that have laid down most of their arms
-      const calm = shareUnder(c, (pid) => !atWar(w, pid) && (w.polities.get(pid)?.gov.spendMilitary ?? 1) <= 0.15);
+      const calm = shareUnder(c, (pid) => !atWar(w, pid) && (w.polities.get(pid)?.gov.spendMilitary ?? 1) <= PEACE_ARMS);
       const fighting = [...new Set(ours.map((s) => s.polity))].find((p) => atWar(w, p));
-      return [calm >= 0.7, Math.min(1, calm / 0.7), calm >= 0.7 ? null : fighting !== undefined ? `${w.polities.get(fighting)?.name ?? 'A realm'} is at war.` : `Only ${Math.round(calm * 100)}% of our people live in disarmed states at peace.`];
+      return [calm >= 0.6, Math.min(1, calm / 0.6), calm >= 0.6 ? null : fighting !== undefined ? `${w.polities.get(fighting)?.name ?? 'A realm'} is at war.` : `Only ${Math.round(calm * 100)}% of our people live in disarmed states at peace.`];
     }
     case 'faith-free': {
-      const sh = shareUnder(c, (pid) => (w.polities.get(pid)?.gov.tolerance ?? 0) > 0.6);
-      return [sh >= 0.7, Math.min(1, sh / 0.7), sh >= 0.7 ? null : `${Math.round(sh * 100)}% of our people live under tolerant rule.`];
+      const bar = toleranceBar(g);
+      const sh = shareUnder(c, (pid) => (w.polities.get(pid)?.gov.tolerance ?? 0) > bar);
+      return [sh >= 0.6, Math.min(1, sh / 0.6), sh >= 0.6 ? null : `${Math.round(sh * 100)}% of our people live under tolerant rule.`];
     }
     case 'power': {
       const pops = new Map<number, number>();
       for (const s of ours) pops.set(s.polity, (pops.get(s.polity) ?? 0) + s.pop);
       const top = [...pops.entries()].sort((a, b) => b[1] - a[1])[0];
       if (!top) return [false, 0, 'Our people have no state.'];
-      const need = ['ruler', 'high-priest', 'treasurer'];
-      const have = need.filter((k) => g.offices.some((o) => o.polity === top[0] && o.kind === k && g.members.has(o.holder)));
-      const missing = need.filter((k) => !have.includes(k));
-      return [missing.length === 0, have.length / 3, missing.length ? `We do not yet hold the ${missing.join(', the ').replace('high-priest', 'high priesthood')} of ${w.polities.get(top[0])?.name}.` : null];
+      const holds = (k: string) => g.offices.some((o) => o.polity === top[0] && o.kind === k && g.members.has(o.holder));
+      const throne = holds('ruler');
+      const great = ['high-priest', 'treasurer', 'chancellor'].filter(holds).length;
+      const name = w.polities.get(top[0])?.name;
+      const ok = throne && great >= 1;
+      return [ok, (throne ? 0.6 : 0) + Math.min(1, great) * 0.4, ok ? null : !throne ? `We do not yet hold the throne of ${name}.` : `We hold the throne of ${name}, but not its temple, treasury or chancery.`];
     }
     case 'endure': {
-      // measured as a share of the world, so ordinary growth that every people enjoys does not count
-      const share = peoplePop(w) / Math.max(1, w.population);
-      const want = Math.min(0.9, 2 * g.order.baseShare);
-      const r = share / want;
-      return [r >= 1, Math.min(1, r), r >= 1 ? null : `Our people are ${Math.round(share * 100)}% of the world; the work needs ${Math.round(want * 100)}%.`];
+      // grown in number, not shrinking as a share of the world (so ordinary growth that every people enjoys is not enough), and fed
+      const pop = peoplePop(w);
+      const share = pop / Math.max(1, w.population);
+      const grown = pop / Math.max(1, 1.6 * g.order.basePop);
+      const held = share / Math.max(1e-6, 1.1 * g.order.baseShare);
+      const all = ours.reduce((a, x) => a + x.pop, 0) || 1;
+      const hungry = ours.filter((s) => s.foodRatio < 0.85 || s.hungerShare > 0.25);
+      const hungryShare = hungry.reduce((a, x) => a + x.pop, 0) / all;
+      // and cared for: a people that endures is one whose states keep relief for the lean years
+      const funded = shareUnder(c, (pid) => (w.polities.get(pid)?.gov.spendWelfare ?? 0) >= RELIEF_FUNDED);
+      const ok = grown >= 1 && held >= 1 && hungryShare <= 0.1 && funded >= 0.3;
+      const close = Math.min(1, grown) * 0.35 + Math.min(1, held) * 0.35 + (1 - Math.min(1, hungryShare * 3)) * 0.15 + Math.min(1, funded / 0.3) * 0.15;
+      return [ok, close, ok ? null : funded < 0.3 ? `Only ${Math.round(funded * 100)}% of our people live under states that fund relief; the work needs 30%.` : grown < 1 ? `Our people number ${Math.round(pop)}; the work needs ${Math.round(1.6 * g.order.basePop)}.` : held < 1 ? `Our people are ${Math.round(share * 100)}% of the world; the work needs ${Math.round(g.order.baseShare * 110)}%, a tenth more than at the founding.` : `${hungry[0].name} is going hungry.`];
     }
   }
   return [false, 0, null];
 }
+
+/** Months held lost for each month the Great Work's condition fails. */
+export const GRACE = 4;
 
 /** Monthly: advance the Great Work and the Lesser Works; returns true when the Great Work is won. */
 export function worksMonth(c: Ctx): boolean {
@@ -184,11 +221,14 @@ export function worksMonth(c: Ctx): boolean {
     const ok = cond && atWork;
     const blocker = cond && !atWork ? 'The Order is too small to claim this as its work: it needs four members and a seat.' : cblock;
     const wasHeld = gw.held;
-    gw.held = ok ? gw.held + 1 : 0;
-    gw.progress = ok ? 0.5 + 0.5 * (gw.held / gw.need) : 0.5 * close;
+    const wasOk = wasHeld > 0 && gw.blocker === null;
+    // a short lapse sets the work back rather than undoing it: each month the condition fails costs four months held,
+    // so a bad year is survivable but a lucky decade between long failures is not
+    gw.held = ok ? gw.held + 1 : Math.max(0, gw.held - GRACE);
+    gw.progress = ok ? 0.5 + 0.5 * (gw.held / gw.need) : gw.held > 0 ? 0.5 * (gw.held / gw.need) + 0.5 * close * (1 - gw.held / gw.need) : 0.5 * close;
     gw.blocker = ok ? null : blocker;
-    if (ok && wasHeld === 0) notice(w, 'work', 1, 'The Great Work stands', `${gw.title}: the condition is met. It must now hold for ${Math.round(gw.need / 12)} years.`);
-    if (!ok && wasHeld > 24) notice(w, 'work', 3, 'The Great Work falters', `${gw.title}: ${blocker ?? 'the condition no longer holds'}`);
+    if (ok && !wasOk) notice(w, 'work', 1, 'The Great Work stands', `${gw.title}: the condition is met. It must now hold for ${Math.max(1, Math.round((gw.need - gw.held) / 12))} more years.`);
+    if (!ok && wasOk && wasHeld > 24) notice(w, 'work', 3, 'The Great Work falters', `${gw.title}: ${blocker ?? 'the condition no longer holds'}`);
     if (gw.held >= gw.need) { gw.done = true; gw.doneAt = w.tick; gw.progress = 1; return true; }
   }
   const defs = LESSER[gw.kind as WorkKind] ?? [];
