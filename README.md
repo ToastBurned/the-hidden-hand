@@ -1,32 +1,37 @@
-# The Noosphere
+# The Hidden Hand
 
-An autonomous civilisation simulation. A few hundred foragers are placed on a generated world, and from then on
-nothing is scripted: farming, towns, markets, inequality, states, faiths, wars, inventions and collapses appear
-(or don't) because of the material conditions and the choices of thousands of individually simulated people.
-Experiment tooling is built in, so you can run many worlds, compare conditions, tell real effects from noise and
-see what explains why worlds turn out differently.
+A game of secret stewardship. You lead a hidden Order inside a living, procedurally generated civilisation: neither
+king nor god, you cannot give anyone an order. You found institutions, back leaders and movements, shift budgets,
+spread ideas, and when you must, blackmail and remove people, all while keeping the Order secret. Every person in the
+world is individually simulated; farming, towns, markets, states, faiths, wars and inventions arise (or don't) from
+material conditions and the choices of thousands of people, and your influence only tilts those choices.
+
+The game grew out of *The Noosphere*, an autonomous civilisation simulation, and keeps its full engine. The game's
+campaign (the Order, its creed, levers and the Great Work) is being built now; until it lands, the app opens on the
+simulated world described below. The simulation's research tools (the Experiments lab and direct interventions) are
+kept for development and balancing and are hidden from the player: see [Developer mode](#developer-mode).
 
 ![World view](docs/screenshots/world.png)
 
 ## Running it on Windows
 
 **Option 1: no installation (recommended).** Download the repository (green *Code* button → *Download ZIP*),
-unzip it, and double-click **`app\Noosphere.html`**. It opens in your browser (Edge or Chrome recommended) and runs
+unzip it, and double-click **`app\HiddenHand.html`**. It opens in your browser (Edge or Chrome recommended) and runs
 entirely on your computer, with no server and no internet connection needed. Your saved worlds are kept in the
 browser's storage on your machine.
 
 **Desktop app (optional).** For an installed program with a Start-menu shortcut, saves as real files in
-`Documents\Noosphere\Saves`, and no slow-down when the window is in the background, see
+`Documents\The Hidden Hand\Saves`, and no slow-down when the window is in the background, see
 [`desktop/README.md`](desktop/README.md).
 
 **Option 2: local server.** If your browser blocks pages opened from disk, install [Node.js](https://nodejs.org)
-(version 18 or newer) and double-click **`Noosphere.bat`**. It serves the app at `http://localhost:5179` and opens it.
+(version 18 or newer) and double-click **`HiddenHand.bat`**. It serves the app at `http://localhost:5179` and opens it.
 
 **Option 3: from source** (for development):
 
 ```bat
 npm install
-npm run build      :: type-checks, builds dist/index.html and copies it to app/Noosphere.html
+npm run build      :: type-checks, builds dist/index.html and copies it to app/HiddenHand.html
 npm start          :: serves the build at http://localhost:5179
 npm run dev        :: live-reloading development server
 ```
@@ -43,7 +48,7 @@ Press **Space** to start. The top bar shows the date, controls and headline numb
 | **Statistics** | Time series of population, births and deaths, fertility, food, hunger, inequality, wealth, trade, money, technology, literacy, unrest, wars, forests, game, soils, climate, occupations and causes of death. Export as CSV. |
 | **Societies** | Timelines of polities, descent trees of cultures and faiths, technology discovery and diffusion, wars and epidemics. |
 | **People** | Search the living and the notable dead, each with a portrait. |
-| **Experiments** | Design and run batches of worlds in the background, then analyse them. |
+| **Experiments** | *Developer mode only.* Design and run batches of worlds in the background, then analyse them. |
 
 The **inspector** on the right links everything together: a settlement → its polity, residents, prices, buildings,
 knowledge and history; a person → their family, character, values, memories, friends, rivals and deeds; an event →
@@ -60,14 +65,21 @@ from a fixed seed: they are decoration, not simulated detail.
 its kind, or news of someone you follow. The bell in the top bar changes this. A short **guided tour** runs on first
 launch and can be replayed from Help.
 
-**Intervene** applies a drought, plague, volcanic winter, climate shift, technology grant, bountiful years, migration
+**Intervene** (developer mode only) applies a drought, plague, volcanic winter, climate shift, technology grant, bountiful years, migration
 wave or cultural shock to the running world. **Save** (Ctrl+S) and **Library** keep worlds in the browser and export
 or import them as files. A save resumes exactly: the same future unfolds as if you had never saved.
 **New world** exposes every parameter of geography, environment, human nature and culture.
 
-Keyboard: Space play/pause · `.` one month · `>` one year · `+`/`-` speed · `1`–`7` tabs · Ctrl+S save · Esc back.
+Keyboard: Space play/pause · `.` one month · `>` one year · `+`/`-` speed · `1`–`6` tabs (`7` in developer mode) · Ctrl+S save · Esc back.
 
-## Experiments
+## Developer mode
+
+The simulation tools are off the player's menu but still in the app. Turn them on by opening
+`app\HiddenHand.html?dev` (or `http://localhost:5179/?dev`), by starting the desktop app with `--dev` (or with the
+environment variable `HIDDENHAND_DEV=1`), or by pressing **Ctrl+Shift+D**, which toggles them and remembers the
+choice in that browser. A small *dev* badge by the title shows when they are on.
+
+## Experiments (developer tools)
 
 An experiment is a set of **conditions** (parameter changes and scheduled interventions) crossed with a set of
 **seeds**. Two designs are available:

@@ -10,6 +10,7 @@ export interface Prefs {
   follow: { persons: { id: number; name: string }[]; families: string[] };
   toured: boolean;
 }
+// Key kept from before the rename (The Noosphere) so existing preferences carry over.
 const KEY = 'noosphere.prefs.v1';
 const DEFAULTS: Prefs = { alerts: { level: 4, autoPause: true, followed: true }, follow: { persons: [], families: [] }, toured: false };
 

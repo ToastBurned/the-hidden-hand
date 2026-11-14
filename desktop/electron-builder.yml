@@ -1,7 +1,7 @@
 # Builds the Windows installer (NSIS) and a portable .exe into desktop/release/.
-appId: io.github.toastburned.noosphere
-productName: The Noosphere
-copyright: The Noosphere
+appId: io.github.toastburned.hiddenhand
+productName: The Hidden Hand
+copyright: The Hidden Hand
 directories:
   output: release
   buildResources: build
@@ -18,14 +18,14 @@ win:
     - nsis
     - portable
 nsis:
-  artifactName: "Noosphere-Setup-${version}.${ext}"
+  artifactName: "HiddenHand-Setup-${version}.${ext}"
   oneClick: false
   perMachine: false
   allowToChangeInstallationDirectory: true
   createDesktopShortcut: always
   createStartMenuShortcut: true
-  shortcutName: The Noosphere
-  # Saved worlds live in Documents\Noosphere\Saves, not in the app folder, so uninstalling never deletes them.
+  shortcutName: The Hidden Hand
+  # Saved worlds live in Documents\The Hidden Hand\Saves, not in the app folder, so uninstalling never deletes them.
   deleteAppDataOnUninstall: false
 portable:
-  artifactName: "Noosphere-${version}-portable.exe"
+  artifactName: "HiddenHand-${version}-portable.exe"

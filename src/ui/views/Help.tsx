@@ -1,8 +1,8 @@
 import { Modal } from '../components/Modal';
 
-export function HelpDialog({ onClose, onTour }: { onClose: () => void; onTour?: () => void }) {
+export function HelpDialog({ onClose, onTour, dev }: { onClose: () => void; onTour?: () => void; dev?: boolean }) {
   return (
-    <Modal title="How to use the Noosphere" onClose={onClose} wide>
+    <Modal title="How to use The Hidden Hand" onClose={onClose} wide>
       <div className="help">
         <section>
           <h3>What you are watching</h3>
@@ -14,7 +14,7 @@ export function HelpDialog({ onClose, onTour }: { onClose: () => void; onTour?: 
             <tr><td><kbd>Space</kbd></td><td>Play or pause</td></tr>
             <tr><td><kbd>.</kbd> / <kbd>&gt;</kbd></td><td>Advance one month / one year while paused</td></tr>
             <tr><td><kbd>+</kbd> / <kbd>-</kbd></td><td>Faster / slower</td></tr>
-            <tr><td><kbd>1</kbd>–<kbd>7</kbd></td><td>Switch between Story, World, Chronicle, Statistics, Societies, People, Experiments</td></tr>
+            <tr><td><kbd>1</kbd>–<kbd>{dev ? 7 : 6}</kbd></td><td>Switch between Story, World, Chronicle, Statistics, Societies, People{dev ? ', Experiments' : ''}</td></tr>
             <tr><td><kbd>Ctrl</kbd>+<kbd>S</kbd></td><td>Save to the library</td></tr>
             <tr><td><kbd>Esc</kbd></td><td>Back in the inspector / close a dialog</td></tr>
             <tr><td>Mouse</td><td>Drag to pan the map, scroll to zoom, click a settlement or a patch of land to inspect it. Zoom in close and settlements become towns; double-click one to open its streets.</td></tr>
@@ -31,10 +31,11 @@ export function HelpDialog({ onClose, onTour }: { onClose: () => void; onTour?: 
           <h3>Following causes</h3>
           <p>Every inspector links onward: a settlement to its polity, its people and its history; a person to their family, memories and deeds; an event to the earlier events that caused it and the later ones it led to. The “Why” line on each event is written from the state of the world at that moment, for example the food stocks during a famine or the grievances behind a war.</p>
         </section>
-        <section>
-          <h3>Experiments</h3>
+        {dev && <section>
+          <h3>Experiments (developer mode)</h3>
           <p>The Experiments tab runs many worlds in parallel in the background while you keep exploring. Compare conditions (different parameters or interventions) across the same seeds, or branch many futures from the world you are watching. The analysis reports means with 95% confidence intervals, Welch's t-test and Mann–Whitney U with a false-discovery-rate correction, effect sizes, and which features of a world predict how it turns out. A difference is only called systematic when it survives that correction and is large.</p>
-        </section>
+          <p className="small">Developer mode also shows the Intervene button. Press <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>D</kbd> to hide these tools again.</p>
+        </section>}
         <section>
           <h3>Saving</h3>
           <p>Saves go to this browser's storage on your computer (Library). Export a world to a file to back it up or share it. Loading a save resumes exactly the same future.</p>
