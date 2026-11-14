@@ -3,8 +3,8 @@
  * End-to-end check of the desktop app: changes settings and checks they reach preferences.json,
  * founds an Order in a small world, saves the campaign from the pause menu and confirms a real file
  * appears in the saves folder, checks the folder rules (dropped-in files, old .noosphere.json saves,
- * paths outside the folder), restarts the app, confirms settings and the save are still there, and
- * continues the campaign and re-saves it at the same point.
+ * paths outside the folder), restarts the app, confirms settings and the save are still there, loads
+ * the campaign from Saved campaigns and re-saves it at the same point, and deletes a save from the list.
  *
  * Needs a display (on Linux: xvfb-run -a npm test).
  * Usage: npm test            (after npm run prepare-app)
@@ -119,14 +119,31 @@ async function saveCampaign(page, count) {
   assert(await page.evaluate(() => window.hiddenHandDesktop.prefs.get('hiddenhand.settings.v1')).then((v) => JSON.parse(v).textScale === 1.12), 'settings are back after restarting the app');
   const cont = page.getByRole('button', { name: /^Continue/ });
   await until(() => cont.isEnabled(), 'Continue to be offered', 10000);
-  await cont.click();
+
+  // Saved campaigns: load a save from the list.
+  await page.getByRole('button', { name: /^Saved campaigns/ }).click();
+  const dialog = page.getByRole('dialog', { name: 'Saved campaigns' });
+  await dialog.getByRole('button', { name: /^Load / }).first().click();
   // Wait for the play screen of the loaded campaign before opening the pause menu.
   await page.getByRole('button', { name: /Conclave/ }).waitFor({ timeout: 120000 });
   await page.waitForTimeout(3000);
   const both = await saveCampaign(page, 2);
   const second = both.find((f) => f !== first);
   const secondWorld = JSON.parse(fs.readFileSync(path.join(savesDir, second), 'utf8'));
-  assert(secondWorld.game && secondWorld.tick === firstWorld.tick, `Continue restored the campaign at tick ${firstWorld.tick} (got ${secondWorld.tick})`);
+  assert(secondWorld.game && secondWorld.tick === firstWorld.tick, `loading from Saved campaigns restored the campaign at tick ${firstWorld.tick} (got ${secondWorld.tick})`);
+
+  // Save and return to the start screen, then delete a save from the list.
+  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: 'Save and return to the start screen' }).click({ timeout: 120000 });
+  await until(() => saves().length === 3, 'third save');
+  await page.getByRole('button', { name: /^Saved campaigns/ }).click();
+  await dialog.getByRole('button', { name: /^Delete / }).first().waitFor();
+  assert((await dialog.getByRole('button', { name: /^Load / }).count()) === 3, 'Saved campaigns lists all three saves');
+  if (shots) await page.screenshot({ path: path.join(shots, 'desktop-saved-campaigns.png') });
+  await dialog.getByRole('button', { name: /^Delete / }).first().click();
+  await dialog.getByRole('button', { name: 'Delete', exact: true }).click();
+  await until(() => saves().length === 2, 'delete from Saved campaigns', 10000);
+  assert(await until(async () => (await dialog.getByRole('button', { name: /^Load / }).count()) === 2, 'list refresh', 10000), 'deleting from Saved campaigns removes the file and the row');
   await app.close();
   fs.rmSync(tmp, { recursive: true, force: true });
   console.log('\nDesktop smoke test passed.');

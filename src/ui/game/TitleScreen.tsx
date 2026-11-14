@@ -12,10 +12,11 @@ import { useSettings } from './settings';
 
 const BACKDROP_YEARS = 70;
 
-export function TitleScreen(props: { onNew: () => void; onContinue: (s: SaveMeta) => void; onTutorial: () => void; onSettings: () => void; onChronicles: () => void }) {
+export function TitleScreen(props: { onNew: () => void; onContinue: (s: SaveMeta) => void; onTutorial: () => void; onLoad: () => void; onSettings: () => void; onChronicles: () => void; savesVersion?: number }) {
   const st = useSim();
   const settings = useSettings();
   const [latest, setLatest] = useState<SaveMeta | null>(null);
+  const [count, setCount] = useState(0);
   const started = useRef(false);
 
   // A fresh backdrop world: it forms quickly, then lives at a stately pace.
@@ -32,8 +33,12 @@ export function TitleScreen(props: { onNew: () => void; onContinue: (s: SaveMeta
   }, [st.ready, st.frame?.tick, st.running, st.config?.name]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    listSaves().then((all) => setLatest(all.find((s) => s.note === 'campaign') ?? null)).catch(() => setLatest(null));
-  }, []);
+    listSaves().then((all) => {
+      const campaigns = all.filter((s) => s.note === 'campaign');
+      setLatest(campaigns[0] ?? null);
+      setCount(campaigns.length);
+    }).catch(() => { setLatest(null); setCount(0); });
+  }, [props.savesVersion]);
 
   const ev = st.chronicle.filter((e) => e.imp >= 3).slice(-1)[0];
   return (
@@ -48,6 +53,7 @@ export function TitleScreen(props: { onNew: () => void; onContinue: (s: SaveMeta
         <nav className="menu" aria-label="Main menu">
           <button onClick={props.onNew} autoFocus>New campaign<span className="sub">Found an Order in a world with its own history</span></button>
           <button onClick={() => latest && props.onContinue(latest)} disabled={!latest}>Continue<span className="sub">{latest ? `${latest.name}, year ${Math.floor(latest.tick / 12)}` : 'No campaign saved yet'}</span></button>
+          <button onClick={props.onLoad}>Saved campaigns<span className="sub">{count > 1 ? `Load any of ${count} saves, or export and delete them` : count === 1 ? 'Load, export or delete a save, or import one' : 'Import a campaign from a file'}</span></button>
           <button onClick={props.onTutorial}>Tutorial<span className="sub">{settings.tutorialDone ? 'Play the first twenty years again' : 'Your first twenty years, guided'}</span></button>
           {settings.chronicles.length > 0 && <button onClick={props.onChronicles}>Chronicles<span className="sub">The Orders you have led</span></button>}
           <button onClick={props.onSettings}>Settings</button>

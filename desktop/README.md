@@ -4,7 +4,9 @@ The same game as `app\HiddenHand.html`, packaged as an installed Windows program
 
 - **Real save files.** Campaigns saved from the pause menu are `.hiddenhand.json` files in
   `Documents\The Hidden Hand\Saves` (change it with *File → Change Saves Folder…*). They are ordinary files:
-  back them up or copy them to another computer. *Continue* on the start screen opens the newest campaign.
+  back them up or copy them to another computer. *Continue* on the start screen opens the newest campaign;
+  *Saved campaigns* lists them all to load, export or delete (deleting moves the file to the Recycle Bin), and
+  imports a campaign from a file.
 - **No background slow-down.** A browser throttles a tab that is minimised or hidden; the desktop app
   keeps the world running at full speed, and gives the simulation the largest memory limit the engine allows.
 - A Start-menu and desktop shortcut, its own window, and no dependence on which browser you have.
@@ -40,7 +42,7 @@ This builds the web app, then writes both files to `desktop\release\`. Other com
 ```bat
 npm start          :: run the desktop app from source, no packaging
 npm run dist:dir   :: package to release\win-unpacked\ without making an installer (faster)
-npm test           :: end-to-end check: settings, found a campaign, save, restart, continue
+npm test           :: end-to-end check: settings, found a campaign, save, restart, load, delete
 ```
 
 The installer is not code-signed, so Windows SmartScreen shows "Windows protected your PC" the first time:
