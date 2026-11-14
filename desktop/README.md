@@ -2,10 +2,11 @@
 
 The same game as `app\HiddenHand.html`, packaged as an installed Windows program with:
 
-- **Real save files.** Worlds are saved as `.hiddenhand.json` files in `Documents\The Hidden Hand\Saves`
-  (change it with *File → Change Saves Folder…*). They are ordinary files: back them up, copy them to
-  another computer, or drop a world exported from the browser version into the folder and it appears in
-  the Library. Deleting a save from the Library moves the file to the Recycle Bin.
+- **Real save files.** Campaigns saved from the pause menu are `.hiddenhand.json` files in
+  `Documents\The Hidden Hand\Saves` (change it with *File → Change Saves Folder…*). They are ordinary files:
+  back them up or copy them to another computer. *Continue* on the start screen opens the newest campaign;
+  *Saved campaigns* lists them all to load, export or delete (deleting moves the file to the Recycle Bin), and
+  imports a campaign from a file.
 - **No background slow-down.** A browser throttles a tab that is minimised or hidden; the desktop app
   keeps the world running at full speed, and gives the simulation the largest memory limit the engine allows.
 - A Start-menu and desktop shortcut, its own window, and no dependence on which browser you have.
@@ -13,15 +14,14 @@ The same game as `app\HiddenHand.html`, packaged as an installed Windows program
 **Coming from The Noosphere?** The app was renamed, so it installs as a new program next to the old one
 (uninstall *The Noosphere* whenever you like). On first start, if `Documents\Noosphere\Saves` exists and the new
 saves folder does not, your old worlds are copied across; the old folder is left as it was. Old `.noosphere.json`
-files keep loading. They open as simulated worlds; campaigns of the game will use their own save format, and
-old worlds cannot be turned into campaigns.
+files are still recognised, but they are simulated worlds, not campaigns, and cannot be played as a campaign.
 
-**Developer mode.** Start the app with `--dev` (for example a shortcut to `"The Hidden Hand.exe" --dev`) or set
-`HIDDENHAND_DEV=1` to show the simulation tools (Experiments and Intervene). Ctrl+Shift+D toggles them too.
+**Preferences on disk.** Your settings (what pauses the game, text size, motion, hints, history length, tutorial
+progress and the Chronicles of Orders you have led) are kept in `%APPDATA%\The Hidden Hand\preferences.json`, so they
+survive updates and reinstalls. Settings from earlier versions are carried over the first time 0.2.0 starts.
 
 The browser version (`app\HiddenHand.html`, `HiddenHand.bat`) still works exactly as before and keeps using
-browser storage. The two do not share a library automatically: to move a browser save across, use
-*Library → Export* in the browser and put the file in the saves folder.
+browser storage. The two do not share saves.
 
 ## Getting the installer
 
@@ -42,7 +42,7 @@ This builds the web app, then writes both files to `desktop\release\`. Other com
 ```bat
 npm start          :: run the desktop app from source, no packaging
 npm run dist:dir   :: package to release\win-unpacked\ without making an installer (faster)
-npm test           :: end-to-end check: start, save with Ctrl+S, load from the Library, restart
+npm test           :: end-to-end check: settings, found a campaign, save, restart, load, delete
 ```
 
 The installer is not code-signed, so Windows SmartScreen shows "Windows protected your PC" the first time:

@@ -1,8 +1,10 @@
 /**
- * Game settings, per player. Stored in localStorage when it is available; the game works
+ * Game settings, per player. Stored in localStorage when it is available (in the desktop app, in a file: see
+ * platform/storage.ts); the game works
  * with the defaults when it is not (private windows, blocked storage).
  */
 import { useSyncExternalStore } from 'react';
+import { readPref, writePref } from '../../platform/storage';
 import type { Interrupts } from '../../game/view';
 
 export interface GameSettings {
@@ -24,7 +26,7 @@ const DEFAULTS: GameSettings = { interrupts: 'important', textScale: 1, reducedM
 
 function load(): GameSettings {
   try {
-    const raw = localStorage.getItem(KEY);
+    const raw = readPref(KEY);
     if (raw) return { ...DEFAULTS, ...(JSON.parse(raw) as Partial<GameSettings>) };
   } catch { /* storage unavailable */ }
   const reduce = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -34,7 +36,7 @@ let state = load();
 const listeners = new Set<() => void>();
 export function setSettings(f: (s: GameSettings) => GameSettings) {
   state = f(state);
-  try { localStorage.setItem(KEY, JSON.stringify(state)); } catch { /* ignore */ }
+  writePref(KEY, JSON.stringify(state));
   for (const l of listeners) l();
 }
 export const getSettings = () => state;

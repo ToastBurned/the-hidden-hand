@@ -5,7 +5,8 @@
 import { useEffect, useState } from 'react';
 import { sim } from '../client';
 import { useSim } from '../hooks';
-import { getSave } from '../saves';
+import { getSave, type SaveMeta } from '../saves';
+import { LoadDialog } from './LoadDialog';
 import { PlayScreen } from './PlayScreen';
 import { GameModal } from './Modal';
 import { Icon } from './Icons';
@@ -24,7 +25,8 @@ type Screen = { id: 'title' } | { id: 'setup'; tutorial: boolean } | { id: 'play
 export function GameApp() {
   const settings = useSettings();
   const [screen, setScreen] = useState<Screen>({ id: 'title' });
-  const [dialog, setDialog] = useState<'settings' | 'chronicles' | null>(null);
+  const [dialog, setDialog] = useState<'settings' | 'chronicles' | 'load' | null>(null);
+  const [savesVersion, setSavesVersion] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const st = useSim();
   // a loaded campaign save opens straight into play
@@ -34,6 +36,13 @@ export function GameApp() {
     if (!r.ok) { setError(`The Order could not be founded: ${r.error}.`); setScreen({ id: 'setup', tutorial }); return; }
     setScreen({ id: 'play', tutorial });
   };
+  const load = async (s: SaveMeta) => {
+    const data = await getSave(s.id);
+    if (!data) { setError('That save could not be read.'); return; }
+    setDialog(null);
+    setScreen({ id: 'loading' });
+    sim.load(data);
+  };
   const toTitle = () => { sim.pause(); setScreen({ id: 'title' }); };
   return (
     <div className="hh" style={{ ['--text-scale' as string]: settings.textScale }} data-motion={settings.reducedMotion ? 'reduced' : 'full'}>
@@ -41,7 +50,9 @@ export function GameApp() {
       {screen.id === 'title' && (
         <TitleScreen
           onNew={() => setScreen({ id: 'setup', tutorial: false })}
-          onContinue={async (s) => { const data = await getSave(s.id); if (!data) { setError('That save could not be read.'); return; } setScreen({ id: 'loading' }); sim.load(data); }}
+          onContinue={load}
+          onLoad={() => setDialog('load')}
+          savesVersion={savesVersion}
           onTutorial={() => setScreen({ id: 'setup', tutorial: true })}
           onSettings={() => setDialog('settings')}
           onChronicles={() => setDialog('chronicles')}
@@ -58,6 +69,7 @@ export function GameApp() {
       )}
       {screen.id === 'play' && <PlayScreen onTitle={toTitle} tutorial={screen.tutorial} />}
       {dialog === 'settings' && <SettingsDialog onClose={() => setDialog(null)} />}
+      {dialog === 'load' && <LoadDialog onLoad={load} onClose={() => { setDialog(null); setSavesVersion((v) => v + 1); }} />}
       {dialog === 'chronicles' && <ChroniclesDialog onClose={() => setDialog(null)} />}
       {error && <div className="hh-toast" role="alert" onClick={() => setError(null)}>{error}</div>}
       {screen.id !== 'play' && <CodexCorner />}

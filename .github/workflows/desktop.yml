@@ -5,7 +5,7 @@ name: Desktop app (Windows)
 on:
   workflow_dispatch:
   pull_request:
-    paths: ['desktop/**', 'src/platform/**', 'src/ui/saves.ts', '.github/workflows/desktop.yml']
+    paths: ['desktop/**', 'src/platform/**', 'src/ui/saves.ts', 'src/ui/game/settings.ts', '.github/workflows/desktop.yml']
   push:
     tags: ['v*']
 
@@ -15,7 +15,7 @@ permissions:
 jobs:
   build:
     runs-on: windows-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
