@@ -22,7 +22,11 @@ export interface Roster {
 }
 
 const caches = new WeakMap<World, Map<number, Roster>>();
-const verify = typeof process !== 'undefined' && !!process.env?.HH_VERIFY_ROSTER;
+let verify = typeof process !== 'undefined' && !!process.env?.HH_VERIFY_ROSTER;
+/** Check every cached roster against a fresh one (slow; for tests). */
+export function setRosterChecks(on: boolean): void {
+  verify = on;
+}
 
 /** Drop the cached roster of a settlement after its households or their members changed. */
 export function touchRoster(w: World, sid: number): void {
