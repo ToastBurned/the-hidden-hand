@@ -19,10 +19,10 @@ export interface WorkDef {
 }
 
 export const GREAT_WORKS: Record<WorkKind, WorkDef> = {
-  'no-starving': { kind: 'no-starving', title: 'The Full Granary', text: 'No town of our people goes hungry, and every state of ours keeps relief funded, for forty years.', need: 480 },
-  knowledge: { kind: 'knowledge', title: 'The Lamp Kept Lit', text: 'Schools in half the towns of our people (at least three), and a third of us lettered, for thirty years.', need: 360 },
+  'no-starving': { kind: 'no-starving', title: 'The Full Granary', text: 'Our towns fed, and seven in ten of our people under states that fund relief, for forty years.', need: 480 },
+  knowledge: { kind: 'knowledge', title: 'The Lamp Kept Lit', text: 'Schools in three towns of our people in five (at least three), and nearly half of us lettered, for thirty years.', need: 360 },
   voice: { kind: 'voice', title: 'The Voice of the Many', text: 'Most of our people living under governments that heed the many, for twenty-five years.', need: 300 },
-  peace: { kind: 'peace', title: 'The Long Peace', text: 'No state of our people at war or spending heavily on arms, for forty years.', need: 480 },
+  peace: { kind: 'peace', title: 'The Long Peace', text: 'Seven in ten of our people living in states at peace that spend little on arms, for forty years.', need: 480 },
   'faith-free': { kind: 'faith-free', title: 'The Open Temple', text: 'Seven in ten of our people under tolerant rule, for thirty years.', need: 360 },
   power: { kind: 'power', title: 'The Hidden Throne', text: 'Members of the Order holding the throne, the temple and the treasury of the greatest state of our people at once, for ten years.', need: 120 },
   endure: { kind: 'endure', title: 'The Enduring People', text: 'Our people grown to twice their share of the world at the founding, and held there for thirty years.', need: 360 },
@@ -121,32 +121,31 @@ export function greatCondition(c: Ctx, g: GameState): [boolean, number, string |
   const ours = ourSettlements(w);
   switch (g.greatWork.kind as WorkKind) {
     case 'no-starving': {
-      // fed now is not enough: every state of ours must also keep relief funded, so the next famine is met
+      // fed now is not enough: the states most of our people live in must also keep relief funded
+      const all = ours.reduce((a, x) => a + x.pop, 0) || 1;
       const hungry = ours.filter((s) => s.foodRatio < 0.85 || s.hungerShare > 0.25);
-      const pols = [...new Set(ours.map((s) => s.polity))].map((id) => w.polities.get(id)).filter(Boolean);
-      const stingy = pols.filter((p) => p!.gov.spendWelfare < 0.18);
-      const ok = hungry.length === 0 && stingy.length === 0 && ours.length > 0;
-      const close = (ours.length ? 1 - hungry.length / ours.length : 0) * 0.5 + (pols.length ? 1 - stingy.length / pols.length : 0) * 0.5;
-      return [ok, close, hungry.length ? `${hungry[0].name} is going hungry.` : stingy.length ? `${stingy[0]!.name} spends too little on relief.` : null];
+      const hungryShare = hungry.reduce((a, x) => a + x.pop, 0) / all;
+      const funded = shareUnder(c, (pid) => (w.polities.get(pid)?.gov.spendWelfare ?? 0) >= 0.16);
+      const ok = hungryShare <= 0.05 && funded >= 0.7 && ours.length > 0;
+      const close = (1 - Math.min(1, hungryShare * 4)) * 0.5 + Math.min(1, funded / 0.7) * 0.5;
+      return [ok, close, hungryShare > 0.05 ? `${hungry[0].name} is going hungry.` : funded < 0.7 ? `Only ${Math.round(funded * 100)}% of our people live under states that fund relief.` : null];
     }
     case 'knowledge': {
       const schools = ours.filter((s) => s.buildings[BLD_SCHOOL] >= 1).length;
-      const want = Math.max(3, Math.ceil(ours.length / 2));
+      const want = Math.max(3, Math.ceil(ours.length * 0.6));
       const lit = literacy(c, ours);
-      const ok = schools >= want && lit >= 0.35;
-      return [ok, Math.min(1, schools / want) * 0.5 + Math.min(1, lit / 0.35) * 0.5, ok ? null : schools < want ? `Only ${schools} of our towns keep a school; the work needs ${want}.` : `Only ${Math.round(lit * 100)}% of our people can read.`];
+      const ok = schools >= want && lit >= 0.45;
+      return [ok, Math.min(1, schools / want) * 0.5 + Math.min(1, lit / 0.45) * 0.5, ok ? null : schools < want ? `Only ${schools} of our towns keep a school; the work needs ${want}.` : `Only ${Math.round(lit * 100)}% of our people can read.`];
     }
     case 'voice': {
       const sh = shareUnder(c, (pid) => (w.polities.get(pid)?.gov.participation ?? 0) > 0.5);
       return [sh > 0.5, Math.min(1, sh / 0.5), sh > 0.5 ? null : `${Math.round(sh * 100)}% of our people have a say in their government.`];
     }
     case 'peace': {
-      const pols = new Set(ours.map((s) => s.polity));
-      // a lull between wars is not peace: every state of ours must also have laid down most of its arms
-      const fighting = [...pols].filter((p) => atWar(w, p));
-      const armed = [...pols].filter((p) => (w.polities.get(p)?.gov.spendMilitary ?? 0) > 0.15);
-      const close = (1 - fighting.length / Math.max(1, pols.size)) * 0.5 + (1 - armed.length / Math.max(1, pols.size)) * 0.5;
-      return [fighting.length === 0 && armed.length === 0, close, fighting.length ? `${w.polities.get(fighting[0])?.name ?? 'A realm'} is at war.` : armed.length ? `${w.polities.get(armed[0])?.name ?? 'A realm'} still spends heavily on arms.` : null];
+      // a lull between wars is not peace: most of our people must live in states at peace that have laid down most of their arms
+      const calm = shareUnder(c, (pid) => !atWar(w, pid) && (w.polities.get(pid)?.gov.spendMilitary ?? 1) <= 0.15);
+      const fighting = [...new Set(ours.map((s) => s.polity))].find((p) => atWar(w, p));
+      return [calm >= 0.7, Math.min(1, calm / 0.7), calm >= 0.7 ? null : fighting !== undefined ? `${w.polities.get(fighting)?.name ?? 'A realm'} is at war.` : `Only ${Math.round(calm * 100)}% of our people live in disarmed states at peace.`];
     }
     case 'faith-free': {
       const sh = shareUnder(c, (pid) => (w.polities.get(pid)?.gov.tolerance ?? 0) > 0.6);
