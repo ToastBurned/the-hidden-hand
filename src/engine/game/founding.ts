@@ -98,6 +98,22 @@ export function searchFoundings(sim: Simulation, count = 3, reroll = 0): Foundin
   return out;
 }
 
+/** A founding story for any adult the player picks: their strongest wound, or else their calling, is the motive. */
+export function candidateForPerson(sim: Simulation, pid: number): FoundingCandidate | null {
+  const w = sim.w;
+  const p = w.persons.get(pid);
+  if (!p || ageOf(w, p) < 18) return null;
+  let motive: Motive = p.occ === O_SCHOLAR || p.occ === O_PRIEST ? 'learning' : 'ambition';
+  let ev = -1, strength = 0;
+  for (const m of p.mem) {
+    const mo = MOTIVE_OF_MEMORY[m.k];
+    if (mo && Math.abs(m.v) > strength) { strength = Math.abs(m.v); motive = mo; ev = m.e; }
+  }
+  const companion = companionFor(sim, p);
+  if (companion < 0) return null;
+  return { id: 100000 + pid, founder: pid, companion, sid: p.sid, event: ev, title: title(p, motive), motive, score: 0 };
+}
+
 /** The person the founder persuades first: a close friend, a spouse, a sibling, or the nearest kindred mind. */
 export function companionFor(sim: Simulation, p: Person): number {
   const w = sim.w;
