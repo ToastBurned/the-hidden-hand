@@ -10,6 +10,7 @@ import {
 import { ageOf, clamp, type Ctx } from '../context';
 import { addToHousehold, createPolity, createSettlement, householdSize, individuate, meanValues, remember, splitHousehold } from '../entities';
 import { logEvent } from '../history';
+import { push } from '../pressures';
 import { siteScore } from '../gen/terrain';
 import { invalidateFarmCache } from './economy';
 import type { Household, Person, Settlement } from '../types';
@@ -400,7 +401,7 @@ function attractiveness(c: Ctx, s: Settlement, p: Person): number {
   const room = s.nomadic ? 0 : clamp((housing - s.pop) / Math.max(20, s.pop), -0.5, 0.3);
   return s.foodRatio * 2 + s.prosperity * 0.8 - s.hungerShare * 1.5 - s.unrest + room - s.warDamage
     + (s.culture === p.culture ? 0.5 : 0) + (s.religion === p.religion ? 0.2 + Math.max(0, p.values[V_PIETY]) * 0.4 : 0)
-    + Math.log10(Math.max(10, s.pop)) * 0.15;
+    + Math.log10(Math.max(10, s.pop)) * 0.15 + push(c.w, `s${s.id}:attract`);
 }
 
 export function migrationMonth(c: Ctx, s: Settlement): void {
