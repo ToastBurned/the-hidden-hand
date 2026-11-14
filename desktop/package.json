@@ -5,7 +5,7 @@
   "private": true,
   "description": "The Hidden Hand as a Windows desktop app.",
   "author": "The Hidden Hand",
-  "repository": "github:ToastBurned/noosphere",
+  "repository": "github:ToastBurned/the-hidden-hand",
   "main": "main.cjs",
   "scripts": {
     "prepare-app": "node scripts/prepare-app.cjs",
