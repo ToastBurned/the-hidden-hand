@@ -38,6 +38,10 @@ async function launch() {
   });
   const page = await app.firstWindow();
   page.on('pageerror', (e) => console.error('page error:', e.message));
+  // CI runners have no GPU and the start screen draws a living world behind the menu, so the page
+  // can be slow to respond there: allow generous time, and turn off motion so buttons hold still.
+  page.setDefaultTimeout(120000);
+  await page.emulateMedia({ reducedMotion: 'reduce' }).catch(() => {});
   await page.getByRole('button', { name: /New campaign/ }).waitFor();
   return { app, page };
 }
