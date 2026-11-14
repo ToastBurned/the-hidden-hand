@@ -92,7 +92,7 @@ export function App() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement;
-      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT')) return;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT')) { if (e.key === 'Escape' && dialog) setDialog(null); return; }
       if (e.code === 'Space') { e.preventDefault(); if (st.running) sim.pause(); else sim.play(); }
       else if (e.key === '.' ) sim.step(1);
       else if (e.key === '>' ) sim.step(12);

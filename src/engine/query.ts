@@ -16,7 +16,7 @@ import { polityPop } from './systems/governance';
 export interface SettlementSummary {
   id: number; name: string; x: number; y: number; pop: number; polity: number; culture: number; religion: number;
   nomadic: boolean; alive: boolean; unrest: number; food: number; capital: boolean; walls: number; techs: number; sieged: boolean;
-  /** Presentation extras: technological era (0..5), building levels, recent war damage. */
+  /** Presentation extras: technological era (0..8), building levels, recent war damage. */
   era: number; bld: number[]; dmg: number;
 }
 export interface PolitySummary {
@@ -190,6 +190,8 @@ export function settlementDetail(sim: Simulation, id: number) {
     foodRatio: s.foodRatio, hungerShare: s.hungerShare, unrest: s.unrest, cohesion: s.cohesion, prosperity: s.prosperity,
     farmland, forest, gameShare: gameCap ? game / gameCap : 0, soil: fertBase ? fert / fertBase : 1, territory: s.territory.length,
     techs: s.techs.map((v, i) => (v ? TECHS[i].name : '')).filter(Boolean),
+    /** Known techs grouped by era (newest first), for display. */
+    techsByEra: (() => { const g: { era: number; names: string[] }[] = []; s.techs.forEach((v, i) => { if (!v) return; const e = TECHS[i].era; let x = g.find((y) => y.era === e); if (!x) g.push((x = { era: e, names: [] })); x.names.push(TECHS[i].name); }); return g.sort((a, b) => b.era - a.era); })(),
     research: s.techProgress.map((v, i) => ({ name: TECHS[i].name, p: v / TECHS[i].cost, known: s.techs[i] })).filter((r) => r.p > 0.05 && !r.known).map(({ name, p }) => ({ name, p })).sort((a, b) => b.p - a.p).slice(0, 5),
     effects: { farmYield: fx.farmYield, farmArea: fx.farmArea, toolQ: fx.toolQ, weapon: fx.weapon, transport: fx.transport, disease: fx.disease, research: fx.research },
     history: s.history.slice(-300),
@@ -421,26 +423,28 @@ function repN(p: object): number {
   return typeof n === 'number' && n > 1 ? Math.round(n) : 1;
 }
 
-export const ERA_NAMES = ['Age of Foragers', 'Age of First Farmers', 'Age of Bronze', 'Age of Iron', 'Classical Age', 'Age of Letters'] as const;
-let eraKeys: { k: string; era: number }[][] | null = null;
+export const ERA_NAMES = ['Age of Foragers', 'Age of First Farmers', 'Age of Bronze', 'Age of Iron', 'Age of Steel', 'Age of Letters', 'Age of Reason', 'Age of Steam', 'Age of Electricity'] as const;
 /**
- * A settlement's broad technological era (0..5), used for clothing, architecture and
- * naming ages. Keyed on well-known techs; if those are absent from the tech list it
- * falls back to the share of all techs known, so it survives changes to the tree.
+ * Distinct techs of each era a settlement must know (or the world must have invented) to
+ * count as having reached it: 4% of the era's techs, and never fewer than three.
+ */
+export const eraMinTechs = (() => {
+  let v: number[] | null = null;
+  return () => v ?? (v = ERA_NAMES.map((_, e) => Math.max(3, Math.ceil(0.04 * TECHS.filter((t) => t.era === e).length))));
+})();
+let farmIds: number[] | null = null;
+/**
+ * A settlement's technological era (0..8, the eras of the tech tree), used for clothing,
+ * architecture and naming ages: the latest era of which it knows at least eraMinTechs()
+ * techs, or the Neolithic as soon as it farms or herds.
  */
 export function eraOf(sim: Simulation, s: { techs: number[] }): number {
-  if (!eraKeys) {
-    const idx = (k: string) => TECHS.findIndex((t) => t.key === k);
-    const lv = (era: number, ...ks: string[]) => ks.map((k) => ({ k, era, i: idx(k) })).filter((x) => x.i >= 0).map((x) => ({ k: String(x.i), era }));
-    eraKeys = [lv(1, 'agriculture', 'husbandry'), lv(2, 'copper', 'bronze'), lv(3, 'iron'), lv(4, 'philosophy', 'mathematics', 'law'), lv(5, 'printing', 'banking', 'steel', 'medicine')];
-  }
-  let era = 0;
-  let found = false;
-  for (const tier of eraKeys) for (const e of tier) { found = true; if (s.techs[+e.k]) era = Math.max(era, e.era); }
-  if (!found) {
-    const known = s.techs.reduce((a, b) => a + (b ? 1 : 0), 0);
-    era = Math.min(5, Math.floor((known / Math.max(1, s.techs.length)) * 6.5));
-  }
+  if (!farmIds) farmIds = TECHS.filter((t) => t.key === 'agriculture' || t.key === 'husbandry').map((t) => t.id);
+  const n = new Array(ERA_NAMES.length).fill(0);
+  for (let i = 0; i < s.techs.length; i++) if (s.techs[i] && TECHS[i]) n[TECHS[i].era]++;
+  let era = farmIds.some((i) => s.techs[i]) ? 1 : 0;
+  const min = eraMinTechs();
+  for (let e = n.length - 1; e > era; e--) if (n[e] >= min[e]) { era = e; break; }
   void sim;
   return era;
 }
@@ -533,7 +537,7 @@ export function storyDigest(sim: Simulation) {
   const w = sim.w;
   const year = Math.floor(w.tick / 12);
   let era = 0;
-  const eraPop = new Array(6).fill(0);
+  const eraPop = new Array(ERA_NAMES.length).fill(0);
   let largest: { id: number; name: string; pop: number } | null = null;
   let nSett = 0;
   for (const s of w.settlements.values()) {
@@ -631,7 +635,7 @@ export interface Chapter {
   popStart: number; popEnd: number; wars: number; era: number; polity: { id: number; name: string; hue: number } | null;
 }
 const MIN_CHAPTER = 30;
-const ERA_WORD = ['Stone', 'Stone', 'Bronze', 'Iron', 'Classical', 'Learned'];
+const ERA_WORD = ['Stone', 'Stone', 'Bronze', 'Iron', 'Steel', 'Printed', 'Reasoning', 'Steam', 'Electric'];
 const chapterCache = new WeakMap<object, { year: number; out: Chapter[] }>();
 
 function rulerWord(title: string): string {
@@ -661,18 +665,25 @@ export function chapters(sim: Simulation): Chapter[] {
   const statAt = (y: number) => { if (!st.length) return null; const i = Math.max(0, Math.min(st.length - 1, y - st[0].y)); return st[i]; };
 
   // the year each era was first reached anywhere
-  const eraYear: number[] = [0, -1, -1, -1, -1, -1];
-  const eraEvent: number[] = [-1, -1, -1, -1, -1, -1];
-  const eraKeyOf = new Map<number, number>();
-  const tier: [number, string[]][] = [[1, ['agriculture', 'husbandry']], [2, ['copper', 'bronze']], [3, ['iron']], [4, ['philosophy', 'mathematics', 'law']], [5, ['printing', 'banking', 'steel', 'medicine']]];
-  for (const [e, ks] of tier) for (const k of ks) { const i = TECHS.findIndex((t) => t.key === k); if (i >= 0) eraKeyOf.set(i, e); }
+  const NE = ERA_NAMES.length;
+  const eraYear: number[] = [0, ...new Array(NE - 1).fill(-1)];
+  const eraEvent: number[] = new Array(NE).fill(-1);
+  const eraSeen = new Array(NE).fill(0);
+  const firstSeen = new Set<number>();
   interface Cand { y: number; score: number; ev: number; text: string }
   const cands: Cand[] = [];
   for (const e of w.events) {
     const y = Math.floor(e.t / 12);
     if (e.type === 'invention' && e.data?.tech !== undefined) {
-      const er = eraKeyOf.get(+e.data.tech);
-      if (er !== undefined && eraYear[er] < 0) { eraYear[er] = y; eraEvent[er] = e.id; cands.push({ y, score: 5, ev: e.id, text: e.text }); }
+      // an era is reached when enough of its techs have been invented somewhere (farming opens the Neolithic)
+      const T = TECHS[+e.data.tech];
+      if (T && !firstSeen.has(T.id)) {
+        firstSeen.add(T.id);
+        const er = T.era;
+        eraSeen[er]++;
+        const reached = er === 1 && (T.key === 'agriculture' || T.key === 'husbandry') ? true : eraSeen[er] >= eraMinTechs()[er];
+        if (er > 0 && reached && eraYear[er] < 0) { eraYear[er] = y; eraEvent[er] = e.id; cands.push({ y, score: 5, ev: e.id, text: e.text }); }
+      }
     } else if (e.type === 'genesis') continue;
     else if (e.imp >= 5) cands.push({ y, score: 4, ev: e.id, text: e.text });
     else if (e.type === 'polity_end' && e.polities.length) {
@@ -702,7 +713,7 @@ export function chapters(sim: Simulation): Chapter[] {
     else if (c.score > last.score && (bounds.length < 2 || c.y - bounds[bounds.length - 2].y >= MIN_CHAPTER) && now - last.y < MIN_CHAPTER) bounds[bounds.length - 1] = c;
   }
   // very long quiet stretches are split at their most notable moment
-  const eraAt = (y: number) => { let e = 0; for (let k = 1; k < 6; k++) if (eraYear[k] >= 0 && eraYear[k] <= y) e = k; return e; };
+  const eraAt = (y: number) => { let e = 0; for (let k = 1; k < NE; k++) if (eraYear[k] >= 0 && eraYear[k] <= y) e = k; return e; };
   const polPopAt = (p: { history: { y: number; pop: number; settlements: number }[] }, y: number) => {
     const h = p.history;
     if (!h.length || h[0].y > y) return null;
@@ -762,7 +773,7 @@ export function chapters(sim: Simulation): Chapter[] {
     if (fellFromStart && fallen.length) names.push(`The Fall of ${fallen[0].name}`);
     if (fellFromStart) names.push(warRate >= baseWar ? 'The Years of Fire' : 'The Dark Years', 'The Long Winter', 'The Unravelling');
     if (eraNew && era === 1) names.push('The First Harvests');
-    if (eraNew && era >= 2) names.push(era === 4 ? `The Age of Law and ${rulers}` : era === 5 ? 'The Age of Letters' : `The Age of ${ERA_WORD[era]} ${rulers}`);
+    if (eraNew && era >= 2) names.push(era === 5 ? 'The Age of Letters' : era === 6 ? 'The Age of Reason' : era === 7 ? 'The Age of Steam' : era === 8 ? 'The Age of Electricity' : `The Age of ${ERA_WORD[era]} ${rulers}`);
     if (top && topStart && top.p.id !== topStart.p.id && top.settlements >= 2) names.push(`The Rise of ${P}`);
     if (warRate >= Math.max(4, baseWar * 1.5) && top) names.push(`The Wars of ${P}`, 'The Age of Strife');
     if (top && topGrew < 0.7) names.push(`The Twilight of ${P}`);

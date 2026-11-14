@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { INTERVENTION_KINDS, type Intervention, type InterventionKind } from '../../engine/config';
 import { TECHS } from '../../engine/techs';
+import { TechPicker } from '../components/TechPicker';
 import { VALUE_NAMES } from '../../engine/constants';
 import { sim } from '../client';
 import { Modal } from '../components/Modal';
@@ -46,7 +47,7 @@ export function InterveneDialog({ onClose, onToast }: { onClose: () => void; onT
             </select>
           </label>
         )}
-        {kind === 'grant_tech' && <label>Technology <select value={tech} onChange={(e) => setTech(e.target.value)}>{TECHS.map((t) => <option key={t.key} value={t.key}>{t.name}</option>)}</select></label>}
+        {kind === 'grant_tech' && <div className="block">Technology <TechPicker value={tech} onChange={setTech} /></div>}
         {kind === 'cultural_shock' && <label>Value <select value={axis} onChange={(e) => setAxis(+e.target.value)}>{VALUE_NAMES.map((v, i) => <option key={v} value={i}>{v}</option>)}</select></label>}
       </div>
     </Modal>

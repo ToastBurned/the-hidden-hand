@@ -480,3 +480,24 @@ button.on:not(.primary):not(.chip) { border-color: var(--gold); color: var(--gol
 .alert.chapter-alert .alert-text { font-size: 18px; }
 .alerts { top: 96px; right: 60px; }
 .popover label { white-space: normal; align-items: flex-start; }
+
+/* ---------- the full technology tree ---------- */
+.era-strip { display: grid; grid-template-columns: repeat(9, minmax(0, 1fr)); gap: 6px; margin: 10px 0 14px; }
+.era-cell { display: flex; flex-direction: column; align-items: stretch; gap: 5px; padding: 8px 9px; text-align: left; background: var(--bg-2); border: 1px solid var(--line); border-radius: var(--radius); min-width: 0; }
+.era-cell.on { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+.era-cell.dim { opacity: 0.55; }
+.era-name { font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.era-bar { position: relative; height: 5px; border-radius: 3px; background: var(--bg-3); overflow: hidden; }
+.era-bar i, .era-bar b { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 3px; }
+.era-bar i { background: color-mix(in srgb, var(--accent) 40%, transparent); }
+.era-bar b { background: var(--accent); }
+.era-n { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.grid-table tr.era-head td { padding-top: 16px; font-family: 'Palatino Linotype', Palatino, 'Book Antiqua', Georgia, serif; font-size: 15px; color: var(--accent-2); border-bottom: 1px solid var(--line-2); }
+.tech-table .empty { padding: 24px 4px; }
+.tech-table button.more { margin: 12px auto; display: block; }
+.tech-picker { display: inline-flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.tech-picker input[type='search'] { width: 200px; }
+.tech-picker select { max-width: 240px; }
+.known-era { margin: 6px 0 2px; }
+.known-era summary { cursor: pointer; font-size: 12px; color: var(--text-2); }
+@media (max-width: 900px) { .era-strip { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
