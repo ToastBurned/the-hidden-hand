@@ -89,6 +89,7 @@ export class Simulation implements Ctx {
     this.w = w;
     this.rng = Rng.fromState(w.rng);
     this.field = computeRainField(w);
+    if (!w.travelBasis) this.resetTravelBasis();
   }
 
   static create(over: Partial<WorldConfig> = {}): Simulation {
@@ -172,7 +173,7 @@ export class Simulation implements Ctx {
   settlementAt(tile: number): number { return this.w.tiles.owner[tile]; }
 
   invalidateTravel(sid?: number) {
-    if (sid === undefined) { this.travelCache.clear(); return; }
+    if (sid === undefined) { this.travelCache.clear(); this.resetTravelBasis(); return; }
     const s = this.w.settlements.get(sid);
     if (!s) { this.travelCache.clear(); return; }
     for (const src of [...this.travelCache.keys()]) {
@@ -192,8 +193,18 @@ export class Simulation implements Ctx {
   private distBuf: Float64Array | null = null;
   private stampBuf: Int32Array | null = null;
   private stamp = 0;
-  private roadTiles: Uint8Array | null = null;
-  private roadStamp = -1;
+
+  /**
+   * Routes are computed against a snapshot of roads and seafaring taken at each five-yearly
+   * reset, and the snapshot is saved with the world. A cached route therefore always equals
+   * what a fresh computation would give, so a reloaded world routes exactly as the original.
+   */
+  private resetTravelBasis(): void {
+    const w = this.w;
+    const roads = new Uint8Array(w.tiles.w * w.tiles.h);
+    for (const o of w.settlements.values()) if (o.alive && o.buildings[BLD_ROADS] >= 1) for (const i of o.territory) roads[i] = 1;
+    w.travelBasis = { roads, sea: new Map() };
+  }
 
   private dijkstra(sid: number): Map<number, number> {
     const w = this.w;
@@ -206,16 +217,15 @@ export class Simulation implements Ctx {
       this.distBuf = new Float64Array(n);
       this.stampBuf = new Int32Array(n);
     }
-    if (!this.roadTiles || this.roadStamp !== w.tick) {
-      this.roadTiles = new Uint8Array(n);
-      for (const o of w.settlements.values()) if (o.alive && o.buildings[BLD_ROADS] >= 1) for (const i of o.territory) this.roadTiles[i] = 1;
-      this.roadStamp = w.tick;
-    }
+    if (!w.travelBasis) this.resetTravelBasis();
+    const basis = w.travelBasis!;
     const dist = this.distBuf;
     const stamps = this.stampBuf!;
-    const roads = this.roadTiles;
+    const roads = basis.roads;
     const st = ++this.stamp;
-    const fx = this.fx(sid);
+    let sea = basis.sea.get(sid);
+    if (!sea) { const f = this.fx(sid); sea = [f.boats ? 1 : 0, f.seafaring]; basis.sea.set(sid, sea); }
+    const fx = { boats: sea[0] === 1, seafaring: sea[1] };
     const targets = new Map<number, number[]>();
     for (const o of w.settlements.values()) {
       if (!o.alive || o.id === sid) continue;

@@ -66,10 +66,14 @@ function cold(c: Ctx, s: Settlement): number {
 }
 
 /** Farm tiles sorted by quality are cached per settlement per year. */
-const farmCache = new WeakMap<Settlement, { key: number; tiles: number[]; q: number[] }>();
+/**
+ * Fields ranked best first, refreshed once a year or when the territory changes. The ranking is
+ * kept on the settlement (and so saved), because it is taken from soil fertility at the time it
+ * was made: recomputing it after loading a save would rank the fields differently.
+ */
 function farmTiles(c: Ctx, s: Settlement, field: ClimateField) {
   const key = field.year * 1000 + s.territory.length;
-  let f = farmCache.get(s);
+  let f = s.farmPlan;
   if (f && f.key === key) return f;
   const t = c.w.tiles;
   const tiles = s.territory.filter((i) => t.farmland[i] > 0.001 && t.owner[i] === s.id);
@@ -77,11 +81,11 @@ function farmTiles(c: Ctx, s: Settlement, field: ClimateField) {
   for (const i of tiles) q.set(i, t.fert[i] * cropFactor(c.w, field, i));
   tiles.sort((a, b) => q.get(b)! - q.get(a)!);
   f = { key, tiles, q: tiles.map((i) => q.get(i)!) };
-  farmCache.set(s, f);
+  s.farmPlan = f;
   return f;
 }
 export function invalidateFarmCache(s: Settlement) {
-  farmCache.delete(s);
+  s.farmPlan = undefined;
 }
 
 function bestClearable(c: Ctx, s: Settlement, field: ClimateField): number {
