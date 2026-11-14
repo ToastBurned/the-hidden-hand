@@ -187,17 +187,33 @@ export interface AgedMapProps {
   focus?: { x: number; y: number; zoom: number } | null;
   labels?: boolean;
   /** Extra marks drawn in map tile coordinates. */
-  marks?: { x: number; y: number; kind: 'lodge' | 'member' | 'target' | 'home'; label?: string }[];
+  marks?: { x: number; y: number; kind: 'lodge' | 'member' | 'target' | 'home' | 'travel'; label?: string; to?: { x: number; y: number } }[];
   className?: string;
+  /** Pan and zoom with the mouse; click picks a settlement. */
+  interactive?: boolean;
+  onPick?: (settlement: number | null) => void;
+  selected?: number | null;
+  /** The Veil: how clearly the Order sees each settlement. Unknown towns are faint and unnamed. */
+  clarity?: (settlement: number) => 'known' | 'rumour' | 'unknown';
 }
 
-export function AgedMap({ drift = false, focus = null, labels = true, marks, className }: AgedMapProps) {
+export function AgedMap({ drift = false, focus = null, labels = true, marks, className, interactive = false, onPick, selected = null, clarity }: AgedMapProps) {
   const st = useSim();
   const ref = useRef<HTMLCanvasElement>(null);
   const terrain = useRef<{ v: number; c: HTMLCanvasElement } | null>(null);
   const territory = useRef<HTMLCanvasElement | null>(null);
-  const live = useRef({ frame: st.frame, focus, marks, labels });
-  live.current = { frame: st.frame, focus, marks, labels };
+  const live = useRef({ frame: st.frame, focus, marks, labels, selected, clarity });
+  live.current = { frame: st.frame, focus, marks, labels, selected, clarity };
+  /** Interactive camera, in terrain pixels; null until first fitted. */
+  const cam = useRef<{ cx: number; cy: number; z: number } | null>(null);
+  const xf = useRef<{ cw: number; ch: number; cx: number; cy: number; z: number } | null>(null);
+  const drag = useRef<{ x: number; y: number; moved: boolean } | null>(null);
+  const flyTo = useRef<{ cx: number; cy: number; z: number } | null>(null);
+  useEffect(() => { cam.current = null; }, [st.version]);
+  useEffect(() => {
+    if (!interactive || !focus) return;
+    flyTo.current = { cx: (focus.x + 0.5) * PX, cy: (focus.y + 0.5) * PX, z: 0 };
+  }, [interactive, focus?.x, focus?.y]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (st.map && (!terrain.current || terrain.current.v !== st.version)) terrain.current = { v: st.version, c: bakeTerrain(st.map) };
@@ -224,7 +240,19 @@ export function AgedMap({ drift = false, focus = null, labels = true, marks, cla
       const W = m.w * PX, H = m.h * PX;
       const { frame, focus: fc, marks: mk, labels: lb } = live.current;
       let z: number, cx: number, cy: number;
-      if (fc) {
+      const fit = Math.max(cw / W, ch / H);
+      if (interactive) {
+        if (!cam.current) cam.current = fc ? { cx: (fc.x + 0.5) * PX, cy: (fc.y + 0.5) * PX, z: fit * fc.zoom } : { cx: W / 2, cy: H / 2, z: fit };
+        const f = flyTo.current;
+        if (f) {
+          const c = cam.current;
+          c.cx += (f.cx - c.cx) * 0.12; c.cy += (f.cy - c.cy) * 0.12;
+          if (Math.abs(f.cx - c.cx) + Math.abs(f.cy - c.cy) < 1) flyTo.current = null;
+        }
+        const c = cam.current;
+        c.z = Math.max(fit * 0.6, Math.min(fit * 8, c.z));
+        z = c.z; cx = c.cx; cy = c.cy;
+      } else if (fc) {
         z = (Math.max(cw / W, ch / H) * fc.zoom);
         cx = (fc.x + 0.5) * PX; cy = (fc.y + 0.5) * PX;
       } else {
@@ -235,6 +263,9 @@ export function AgedMap({ drift = false, focus = null, labels = true, marks, cla
         const vw = cw / z, vh = ch / z;
         cx = vw / 2 + (W - vw) * sx; cy = vh / 2 + (H - vh) * sy;
       }
+      xf.current = { cw, ch, cx, cy, z };
+      const { selected: sel, clarity: clar } = live.current;
+      const clr = (id: number) => (clar ? clar(id) : 'known');
       g.save();
       g.translate(cw / 2, ch / 2);
       g.scale(z, z);
@@ -246,6 +277,8 @@ export function AgedMap({ drift = false, focus = null, labels = true, marks, cla
         const pulse = (Math.sin((now - t0) / 700) + 1) / 2;
         for (const s of frame.settlements) {
           if (!s.alive) continue;
+          const cl = clr(s.id);
+          g.globalAlpha = cl === 'unknown' ? 0.35 : 1;
           const x = (s.x + 0.5) * PX, y = (s.y + 0.5) * PX;
           const r = Math.max(2, Math.min(7, 1.6 + Math.sqrt(s.pop) / 10)) * Math.min(1.4, 3 / z + 0.5);
           g.fillStyle = s.nomadic ? 'rgba(60, 40, 24, 0.55)' : 'rgba(40, 24, 14, 0.9)';
@@ -254,18 +287,21 @@ export function AgedMap({ drift = false, focus = null, labels = true, marks, cla
           else g.arc(x, y, r, 0, Math.PI * 2);
           g.fill();
           if (s.capital && !s.nomadic) { g.strokeStyle = 'rgba(120, 30, 20, 0.85)'; g.lineWidth = 1.2 / Math.sqrt(z); g.beginPath(); g.arc(x, y, r + 2.2, 0, Math.PI * 2); g.stroke(); }
-          if (s.sieged) { g.strokeStyle = `rgba(170, 40, 30, ${0.3 + pulse * 0.5})`; g.lineWidth = 1; g.beginPath(); g.arc(x, y, r + 4 + pulse * 2, 0, Math.PI * 2); g.stroke(); }
+          if (s.sieged && cl !== 'unknown') { g.strokeStyle = `rgba(170, 40, 30, ${0.3 + pulse * 0.5})`; g.lineWidth = 1; g.beginPath(); g.arc(x, y, r + 4 + pulse * 2, 0, Math.PI * 2); g.stroke(); }
+          if (sel === s.id) { g.strokeStyle = '#f3cf8a'; g.lineWidth = 2 / z; g.beginPath(); g.arc(x, y, r + 7 / Math.sqrt(z), 0, Math.PI * 2); g.stroke(); }
         }
+        g.globalAlpha = 1;
         if (lb) {
           g.textAlign = 'center';
           g.textBaseline = 'top';
           const fs = 12.5 / z;
           for (const s of frame.settlements) {
-            if (!s.alive || s.nomadic || (s.pop < 250 && !s.capital)) continue;
+            const cl = clr(s.id);
+            if (!s.alive || s.nomadic || cl === 'unknown' || (s.pop < 250 && !s.capital && !(clar && cl === 'known'))) continue;
             const size = fs * (s.capital ? 1.25 : 1);
             g.font = `italic ${size}px 'Palatino Linotype', Palatino, Georgia, serif`;
-            g.fillStyle = 'rgba(38, 24, 14, 0.85)';
-            g.fillText(s.name, (s.x + 0.5) * PX, (s.y + 0.5) * PX + 4);
+            g.fillStyle = cl === 'rumour' ? 'rgba(38, 24, 14, 0.5)' : 'rgba(38, 24, 14, 0.88)';
+            g.fillText(cl === 'rumour' ? `${s.name}?` : s.name, (s.x + 0.5) * PX, (s.y + 0.5) * PX + 4 + 4 / Math.sqrt(z));
           }
           // realm names in spaced capitals
           for (const p of frame.polities) {
@@ -282,15 +318,24 @@ export function AgedMap({ drift = false, focus = null, labels = true, marks, cla
         for (const k of mk) {
           const x = (k.x + 0.5) * PX, y = (k.y + 0.5) * PX;
           const s = 5 / Math.sqrt(z);
-          if (k.kind === 'home' || k.kind === 'lodge') {
+          if (k.kind === 'travel' && k.to) {
+            g.strokeStyle = '#e0b062'; g.lineWidth = 1.5 / Math.sqrt(z); g.setLineDash([4 / z * 2, 4 / z * 2]);
+            g.beginPath(); g.moveTo(x, y); g.lineTo((k.to.x + 0.5) * PX, (k.to.y + 0.5) * PX); g.stroke(); g.setLineDash([]);
+            g.fillStyle = '#e0b062'; g.beginPath(); g.arc(x, y, s * 0.8, 0, Math.PI * 2); g.fill();
+          } else if (k.kind === 'home' || k.kind === 'lodge') {
             g.fillStyle = '#9a3328'; g.strokeStyle = '#f3cf8a'; g.lineWidth = 0.8;
             g.beginPath(); g.arc(x, y, s * 1.4, 0, Math.PI * 2); g.fill(); g.stroke();
           } else if (k.kind === 'target') {
             g.strokeStyle = '#c2473a'; g.lineWidth = 1;
             g.beginPath(); g.arc(x, y, s * 2, 0, Math.PI * 2); g.stroke();
           } else {
-            g.fillStyle = '#e0b062';
-            g.beginPath(); g.arc(x, y, s, 0, Math.PI * 2); g.fill();
+            g.fillStyle = '#e0b062'; g.strokeStyle = 'rgba(30, 18, 8, 0.9)'; g.lineWidth = 1 / Math.sqrt(z);
+            g.beginPath(); g.arc(x + s * 1.6, y - s * 1.6, s, 0, Math.PI * 2); g.fill(); g.stroke();
+          }
+          if (k.label) {
+            g.font = `600 ${10.5 / z}px 'Segoe UI', system-ui, sans-serif`;
+            g.fillStyle = '#f3cf8a'; g.strokeStyle = 'rgba(20, 12, 6, 0.85)'; g.lineWidth = 3 / z; g.textAlign = 'left'; g.textBaseline = 'middle';
+            g.strokeText(k.label, x + s * 3, y - s * 1.6); g.fillText(k.label, x + s * 3, y - s * 1.6);
           }
         }
       }
@@ -304,7 +349,44 @@ export function AgedMap({ drift = false, focus = null, labels = true, marks, cla
     };
     raf = requestAnimationFrame(draw);
     return () => cancelAnimationFrame(raf);
-  }, [st.map, drift]);
+  }, [st.map, drift, interactive]);
 
-  return <canvas ref={ref} className={className} style={{ width: '100%', height: '100%', display: 'block' }} />;
+  const toWorld = (ex: number, ey: number) => {
+    const t = xf.current, cv = ref.current;
+    if (!t || !cv) return null;
+    const r = cv.getBoundingClientRect();
+    return { x: (ex - r.left - t.cw / 2) / t.z + t.cx, y: (ey - r.top - t.ch / 2) / t.z + t.cy, z: t.z };
+  };
+  const pick = (ex: number, ey: number) => {
+    const p = toWorld(ex, ey);
+    const f = st.frame;
+    if (!p || !f) return null;
+    let best: number | null = null, bd = (14 / p.z) ** 2;
+    for (const s of f.settlements) {
+      if (!s.alive) continue;
+      const d = ((s.x + 0.5) * PX - p.x) ** 2 + ((s.y + 0.5) * PX - p.y) ** 2;
+      if (d < bd) { bd = d; best = s.id; }
+    }
+    return best;
+  };
+  const handlers = interactive ? {
+    onWheel: (e: React.WheelEvent) => {
+      const c = cam.current, p = toWorld(e.clientX, e.clientY);
+      if (!c || !p) return;
+      const k = Math.exp(-e.deltaY * 0.0015);
+      const nz = c.z * k;
+      c.cx = p.x - (p.x - c.cx) * (c.z / nz); c.cy = p.y - (p.y - c.cy) * (c.z / nz); c.z = nz;
+      flyTo.current = null;
+    },
+    onPointerDown: (e: React.PointerEvent) => { drag.current = { x: e.clientX, y: e.clientY, moved: false }; (e.target as Element).setPointerCapture?.(e.pointerId); },
+    onPointerMove: (e: React.PointerEvent) => {
+      const d = drag.current, c = cam.current;
+      if (!d || !c) return;
+      const dx = e.clientX - d.x, dy = e.clientY - d.y;
+      if (Math.abs(dx) + Math.abs(dy) > 3) d.moved = true;
+      if (d.moved) { c.cx -= dx / c.z; c.cy -= dy / c.z; d.x = e.clientX; d.y = e.clientY; flyTo.current = null; }
+    },
+    onPointerUp: (e: React.PointerEvent) => { const d = drag.current; drag.current = null; if (d && !d.moved) onPick?.(pick(e.clientX, e.clientY)); },
+  } : {};
+  return <canvas ref={ref} className={className} style={{ width: '100%', height: '100%', display: 'block', cursor: interactive ? 'grab' : undefined, touchAction: interactive ? 'none' : undefined }} {...handlers} />;
 }

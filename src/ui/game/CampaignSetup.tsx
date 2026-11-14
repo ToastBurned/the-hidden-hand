@@ -10,7 +10,10 @@ import { TownThumb } from '../city/TownThumb';
 import type { settlementDetail } from '../../engine/query';
 import type { Creed, FoundingStory, WorldSetup } from '../../game/view';
 import { VOWS } from '../../game/view';
-import { AXIS_POLES, CREED_QUESTIONS, creedFromAnswers, oathText } from '../../game/founding';
+import { CREED_QUESTIONS, oathText } from '../../engine/game/creed';
+import { VALUE_POLES } from '../../engine/constants';
+
+const AXIS_POLES = VALUE_POLES as unknown as [string, string][];
 import { Icon, Mark } from './Icons';
 import { useSettings } from './settings';
 import { FirstOath } from './FirstOath';
@@ -243,12 +246,12 @@ function CreedStep({ story, creed, onChange, onNext, onBack }: { story: Founding
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const first = story.founder.name.split(' ')[0];
   useEffect(() => { if (route === 'founder') onChange(story.creed); }, [route]); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => { if (route === 'questions' && Object.keys(answers).length) onChange(creedFromAnswers(story.creed, answers)); }, [answers]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (route === 'questions' && Object.keys(answers).length) sim.query<Creed | null>('creed-answers', { founder: story.founder.id, answers }).then((c) => { if (c) onChange(c); }); }, [answers]); // eslint-disable-line react-hooks/exhaustive-deps
   const setAxis = (i: number, v: number) => { const d = [...creed.direction]; d[i] = v; onChange({ ...creed, direction: d }); };
   const toggleVow = (id: string) => {
     let vows = creed.vows.includes(id) ? creed.vows.filter((v) => v !== id) : [...creed.vows, id];
     if (vows.length > 3) vows = vows.slice(1);
-    onChange({ ...creed, vows, oath: oathText(vows) });
+    onChange({ ...creed, vows, oath: oathText({ ...creed, vows }) });
   };
   const toggleFocus = (i: number) => {
     const f = creed.focus.includes(i) ? creed.focus : ([creed.focus[1], i] as [number, number]);

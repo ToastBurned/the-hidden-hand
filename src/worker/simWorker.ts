@@ -11,9 +11,38 @@ import {
   familyTree, storyDigest, timeline, yearSnapshot, chapters,
 } from '../engine/query';
 import { applyOne } from '../engine/systems/interventions';
+import { lookOf } from '../engine/query';
+import { OCC_NAMES } from '../engine/constants';
+import { officeTitle } from '../engine/game/offices';
 import type { FromSim, ToSim } from './protocol';
-import { foundingStories, oathScene, orderNames, storyForPerson } from '../game/founding';
-import type { Creed, FoundingStory } from '../game/view';
+import { applyGameCommand, foundingStories, gameView, oathFor, previewOperation, stepCampaign } from '../engine/game/campaign';
+import { proposeNames } from '../engine/game/founding';
+import { creedFromAnswers } from '../engine/game/creed';
+import { leverDefs } from '../engine/game/levers';
+import { opDefs } from '../engine/game/operations';
+import type { Creed, FoundingStory, GameCommand, GameSpeed, Interrupts } from '../game/view';
+
+/** Months per real second at the game's three speeds (index 0 = paused). */
+export const GAME_SPEED_MPS = [0, 0.1, 1, 5];
+const PAUSE_AT: Record<Interrupts, number> = { everything: 1, important: 2, emergencies: 3 };
+let lastNotice = 0;
+let pauseReason: string | null = null;
+/** One month of the world, plus the Order when a campaign is running. */
+function stepOnce(s: Simulation) {
+  if (s.w.game) stepCampaign(s); else s.step();
+}
+/** After a month of a campaign: should the game stop by itself? */
+function autoPause(s: Simulation): string | null {
+  const g = s.w.game;
+  if (!g) return null;
+  if (g.phase === 'ended') return g.ending?.title ?? 'The campaign has ended';
+  if (g.conclave && g.conclave.tick === s.w.tick) return 'The conclave meets';
+  const min = PAUSE_AT[g.interrupts] ?? 2;
+  let hit: string | null = null;
+  for (const n of g.notices) if (n.id > lastNotice) { if (n.urgency >= min && !hit) hit = n.title; }
+  if (g.notices.length) lastNotice = Math.max(lastNotice, g.notices[g.notices.length - 1].id);
+  return hit;
+}
 
 declare const self: DedicatedWorkerGlobalScope;
 
@@ -33,7 +62,7 @@ function sendFrame() {
   if (!sim) return;
   const f = frame(sim, lastEventId);
   lastEventId = f.lastEventId;
-  post({ type: 'frame', frame: f, running, perf: { msPerYear, monthsPerSecond: achievedMps } });
+  post({ type: 'frame', frame: f, running, perf: { msPerYear, monthsPerSecond: achievedMps }, game: sim.w.game ? gameView(sim) : null, pauseReason });
   lastFrame = performance.now();
 }
 function sendLayers() {
@@ -59,8 +88,10 @@ function advance(maxMonths: number, budget: number): number {
   let n = 0;
   while (n < maxMonths && performance.now() - t0 < budget) {
     const ts = performance.now();
-    sim.step();
+    stepOnce(sim);
     n++;
+    const why = autoPause(sim);
+    if (why) { running = false; pauseReason = why; if (sim.w.game) sim.w.game.speed = 0; break; }
     const dt = performance.now() - ts;
     msPerYear = msPerYear ? msPerYear * 0.97 + dt * 12 * 0.03 : dt * 12;
     if (sim.extinct()) { running = false; break; }
@@ -116,11 +147,35 @@ function answer(kind: string, arg: unknown): unknown {
     case 'chapters': return chapters(sim);
     case 'year': return yearSnapshot(sim, arg as number);
     case 'foundings': return foundingStories(sim, (arg as number) ?? 0);
-    case 'story-for': return storyForPerson(sim, arg as number);
-    case 'names': { const a = arg as { story: FoundingStory; creed: Creed; salt: number }; return orderNames(sim, a.story, a.creed, a.salt); }
-    case 'oath': { const a = arg as { story: FoundingStory; creed: Creed; name: string }; return oathScene(sim, a.story, a.creed, a.name); }
+    case 'story-for': return null; // choosing any person needs an engine entry point (asked for)
+    case 'names': { const a = arg as { story: FoundingStory; creed: Creed; salt: number }; const p = sim.w.persons.get(a.story.founder.id); return p ? proposeNames(sim, p, a.creed, a.salt) : a.story.names; }
+    case 'creed-answers': { const a = arg as { founder: number; answers: Record<string, string> }; const p = sim.w.persons.get(a.founder); return p ? creedFromAnswers(p, a.answers) : null; }
+    case 'oath': { const a = arg as { story: FoundingStory; creed: Creed; name: string }; return oathFor(sim, a.story.id, a.creed, a.name); }
+    case 'op-preview': return previewOperation(sim, arg as Extract<GameCommand, { type: 'operation' }>);
+    case 'catalogue': return { levers: leverDefs(), operations: opDefs() };
+    case 'game': return gameView(sim);
+    case 'residents': return residents(sim, arg as number);
   }
   return null;
+}
+
+/** People of a town the Order could act on: living adult individuals, most prominent first. */
+function residents(s: Simulation, sid: number) {
+  const w = s.w;
+  const st = w.settlements.get(sid);
+  if (!st) return [];
+  const g = w.game;
+  const offices = new Map<number, string>();
+  if (g) for (const o of g.offices) offices.set(o.holder, officeTitle(s, o));
+  const out = [];
+  for (const p of s.residents(st)) {
+    if (p.n !== 1) continue;
+    const age = Math.floor((w.tick - p.born) / 12);
+    if (age < 16) continue;
+    out.push({ id: p.id, name: `${p.name} ${p.family}`, age, occ: OCC_NAMES[p.occ], title: p.title, office: offices.get(p.id) ?? null, member: !!g?.members.has(p.id), status: p.status, look: lookOf(s, p.id) });
+  }
+  out.sort((a, b) => (b.office ? 1 : 0) - (a.office ? 1 : 0) || b.status - a.status);
+  return out.slice(0, 120);
 }
 
 /** Campaign world creation: run history in slices so progress and cancels get through. */
@@ -129,7 +184,7 @@ function generateSlice() {
   if (!sim || !gen) return;
   const t0 = performance.now();
   while (gen.done < gen.total && performance.now() - t0 < 120) {
-    for (let m = 0; m < 12; m++) sim.step();
+    for (let m = 0; m < 12; m++) stepOnce(sim);
     gen.done++;
     if (sim.extinct()) { gen.done = gen.total; break; }
   }
@@ -150,7 +205,20 @@ self.onmessage = (e: MessageEvent<ToSim>) => {
     switch (m.type) {
       case 'create': running = false; start(Simulation.create(m.config)); break;
       case 'load': running = false; start(new Simulation(deserializeWorld(m.data))); break;
-      case 'play': if (sim && !sim.extinct()) { running = true; lastLoop = 0; if (!timer) loop(); sendFrame(); } break;
+      case 'game': {
+        if (!sim) break;
+        const cmd = m.cmd;
+        const res = applyGameCommand(sim, cmd);
+        if (cmd.type === 'found' && res.ok) { lastNotice = sim.w.game?.notices.length ? sim.w.game.notices[sim.w.game.notices.length - 1].id : 0; }
+        if (cmd.type === 'speed') {
+          if (cmd.speed === 0) running = false;
+          else { monthsPerSecond = GAME_SPEED_MPS[cmd.speed]; carry = 0; pauseReason = null; if (sim.w.game?.phase !== 'ended' && !running) { running = true; lastLoop = 0; if (!timer) loop(); } }
+        }
+        post({ type: 'reply', id: m.id, data: res });
+        sendFrame();
+        break;
+      }
+      case 'play': if (sim && !sim.extinct()) { pauseReason = null; running = true; lastLoop = 0; if (!timer) loop(); sendFrame(); } break;
       case 'pause': running = false; sendFrame(); sendLayers(); break;
       case 'speed': monthsPerSecond = m.monthsPerSecond; carry = 0; break;
       case 'step': advance(m.months, 60000); sendFrame(); sendLayers(); break;
