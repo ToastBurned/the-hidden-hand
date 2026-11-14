@@ -12,7 +12,7 @@
  */
 import { hex, ramp, type Col } from './px';
 
-export type StyleId = 'hearth' | 'plan' | 'ledger';
+export type StyleId = 'hearth' | 'plan' | 'ledger' | 'ledgerFront' | 'ledgerFront12';
 
 export interface Style {
   id: StyleId;
@@ -84,6 +84,16 @@ const LEDGER: Bases = {
   rugLodge: '#561c26', cloth: '#5c4430', gold: '#c09030', paper: '#c8b890', iron: '#38383e', hedge: '#30522a',
 };
 
+/** Ledger's palette and texture with the three-quarter view, at a given cell size. */
+function LF(cell: number) {
+  return {
+    cell, tile: 12, threeQuarter: true, texture: 0.8, outline: 'self' as const, ink: '#141210', spread: 0.6, shift: 0.5, bases: LEDGER,
+    crops: ['#a08a34', '#6c7c2c', '#56702c', '#806040', '#948040'],
+    cloth: ['#6a2c22', '#2e4660', '#4a5a2a', '#6e5c36', '#3a2c48', '#7c6c50', '#201c1c'], robe: '#4a1420',
+    glow: '#ffb84a', night: '#2c3660', dusk: '#dcac90',
+  };
+}
+
 export const STYLES: Record<StyleId, Style> = {
   hearth: make('hearth', 'Hearth', 'Three-quarter view at 16 px: roofs and the front wall of every house, warm colour, soft texture.', {
     cell: 16, tile: 16, threeQuarter: true, texture: 0.55, outline: 'self', ink: '#2a1e1c', spread: 0.55, shift: 0.7, bases: HEARTH,
@@ -103,6 +113,8 @@ export const STYLES: Record<StyleId, Style> = {
     cloth: ['#6a2c22', '#2e4660', '#4a5a2a', '#6e5c36', '#3a2c48', '#7c6c50', '#201c1c'], robe: '#4a1420',
     glow: '#ffb84a', night: '#2c3660', dusk: '#dcac90',
   }),
+  ledgerFront: make('ledgerFront', 'Ledger + fronts', "Ledger's dense, earthy palette with Hearth's three-quarter view at 10 px: every house shows its street wall.", LF(10)),
+  ledgerFront12: make('ledgerFront12', 'Ledger + fronts', "Ledger's dense, earthy palette with Hearth's three-quarter view at 12 px: a little more room for windows and doors.", LF(12)),
 };
 
 export type Season = 0 | 1 | 2 | 3; // spring, summer, autumn, winter

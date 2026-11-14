@@ -25,10 +25,14 @@ game is untouched.
 | `lodge.ts` | `lodgeDemo(city)`: picks a host house and writes its interior at four stages (back room, cellar, rooms below, hidden house) as real `Interior` data with lodge room kinds, `hidden` flags and the game's room names as tags. The Order layer can take this over for its real lodge. |
 | `ArtLab.tsx`, `artlab.css` | The prototype page: style, season and light switches, a pannable, zoomable city, a building's floors on click, and the lodge screen. |
 
-## The three styles (none chosen yet)
+## The styles (none chosen yet)
 
 - **Hearth**: 16 px a cell, three-quarter view (roof plus the street wall of every house), warm colour, outlines in each material's own dark.
 - **Plan**: 16 px a cell, straight down, flat colour, one ink outline, little texture. Readability first.
 - **Ledger**: 8 px a cell, straight down, dense and earthy; the whole city fits on one screen.
 
 Rendering a whole 6,000-person city takes about 1.5 s at 16 px and 0.4 s at 8 px in node.
+
+Added after Ed's first look (he liked Ledger's density and palette and Hearth's house fronts):
+
+- **Ledger + fronts**: Ledger's palette and texture with the three-quarter view, at 10 px a cell (and a 12 px variant); interior tiles 12 px.

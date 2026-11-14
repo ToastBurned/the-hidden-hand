@@ -57,7 +57,7 @@ const personName = (c: City, id: number) => {
 export function ArtLab() {
   const [seed, setSeed] = useState(1);
   const [seedText, setSeedText] = useState('1');
-  const [styleId, setStyleId] = useState<StyleId>('hearth');
+  const [styleId, setStyleId] = useState<StyleId>('ledgerFront');
   const [season, setSeason] = useState<Season>(1);
   const [time, setTime] = useState<TimeOfDay>('day');
   const [tab, setTab] = useState<'city' | 'lodge'>('city');
@@ -91,7 +91,7 @@ export function ArtLab() {
           <span className="lbl">Style</span>
           {(Object.keys(STYLES) as StyleId[]).map((id) => (
             <button type="button" key={id} id={`style-${id}`} className={styleId === id ? 'on' : ''} onClick={() => setStyleId(id)}>
-              {STYLES[id].name} <small>{STYLES[id].cell}px</small>
+              {STYLES[id].name} <small>{STYLES[id].cell}px</small>{id.startsWith('ledgerFront') ? <small className="new"> new</small> : null}
             </button>
           ))}
         </div>
