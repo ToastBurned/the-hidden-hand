@@ -84,14 +84,14 @@ export function suspicionMonth(c: Ctx, r: Rng): void {
     // a large circle in one town is hard to hide, more so in a small town
     const s = w.settlements.get(sid);
     const crowd = Math.pow(ms.length, 1.4) / Math.sqrt(Math.max(50, s?.pop ?? 50));
-    trace(c, sid, crowd * 0.0025);
+    trace(c, sid, crowd * 0.0012);
   }
   // inquiries open where suspicion runs high
   for (const [sid] of memberTowns) {
     const l = localOf(g, sid);
-    if (l.level < 0.35) continue;
+    if (l.level < 0.4) continue;
     if (g.investigations.some((i) => !i.closed && i.sid === sid)) continue;
-    if (!r.chance((l.level - 0.3) * 0.2)) continue;
+    if (!r.chance((l.level - 0.38) * 0.2)) continue;
     const s = w.settlements.get(sid)!;
     const pol = s.polity;
     let best: Person | undefined, bs = -1;
@@ -146,7 +146,7 @@ function investigate(c: Ctx, r: Rng, inv: Investigation, quiet: boolean): void {
     const hidden = m.hiddenUntil > w.tick ? 0.25 : 1;
     const known = inv.found.some((f) => g.members.get(f)?.knows.includes(m.pid)) ? 2.5 : 1;
     const localLv = here ? l.level : (g.local[p.sid]?.level ?? 0) * 0.6;
-    const rate = 0.09 * skill * (0.25 + localLv) * (1 - m.discretion * 0.6) * safe * hidden * known * (quiet ? 0.45 : g.order.posture === 'cautious' ? 0.75 : 1) * (here ? 1 : 0.4);
+    const rate = 0.18 * skill * (0.25 + localLv) * (1 - m.discretion * 0.6) * safe * hidden * known * (quiet ? 0.45 : g.order.posture === 'cautious' ? 0.75 : 1) * (here ? 1 : 0.4);
     const before = inv.trail[m.pid] ?? 0;
     const after = before + rate * (0.6 + r.next() * 0.8);
     inv.trail[m.pid] = after;

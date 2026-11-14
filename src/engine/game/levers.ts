@@ -37,8 +37,8 @@ export interface LeverSpec extends LeverDef {
 const REALM: OfficeKind[] = ['ruler', 'councillor', 'treasurer', 'high-priest', 'marshal', 'chancellor', 'magistrate'];
 
 export const LEVERS: LeverSpec[] = [
-  { kind: 'tilt-army', name: 'Tilt the budget: the army', blurb: 'Nudge how much of the treasury goes to soldiers (negative to cut it).', seats: ['ruler', 'treasurer', 'councillor', 'marshal'], cost: { influence: 0.2, wealth: 0 }, delay: '1 to 5 years', resisters: 'The army, if you cut it; the common folk, if you feed it', target: 'polity', channel: 'military', max: 0.22, upkeep: 0.2, coin: 0, trace: 0.003 },
-  { kind: 'tilt-welfare', name: 'Tilt the budget: relief', blurb: 'Nudge how much goes to feeding and housing the poor.', seats: ['ruler', 'treasurer', 'councillor'], cost: { influence: 0.2, wealth: 0 }, delay: '1 to 5 years', resisters: 'The army and the nobility', target: 'polity', channel: 'welfare', max: 0.2, upkeep: 0.2, coin: 0, trace: 0.003 },
+  { kind: 'tilt-army', name: 'Tilt the budget: the army', blurb: 'Nudge how much of the treasury goes to soldiers (negative to cut it).', seats: ['ruler', 'treasurer', 'councillor', 'marshal'], cost: { influence: 0.2, wealth: 0 }, delay: '1 to 5 years', resisters: 'The army, if you cut it; the common folk, if you feed it', target: 'polity', channel: 'military', max: 0.28, upkeep: 0.2, coin: 0, trace: 0.003 },
+  { kind: 'tilt-welfare', name: 'Tilt the budget: relief', blurb: 'Nudge how much goes to feeding and housing the poor.', seats: ['ruler', 'treasurer', 'councillor'], cost: { influence: 0.2, wealth: 0 }, delay: '1 to 5 years', resisters: 'The army and the nobility', target: 'polity', channel: 'welfare', max: 0.26, upkeep: 0.2, coin: 0, trace: 0.003 },
   { kind: 'tilt-learning', name: 'Tilt the budget: learning', blurb: 'Nudge how much goes to scholars and schools.', seats: ['ruler', 'treasurer', 'councillor', 'chancellor'], cost: { influence: 0.2, wealth: 0 }, delay: '1 to 5 years', resisters: 'The clergy', target: 'polity', channel: 'learning', max: 0.16, upkeep: 0.2, coin: 0, trace: 0.003 },
   { kind: 'tilt-temples', name: 'Tilt the budget: the temples', blurb: 'Nudge how much goes to the priesthood.', seats: ['ruler', 'treasurer', 'councillor', 'high-priest'], cost: { influence: 0.2, wealth: 0 }, delay: '1 to 5 years', resisters: 'The scholars', target: 'polity', channel: 'religion', max: 0.16, upkeep: 0.2, coin: 0, trace: 0.003 },
   { kind: 'ease-taxes', name: 'Ease the taxes', blurb: 'Counsel a lighter tax (negative to raise it).', seats: ['ruler', 'treasurer', 'councillor'], cost: { influence: 0.2, wealth: 0 }, delay: '1 to 3 years', resisters: 'Whoever lives off the treasury', target: 'polity', channel: 'tax', max: -0.08, upkeep: 0.2, coin: 0, trace: 0.003 },
@@ -193,7 +193,7 @@ export function leversYear(c: Ctx, r: Rng): void {
     const people = c.residents(s);
     if (lv.kind === 'endow-school') {
       if (s.buildings[BLD_SCHOOL] < 2) s.buildings[BLD_SCHOOL] = Math.min(2, s.buildings[BLD_SCHOOL] + 0.35 * k * str);
-      for (const p of people) { const a = ageOf(w, p); if (a >= 6 && a < 30) p.edu = clamp(p.edu + 0.025 * k * str * (1 - p.edu)); }
+      for (const p of people) { const a = ageOf(w, p); if (a >= 6 && a < 30) p.edu = clamp(p.edu + 0.04 * k * str * (1 - p.edu)); }
       g.practice.good += 0.2 * k;
     } else if (lv.kind === 'preach') {
       for (const p of people) {
