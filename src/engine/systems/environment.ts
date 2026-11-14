@@ -170,7 +170,7 @@ function damageSettlement(c: Ctx, s: Settlement, frac: number, deathRate: number
   for (let b = 0; b < NBLD; b++) s.buildings[b] *= 1 - frac * (b === BLD_HOUSING ? 1 : 0.6);
   s.granary *= 1 - foodLoss;
   let deaths = 0;
-  for (const p of c.residents(s)) {
+  for (const p of c.roster(s)) {
     remember(p, w.tick, M_DISASTER, -0.4, s.id, ev);
     deaths += agentDeaths(c, p, deathRate, D_DISASTER, ev);
   }

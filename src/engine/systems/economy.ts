@@ -12,10 +12,10 @@
 import {
   BASE_PRICE, BASE_SPOIL, BLD_GRANARY, BLD_HARBOR, BLD_MARKET, BLD_WORKSHOP, G_FOOD, G_LUX, G_METAL, G_STONE, G_TOOLS, G_WOOD,
   NG, NOCC, O_ARTISAN, O_BUILDER, O_FARMER, O_FISHER, O_FORAGER, O_MERCHANT, O_MINER, O_NONE, O_PRIEST, O_SCHOLAR, O_SOLDIER,
-  O_WOODCUTTER, ORE_COPPER, ORE_GOLD, ORE_IRON, V_INDIV, V_PIETY, isWater,
+  O_WOODCUTTER, ORE_COPPER, ORE_GOLD, ORE_IRON, V_INDIV, V_PIETY, isWater, M_FAMINE,
 } from '../constants';
 import { ageOf, clamp, type Ctx } from '../context';
-import { headcount, householdSize } from '../entities';
+import { headcount, householdSize, memoryBound } from '../entities';
 import { tariff } from './law';
 import { cropFactor, wildSeason, type ClimateField } from './environment';
 import type { Household, Person, Polity, Settlement } from '../types';
@@ -42,7 +42,7 @@ function laborOf(age: number, p: Person, occ: number): number {
 /** Per-settlement working data built each month. */
 export interface SettlementWork {
   s: Settlement;
-  people: Person[];
+  people: readonly Person[];
   workers: Person[][]; // by occupation
   labor: number[][]; // parallel to workers: labour units incl. tools
   hhWorkers: Map<number, number>;
@@ -106,7 +106,7 @@ function bestClearable(c: Ctx, s: Settlement, field: ClimateField): number {
 
 export function buildWork(c: Ctx, s: Settlement): SettlementWork {
   const w = c.w;
-  const people = c.residents(s);
+  const people = c.roster(s);
   const workers: Person[][] = Array.from({ length: NOCC }, () => []);
   const labor: number[][] = Array.from({ length: NOCC }, () => []);
   const hhWorkers = new Map<number, number>();
@@ -420,6 +420,8 @@ export function householdOrders(c: Ctx, sw: SettlementWork): void {
   const coldK = cold(c, s);
   const monthsToHarvest = month <= 7 ? 8 - month : 20 - month;
   const { people, hhs, start } = rosterOf(w, s);
+  // famine memories younger than 20 years raise reserves; skip the scan when none can exist
+  const famineScan = w.tick - memoryBound(M_FAMINE) < 240;
   for (let k = 0; k < hhs.length; k++) {
     const h = hhs[k];
     if (!h.members.length) continue;
@@ -441,7 +443,7 @@ export function householdOrders(c: Ctx, sw: SettlementWork): void {
       consc += m.consc * m.n;
       piety += m.values[V_PIETY] * m.n;
       size += m.n;
-      if (!famine) for (const mm of m.mem) if (mm.k === 1 && w.tick - mm.t < 240) { famine = 1; break; }
+      if (famineScan && !famine) for (const mm of m.mem) if (mm.k === M_FAMINE && w.tick - mm.t < 240) { famine = 1; break; }
       if (m.occ === O_FARMER) farmer = true;
       if (m.occ === O_ARTISAN) { artisan = true; artisans += m.n; }
       if (m.occ === O_MINER) miner = true;

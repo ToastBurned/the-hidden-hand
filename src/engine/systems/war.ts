@@ -393,7 +393,7 @@ function casualties(c: Ctx, pol: Polity, frac: number, enemy: Polity, ev: number
     if (atSid >= 0 && sid !== atSid && c.rng.chance(0.6)) continue;
     const s = w.settlements.get(sid);
     if (!s) continue;
-    for (const p of c.residents(s)) {
+    for (const p of c.roster(s)) {
       if (p.sex !== 1) continue;
       const age = ageOf(w, p);
       if (age < 16 || age > 50) continue;
@@ -433,7 +433,7 @@ function casualties(c: Ctx, pol: Polity, frac: number, enemy: Polity, ev: number
 
 function sack(c: Ctx, war: War, attacker: Polity, defender: Polity, s: Settlement, battleEv: number): void {
   const w = c.w;
-  const people = c.residents(s);
+  const people = c.roster(s);
   // loot: granary and part of household stores pass to the victor
   let lootFood = s.granary * 0.6;
   s.granary -= lootFood;
@@ -545,7 +545,7 @@ export function transferSettlement(c: Ctx, s: Settlement, from: Polity, to: Poli
 
 function createIndependent(c: Ctx, s: Settlement, from: Polity, ev: number): Polity {
   const w = c.w;
-  const np = createPolity(c, s, meanValues(c.residents(s)));
+  const np = createPolity(c, s, meanValues(c.roster(s)));
   np.relations[from.id] = newRel(-0.2);
   from.relations[np.id] = newRel(-0.2);
   const e = logEvent(w, {

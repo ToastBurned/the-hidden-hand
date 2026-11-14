@@ -319,7 +319,23 @@ export function movePersonToNewHousehold(c: Ctx, p: Person, sid: number): Househ
 
 // ------------------------------------------------------------------ memories & relations
 
+/**
+ * The latest tick at which a memory of each kind was formed, across every world in this
+ * process. It only ever rises, so it is an upper bound for every memory alive anywhere: when
+ * `tick - memoryBound(k)` is already old enough, no person can hold a recent memory of that
+ * kind and a scan can be skipped. Loaded worlds are folded in by `noteMemories`.
+ */
+const latestMemory: number[] = [];
+export function memoryBound(k: number): number {
+  return latestMemory[k] ?? -Infinity;
+}
+/** Fold the memories of a world that did not form them here (a loaded save) into the bound. */
+export function noteMemories(persons: Iterable<Person>): void {
+  for (const p of persons) for (const m of p.mem) if (!(m.t <= (latestMemory[m.k] ?? -Infinity))) latestMemory[m.k] = m.t;
+}
+
 export function remember(p: Person, t: number, k: number, v: number, s = -1, e = -1): void {
+  if (!(t <= (latestMemory[k] ?? -Infinity))) latestMemory[k] = t;
   // reinforce an existing memory of the same kind and subject
   for (const m of p.mem) {
     if (m.k === k && m.s === s) {
@@ -775,7 +791,7 @@ export function createPolity(c: Ctx, capital: Settlement, values: number[], name
   return p;
 }
 
-export function meanValues(people: Person[]): number[] {
+export function meanValues(people: readonly Person[]): number[] {
   const v = new Array(NV).fill(0);
   if (!people.length) return v;
   let n = 0;
@@ -791,7 +807,7 @@ export function householdSize(w: { persons: Map<number, Person> }, h: Household)
 }
 
 /** Number of people represented by a list of agents. */
-export function headcount(people: Person[]): number {
+export function headcount(people: readonly Person[]): number {
   let n = 0;
   for (const p of people) n += p.n;
   return n;

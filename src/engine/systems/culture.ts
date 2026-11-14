@@ -21,7 +21,7 @@ function dist(a: number[], b: number[]): number {
 
 export function cultureYear(c: Ctx, s: Settlement): void {
   const w = c.w;
-  const people = c.residents(s);
+  const people = c.roster(s);
   if (!people.length) return;
   const conf = w.config.conformity;
   const mean = meanValues(people);
@@ -151,7 +151,7 @@ export function culturesGlobalYear(c: Ctx): void {
 
 export function religionYear(c: Ctx, s: Settlement): void {
   const w = c.w;
-  const people = c.residents(s);
+  const people = c.roster(s);
   if (people.length < 5) return;
   const pol = w.polities.get(s.polity);
   // priests convert; state religion carries extra weight; neighbours' faiths seep in through contact

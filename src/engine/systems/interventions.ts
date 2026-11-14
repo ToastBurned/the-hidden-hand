@@ -109,7 +109,7 @@ export function applyOne(c: Ctx, iv: Intervention): void {
     }
     case 'cultural_shock': {
       const axis = iv.axis ?? 0;
-      for (const s of ts) for (const p of c.residents(s)) p.values[axis] = clamp(p.values[axis] + iv.magnitude, -1, 1);
+      for (const s of ts) for (const p of c.roster(s)) p.values[axis] = clamp(p.values[axis] + iv.magnitude, -1, 1);
       logEvent(w, { ...base, text: `A cultural upheaval pushed ${ts.length === 1 ? ts[0].name : 'the world'} towards ${iv.magnitude >= 0 ? VALUE_POLES[axis][1] : VALUE_POLES[axis][0]} values.`, settlements: ts.map((s) => s.id) });
       break;
     }

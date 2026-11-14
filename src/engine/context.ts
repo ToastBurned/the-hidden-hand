@@ -13,7 +13,10 @@ export interface Ctx {
   travel(a: number, b: number): number;
   /** Invalidate cached travel costs; with a settlement id, only routes near it. */
   invalidateTravel(sid?: number): void;
+  /** A fresh array of the settlement's residents, safe to modify. */
   residents(s: Settlement): Person[];
+  /** The settlement's cached residents. Read only: never modify the array. */
+  roster(s: Settlement): readonly Person[];
   /** Spatial lookups */
   settlementAt(tile: number): number;
   readonly year: number;

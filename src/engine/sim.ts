@@ -30,7 +30,7 @@ import { consolidateYear } from './systems/scale';
 import { navalYear } from './systems/naval';
 import { bankMonth, bankingYear, stateDebtYear } from './systems/finance';
 import { lawsYear } from './systems/law';
-import { householdSize } from './entities';
+import { householdSize, noteMemories } from './entities';
 import { roster } from './roster';
 
 export const ENGINE_VERSION = 1;
@@ -91,6 +91,7 @@ export class Simulation implements Ctx {
     this.rng = Rng.fromState(w.rng);
     this.field = computeRainField(w);
     if (!w.travelBasis) this.resetTravelBasis();
+    noteMemories(w.persons.values());
   }
 
   static create(over: Partial<WorldConfig> = {}): Simulation {
@@ -159,6 +160,10 @@ export class Simulation implements Ctx {
 
   residents(s: Settlement): Person[] {
     return roster(this.w, s).slice();
+  }
+
+  roster(s: Settlement): readonly Person[] {
+    return roster(this.w, s);
   }
 
   settlementAt(tile: number): number { return this.w.tiles.owner[tile]; }
