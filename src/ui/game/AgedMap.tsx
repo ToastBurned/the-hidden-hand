@@ -250,7 +250,12 @@ export function AgedMap({ drift = false, focus = null, labels = true, marks, cla
           if (Math.abs(f.cx - c.cx) + Math.abs(f.cy - c.cy) < 1) flyTo.current = null;
         }
         const c = cam.current;
-        c.z = Math.max(fit * 0.6, Math.min(fit * 8, c.z));
+        c.z = Math.max(fit, Math.min(fit * 6, c.z));
+        // keep the sheet filling the view: no black margins past the map's edge
+        const vw = cw / c.z, vh = ch / c.z;
+        c.cx = vw >= W ? W / 2 : Math.max(vw / 2, Math.min(W - vw / 2, c.cx));
+        c.cy = vh >= H ? H / 2 : Math.max(vh / 2, Math.min(H - vh / 2, c.cy));
+        if (f) { f.cx = vw >= W ? W / 2 : Math.max(vw / 2, Math.min(W - vw / 2, f.cx)); f.cy = vh >= H ? H / 2 : Math.max(vh / 2, Math.min(H - vh / 2, f.cy)); }
         z = c.z; cx = c.cx; cy = c.cy;
       } else if (fc) {
         z = (Math.max(cw / W, ch / H) * fc.zoom);
@@ -270,7 +275,7 @@ export function AgedMap({ drift = false, focus = null, labels = true, marks, cla
       g.translate(cw / 2, ch / 2);
       g.scale(z, z);
       g.translate(-cx, -cy);
-      g.imageSmoothingEnabled = true;
+      g.imageSmoothingEnabled = true; g.imageSmoothingQuality = 'high';
       g.drawImage(terrain.current.c, 0, 0);
       if (territory.current) g.drawImage(territory.current, 0, 0, m.w * PX, m.h * PX);
       if (frame) {

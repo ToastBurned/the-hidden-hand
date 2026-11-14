@@ -53,7 +53,7 @@ export function GameApp() {
           onBegin={(start) => begin(start, screen.tutorial)}
         />
       )}
-      {screen.id === 'play' && <PlayScreen onTitle={toTitle} />}
+      {screen.id === 'play' && <PlayScreen onTitle={toTitle} tutorial={screen.tutorial} />}
       {dialog === 'settings' && <SettingsDialog onClose={() => setDialog(null)} />}
       {dialog === 'chronicles' && <ChroniclesDialog onClose={() => setDialog(null)} />}
       {error && <div className="hh-toast" role="alert" onClick={() => setError(null)}>{error}</div>}

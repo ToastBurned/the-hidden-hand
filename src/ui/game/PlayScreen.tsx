@@ -5,6 +5,7 @@
  * screens. Centre: the chosen screen (the map by default). Right: notices, newest first.
  * Conclaves, assignments and endings open over the top.
  */
+import { Tutorial } from './Tutorial';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { sim } from '../client';
 import { useSim } from '../hooks';
@@ -52,7 +53,7 @@ export interface PlayApi {
   toast: (s: string) => void;
 }
 
-export function PlayScreen({ onTitle, tutorial }: { onTitle: () => void; tutorial?: React.ReactNode }) {
+export function PlayScreen({ onTitle, tutorial }: { onTitle: () => void; tutorial?: boolean }) {
   const st = useSim();
   const settings = useSettings();
   const g = st.game;
@@ -63,6 +64,7 @@ export function PlayScreen({ onTitle, tutorial }: { onTitle: () => void; tutoria
   const [menu, setMenu] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [lastSpeed, setLastSpeed] = useState<GameSpeed>(2);
+  const [guide, setGuide] = useState(!!tutorial);
   const [focus, setFocus] = useState<{ x: number; y: number; zoom: number } | null>(null);
 
   useEffect(() => { if (st.frame) rememberNames(st.frame.settlements); }, [st.frame?.settlements.length, st.version]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -81,7 +83,7 @@ export function PlayScreen({ onTitle, tutorial }: { onTitle: () => void; tutoria
   const openTown = useCallback((id: number) => {
     setTown(id); setMemberSel(null); setTab('map');
     const s = st.frame?.settlements.find((x) => x.id === id);
-    if (s) setFocus({ x: s.x, y: s.y, zoom: 3 });
+    if (s) setFocus({ x: s.x, y: s.y, zoom: 1.8 });
   }, [st.frame]);
   const openMember = useCallback((id: number) => { setMemberSel(id); setTown(null); }, []);
 
@@ -118,7 +120,7 @@ export function PlayScreen({ onTitle, tutorial }: { onTitle: () => void; tutoria
   const clarity = useCallback((id: number) => settlementClarity(g, id), [g]);
 
   useEffect(() => {
-    if (g && st.frame && !focus) { const s = st.frame.settlements.find((x) => x.id === g.order.home); if (s) setFocus({ x: s.x, y: s.y, zoom: 2.5 }); }
+    if (g && st.frame && !focus) { const s = st.frame.settlements.find((x) => x.id === g.order.home); if (s) setFocus({ x: s.x, y: s.y, zoom: 1.3 }); }
   }, [g?.order.home, st.frame]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!g) return <div className="ages"><div className="dim italic">The Order gathers…</div></div>;
@@ -168,7 +170,7 @@ export function PlayScreen({ onTitle, tutorial }: { onTitle: () => void; tutoria
           <div className="play-map">
             <AgedMap interactive labels marks={marks} clarity={clarity} focus={focus} selected={town} onPick={(id) => { setTown(id); if (id !== null) setMemberSel(null); }} />
             <div className="map-key small">
-              <span><i className="k home" /> home lodge</span><span><i className="k member" /> members</span><span><i className="k lodge" /> lodge</span><span><i className="k target" /> operation</span>
+              <span><i className="k k-home" /> home lodge</span><span><i className="k k-member" /> members</span><span><i className="k k-lodge" /> lodge</span><span><i className="k k-target" /> operation</span>
               <span className="faint italic">Names with ? are rumour; faint towns lie behind the Veil.</span>
             </div>
             {g.members.length < 3 && !tutorial && <div className="first-task"><span className="label">First task</span> Find a third. Open the Order, choose a member and give them the <b>Recruit</b> assignment.</div>}
@@ -194,7 +196,7 @@ export function PlayScreen({ onTitle, tutorial }: { onTitle: () => void; tutoria
           {!g.notices.length && <p className="dim italic small" style={{ padding: 12 }}>Nothing yet.</p>}
         </div>
       </aside>
-      {tutorial}
+      {guide && <Tutorial ctx={{ g, tab, town, member: memberSel, running, assigning: !!assign }} onExit={() => setGuide(false)} />}
       {assign && <AssignDialog api={api} intent={assign} onClose={() => setAssign(null)} />}
       {g.conclave && !g.ending && <ConclaveDialog api={api} />}
       {g.ending && <EndingScreen g={g} onTitle={onTitle} />}
