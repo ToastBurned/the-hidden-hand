@@ -8,6 +8,8 @@ import type { GameView } from '../../game/view';
 import { Icon } from './Icons';
 import type { Tab } from './PlayScreen';
 import { setSettings } from './settings';
+import { CodexLink } from './codex/Codex';
+import { LESSON_CODEX } from './codex/lessons';
 
 export interface TutorialCtx { g: GameView; tab: Tab; town: number | null; member: number | null; running: boolean; assigning: boolean }
 
@@ -59,12 +61,28 @@ export function Tutorial({ ctx, onExit }: { ctx: TutorialCtx; onExit: () => void
       <div className="row"><span className="label grow">Tutorial · {i + 1} of {LESSONS.length}</span><button className="ghost tiny" onClick={() => setMin(true)} aria-label="Fold the tutorial">fold</button></div>
       <h3>{lesson.title}</h3>
       <p className="small">{lesson.text}</p>
+      {LESSON_CODEX[lesson.id] && <ReadMore ids={LESSON_CODEX[lesson.id]} />}
       {lesson.task && <div className={`tut-task ${done ? 'done' : ''}`}><Icon name={done ? 'seal' : 'next'} size={14} /> {lesson.task}</div>}
       <div className="row" style={{ gap: 10, marginTop: 8 }}>
         <span className="grow" />
         {lesson.task && !done && <button className="link tiny" onClick={next}>Skip this</button>}
         {!lesson.task && <button className="seal" onClick={next}>{i + 1 >= LESSONS.length ? 'Finish' : 'Go on'}</button>}
       </div>
+    </div>
+  );
+}
+
+const READ_MORE: Record<string, string> = {
+  'guide:welcome': 'Your seat', 'order:members': 'Members', 'order:cells': 'Cells', 'op:recruit': 'Recruit', 'order:forecast': 'Forecasts',
+  'guide:time': 'Time and speed', 'guide:veil': 'The Veil', 'op:win-seat': 'Win a seat', 'world:offices': 'Offices', 'order:levers': 'Levers',
+  'order:influence': 'Influence', 'order:operations': 'Operations', 'op:scout': 'Scout a town', 'shadow:suspicion': 'Suspicion', 'shadow:inquiries': 'Investigators',
+  'order:conclave': 'The conclave', 'order:posture': 'Posture', 'guide:winning': 'Winning and losing', 'order:creed': 'The creed', 'guide:first-steps': 'First steps', 'guide:screens': 'The screens',
+};
+/** Links from a lesson into the encyclopaedia, for the player who wants the whole rule. */
+function ReadMore({ ids }: { ids: string[] }) {
+  return (
+    <div className="tut-more tiny"><Icon name="book" size={12} /><span className="dim">Read more:</span>
+      {ids.map((id) => <CodexLink key={id} id={id}>{READ_MORE[id] ?? id}</CodexLink>)}
     </div>
   );
 }

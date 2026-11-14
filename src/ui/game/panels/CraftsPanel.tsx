@@ -1,6 +1,7 @@
 /** The Order's own crafts: learned by practice and teaching, lost if their holders die untaught. */
 import { CRAFTS } from '../../../engine/game/crafts';
 import type { PlayApi } from '../PlayScreen';
+import { HelpMark } from '../codex/Codex';
 
 export function CraftsPanel({ api }: { api: PlayApi }) {
   const g = api.g;
@@ -10,7 +11,7 @@ export function CraftsPanel({ api }: { api: PlayApi }) {
   return (
     <div className="screen">
       <header className="screen-head">
-        <h2>Crafts</h2>
+        <h2>Crafts<HelpMark id="order:crafts" /></h2>
         <p className="dim italic">The world's technology is not yours to direct; the Order's own methods are. Members learn by doing and by teaching. A craft held by one old member dies with them unless someone is taught.</p>
       </header>
       <div className="craft-tree">
@@ -21,7 +22,7 @@ export function CraftsPanel({ api }: { api: PlayApi }) {
               const m = v?.mastery ?? 0;
               return (
                 <div key={c.id} className={`craft panel ${m >= 0.25 ? 'open' : ''}`}>
-                  <div className="row"><b className="grow">{c.name}</b><span className="tiny gold">{Math.round(m * 100)}%</span></div>
+                  <div className="row"><b className="grow">{c.name}<HelpMark id={`craft:${c.id}`} label={c.name} /></b><span className="tiny gold">{Math.round(m * 100)}%</span></div>
                   <div className="bar"><div className={m >= 0.25 ? 'gold' : 'dimbar'} style={{ width: `${m * 100}%` }} /></div>
                   <div className="tiny dim">{c.blurb}</div>
                   {c.needs.length > 0 && <div className="tiny faint">Builds on {c.needs.join(' and ')}</div>}

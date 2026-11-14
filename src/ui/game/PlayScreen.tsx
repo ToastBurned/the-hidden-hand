@@ -28,6 +28,7 @@ import { ConclaveDialog } from './dialogs/ConclaveDialog';
 import { EndingScreen } from './dialogs/EndingScreen';
 import { PauseMenu } from './dialogs/PauseMenu';
 import { useSettings } from './settings';
+import { useCodex } from './codex/Codex';
 
 export type Tab = 'map' | 'order' | 'ops' | 'lodges' | 'crafts' | 'shadow' | 'work' | 'chronicle';
 const TABS: { id: Tab; label: string; icon: IconName; key: string }[] = [
@@ -151,6 +152,7 @@ export function PlayScreen({ onTitle, tutorial }: { onTitle: () => void; tutoria
           ))}
         </div>
         <Resources g={g} />
+        <CodexButton />
         <button className="conclave-btn" onClick={() => act({ type: 'conclave-call' })} disabled={!!g.conclave} title={`Call the conclave now. Next one: ${dateOf(g.nextConclave)}`}><Icon name="candle" size={16} /> Conclave</button>
       </header>
       {st.pauseReason && !running && !g.conclave && !g.ending && (
@@ -206,7 +208,13 @@ export function PlayScreen({ onTitle, tutorial }: { onTitle: () => void; tutoria
   );
 }
 
+function CodexButton() {
+  const { open } = useCodex();
+  return <button className="ghost" onClick={() => open()} title="Encyclopaedia (F1)" aria-label="Encyclopaedia"><Icon name="book" size={18} /></button>;
+}
+
 function Resources({ g }: { g: GameView }) {
+  const { open } = useCodex();
   const r = g.resources;
   const pct = (v: number) => `${Math.round(v * 100)}%`;
   const items: { k: keyof typeof r.delta; label: string; icon: IconName; v: string; d: number; tip: string; warn?: boolean }[] = [
@@ -218,7 +226,7 @@ function Resources({ g }: { g: GameView }) {
   return (
     <div className="resources">
       {items.map((it) => (
-        <div key={it.k} className={`res ${it.warn ? 'warn' : ''}`} title={`${it.label}: ${it.tip}`}>
+        <div key={it.k} className={`res ${it.warn ? 'warn' : ''}`} title={`${it.label}: ${it.tip} Click to read more.`} onClick={() => open(`order:${it.k}`)} style={{ cursor: 'help' }}>
           <Icon name={it.icon} size={16} />
           <div><div className="v">{it.v}{Math.abs(it.d) > 0.005 && <span className={it.d > 0 ? 'up' : 'down'}>{it.d > 0 ? '▲' : '▼'}</span>}</div><div className="l">{it.label}</div></div>
         </div>

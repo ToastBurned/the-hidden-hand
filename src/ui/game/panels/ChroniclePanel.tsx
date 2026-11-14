@@ -3,6 +3,7 @@ import { useSim } from '../../hooks';
 import { Icon } from '../Icons';
 import { settlementClarity } from '../veil';
 import type { PlayApi } from '../PlayScreen';
+import { HelpMark } from '../codex/Codex';
 
 export function ChroniclePanel({ api }: { api: PlayApi }) {
   const st = useSim();
@@ -12,7 +13,7 @@ export function ChroniclePanel({ api }: { api: PlayApi }) {
   return (
     <div className="screen">
       <header className="screen-head">
-        <h2>Chronicle</h2>
+        <h2>Chronicle<HelpMark id="world:chronicle" /></h2>
         <p className="dim italic">The world's own record, as far as news reaches the Order. Events the Order touched carry its private mark; the public text never names it.</p>
       </header>
       <div className="chron">

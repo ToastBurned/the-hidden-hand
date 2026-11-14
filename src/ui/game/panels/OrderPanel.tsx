@@ -3,6 +3,7 @@ import { Portrait } from '../../art/Portrait';
 import type { MemberView } from '../../../game/view';
 import { Icon } from '../Icons';
 import { dateOf, type PlayApi } from '../PlayScreen';
+import { HelpMark } from '../codex/Codex';
 
 const FLAG_LABEL: Record<string, string> = { wavering: 'Wavering', wanted: 'Wanted', imprisoned: 'Imprisoned', ill: 'Ill', founder: 'Founder' };
 
@@ -42,7 +43,7 @@ export function OrderPanel({ api }: { api: PlayApi }) {
   return (
     <div className="screen">
       <header className="screen-head">
-        <h2>{g.order.name}</h2>
+        <h2>{g.order.name}<HelpMark id="order:members" label="Members" /></h2>
         <p className="dim italic">{g.members.length} members in {g.cells.length} {g.cells.length === 1 ? 'cell' : 'cells'}. Members of a cell know each other; only elders know other cells. Whoever is caught can name only those they know.</p>
       </header>
       {g.cells.map((c) => {
