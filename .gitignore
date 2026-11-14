@@ -5,3 +5,5 @@ dist/
 tools/out/
 .scratch/
 tools/.campaigns-last.json
+dist-art/
+shots/

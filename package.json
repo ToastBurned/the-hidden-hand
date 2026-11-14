@@ -12,7 +12,10 @@
     "typecheck": "tsc --noEmit",
     "sim": "tsx tools/cli.ts",
     "validate": "tsx tools/validate.ts",
-    "experiment": "tsx tools/experiment.ts"
+    "experiment": "tsx tools/experiment.ts",
+    "art": "vite --config vite.art.config.ts --open /art.html",
+    "build:art": "vite build --config vite.art.config.ts && node tools/artpage.mjs",
+    "artshots": "tsx tools/artshots.ts"
   },
   "devDependencies": {
     "@types/node": "22.10.2",
