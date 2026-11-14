@@ -18,9 +18,14 @@ export function loanRate(pol: Polity | undefined): number {
   return pol?.laws?.debt === 'limits' ? 0.1 : 0.22;
 }
 
-/** Cash a bank may still lend while keeping a fifth of its deposits in reserve. */
+/** Under debt bondage defaulters work off what they owe, so lenders lose less and lend more readily. */
+function bondage(pol: Polity | undefined): boolean {
+  return pol?.laws?.debt === 'harsh';
+}
+
+/** Cash a bank may still lend: it keeps a third of its deposits in hand and lends at most 60% of them. */
 function lendable(b: Bank): number {
-  return Math.max(0, b.reserves - 0.2 * b.deposits);
+  return Math.max(0, Math.min(b.reserves - 0.35 * b.deposits, 0.6 * b.deposits - b.loans - b.stateLoans));
 }
 
 function recount(c: Ctx, s: Settlement, b: Bank): Household[] {
@@ -44,6 +49,7 @@ export function bankingYear(c: Ctx, s: Settlement): void {
   const w = c.w;
   if (!s.alive || s.bank) return;
   if (!c.fx(s.id).currency || s.buildings[BLD_MARKET] < 0.5 || s.pop < 400 || s.workers[O_MERCHANT] < 3) return;
+  if (s.ctx.bankClosedAt !== undefined && w.tick - s.ctx.bankClosedAt < 12 * 25) return; // trust takes a generation to return
   if (!c.rng.chance(0.08 + Math.min(0.2, s.tradeVol / 4000))) return;
   s.bank = { founded: w.tick, reserves: 0, deposits: 0, loans: 0, stateLoans: 0, failures: 0 };
   s.ctx.bank = logEvent(w, {
@@ -88,7 +94,17 @@ export function bankMonth(c: Ctx, s: Settlement): void {
       if (h.debt < 0.01) h.debt = 0;
       if (h.debt > monthly * 6) indebted += size;
       // hopeless debts are defaulted on
-      if (h.debt > monthly * 30 && h.money < monthly) {
+      if (h.debt > monthly * 12 && h.money < monthly) {
+        if (bondage(pol)) {
+          // bonded debtors keep paying from their labour: half the debt is recovered over time, at great cost in misery
+          const recovered = Math.min(h.debt * 0.5, Math.max(0, h.money) + h.goods[G_FOOD] * pf * 0.5);
+          const fromFood = Math.max(0, recovered - Math.max(0, h.money));
+          h.money -= recovered - fromFood;
+          h.goods[G_FOOD] -= fromFood / pf;
+          b.reserves += recovered;
+          s.ctx.bonded = (s.ctx.bonded ?? 0) + size;
+          for (const id of h.members) { const p = w.persons.get(id); if (p) p.happiness = Math.max(0, p.happiness - 0.25); }
+        }
         defaults += h.debt;
         defaulted += size;
         h.debt = 0;
@@ -96,8 +112,8 @@ export function bankMonth(c: Ctx, s: Settlement): void {
     }
     // --- deposits and withdrawals
     const comfortable = monthly * 4;
-    if (h.debt <= 0 && h.money > comfortable) {
-      const d = (h.money - comfortable) * 0.15;
+    if (h.debt <= 0 && h.money > comfortable && h.deposit < monthly * 24) {
+      const d = Math.min((h.money - comfortable) * 0.06, monthly * 24 - h.deposit);
       h.money -= d;
       h.deposit += d;
       b.reserves += d;
@@ -110,9 +126,10 @@ export function bankMonth(c: Ctx, s: Settlement): void {
       h.money += got;
       b.reserves -= got;
     }
-    // --- borrowing: to eat through a bad season, or to equip workers
-    if (h.deposit <= 0 && h.money < monthly && (h.hunger > 0.08 || h.goods[G_FOOD] < size * 0.8) && h.debt < monthly * 10) {
-      const want = monthly * 2;
+    // --- borrowing: to eat through a bad season, against land or a working income as security
+    const security = h.land * 40 * pf + h.income * 6;
+    if (h.deposit <= 0 && h.money < monthly && (h.hunger > 0.08 || h.goods[G_FOOD] < size * 0.8) && h.debt < Math.min(monthly * 5, security * 0.5)) {
+      const want = Math.min(monthly * 2, security * 0.5 - h.debt);
       const got = Math.min(want, lendable(b));
       if (got > 0.01) {
         b.reserves -= got;
@@ -165,10 +182,17 @@ export function failBank(c: Ctx, s: Settlement, b: Bank, hhs: Household[], reaso
   b.reserves -= pay;
   b.deposits = 0;
   b.failures++;
+  // the bank closes: what it still held goes to its owners in the town, and its loan book dies with it
+  let owed = 0;
+  for (const h of hhs) { owed += h.debt ?? 0; h.debt = 0; }
+  if (b.reserves > 0 && hhs.length) { for (const h of hhs) h.money += b.reserves / hhs.length; b.reserves = 0; }
+  if (pol && (pol.debt ?? 0) > 0 && pol.ctx.creditor === s.id) pol.debt = 0;
+  s.bank = undefined;
+  s.ctx.bankClosedAt = w.tick;
   const ev = logEvent(w, {
     type: 'bank_failure', imp: 4, text: `The bank of ${s.name} failed; depositors recovered ${Math.round(frac * 100)}% of their savings.`, x: s.x, y: s.y,
     settlements: [s.id], polities: [s.polity], causes: [cause, s.ctx.defaultWave ?? -1, pol?.ctx.default ?? -1, s.ctx.sacked ?? -1],
-    why: `${reason[0].toUpperCase() + reason.slice(1)}. Savings of households of ${Math.round(hit)} people were ${frac > 0.95 ? 'repaid' : 'partly lost'}; ${b.loans.toFixed(0)} in loans remained owed to its creditors.`,
+    why: `${reason[0].toUpperCase() + reason.slice(1)}. Savings of households of ${Math.round(hit)} people were ${frac > 0.95 ? 'repaid' : 'partly lost'}; ${owed.toFixed(0)} in loans owed to it were never collected.`,
   });
   s.ctx.bankFailure = ev;
   s.ctx.bankFailureAt = w.tick;
@@ -181,7 +205,13 @@ export function stateDebtYear(c: Ctx, pol: Polity): void {
   const w = c.w;
   if (!pol.alive) return;
   pol.debt = pol.debt ?? 0;
-  const cap = w.settlements.get(pol.capital);
+  // the realm borrows from the richest bank it controls
+  let cap = w.settlements.get(pol.capital);
+  for (const sid of pol.settlements) {
+    const s = w.settlements.get(sid);
+    if (s?.bank && (!cap?.bank || s.bank.reserves > cap.bank.reserves)) cap = s;
+  }
+  if (pol.debt > 0 && pol.ctx.creditor !== undefined) { const cr = w.settlements.get(pol.ctx.creditor); if (cr?.bank && cr.polity === pol.id) cap = cr; }
   const b = cap?.bank;
   const revenue = Math.max(1, pol.lastRevenue ?? pol.revenue ?? 1);
   if (pol.debt > 0) {
@@ -223,6 +253,7 @@ export function stateDebtYear(c: Ctx, pol: Polity): void {
   b.stateLoans += loan;
   pol.treasury += loan;
   pol.debt = loan;
+  pol.ctx.creditor = cap.id;
   pol.ctx.warLoan = logEvent(w, {
     type: 'loan', imp: 2, text: `${pol.name} borrowed from the bank of ${cap.name} to pay for its war.`, x: cap.x, y: cap.y, polities: [pol.id], settlements: [cap.id],
     why: `Its treasury held ${pol.treasury - loan < 1 ? 'almost nothing' : (pol.treasury - loan).toFixed(0)} against a yearly revenue of ${revenue.toFixed(0)}; it borrowed ${loan.toFixed(0)}.`,

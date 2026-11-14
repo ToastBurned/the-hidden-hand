@@ -450,7 +450,7 @@ function sack(c: Ctx, war: War, attacker: Polity, defender: Polity, s: Settlemen
     for (let g = 1; g < NG; g++) h.goods[g] *= 0.7;
   }
   // the victors also empty part of the bank's vault
-  if (s.bank && s.bank.reserves > 0) { const m = s.bank.reserves * 0.4; s.bank.reserves -= m; lootMoney += m; }
+  if (s.bank && s.bank.reserves > 0) { const m = s.bank.reserves * 0.25; s.bank.reserves -= m; lootMoney += m; }
   attacker.treasury += lootMoney;
   const cap = capitalOf(c, attacker);
   if (cap) cap.granary += lootFood * 0.5; // much is lost or consumed on the march

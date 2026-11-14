@@ -228,3 +228,46 @@ describe('representative agents (large populations)', () => {
     new Simulation(old).runYears(2);
   });
 });
+
+describe('fleets, credit and law', () => {
+  const sim = Simulation.create({ seed: 1 });
+  const w = sim.w;
+  let maxDrift = 0;
+  let minMoney = Infinity;
+  let minReserves = Infinity;
+  sim.runYears(270, (s) => {
+    maxDrift = Math.max(maxDrift, Math.abs(moneyStock(s.w) - (s.w.moneyMinted - s.w.moneyLost)) / Math.max(1, s.w.moneyMinted));
+    for (const h of s.w.households.values()) minMoney = Math.min(minMoney, h.money);
+    for (const x of s.w.settlements.values()) if (x.bank) minReserves = Math.min(minReserves, x.bank.reserves);
+  });
+  const types = new Set(w.events.map((e) => e.type));
+
+  it('money is conserved with banks holding reserves and lending', () => {
+    expect(maxDrift).toBeLessThan(1e-6);
+    expect(minMoney).toBeGreaterThanOrEqual(-1e-6);
+    expect(minReserves).toBeGreaterThanOrEqual(-1e-6);
+  });
+
+  it('deposits and debts are never negative and belong to living settlements', () => {
+    for (const h of w.households.values()) {
+      expect(h.deposit ?? 0).toBeGreaterThanOrEqual(-1e-9);
+      expect(h.debt ?? 0).toBeGreaterThanOrEqual(-1e-9);
+      if ((h.deposit ?? 0) > 0) expect(w.settlements.get(h.sid)?.bank, `deposit with no bank in ${h.sid}`).toBeTruthy();
+    }
+    for (const p of w.polities.values()) expect(p.debt ?? 0).toBeGreaterThanOrEqual(0);
+  });
+
+  it('fleets, banks and written laws all appear in a three-century history', () => {
+    expect([...w.polities.values()].some((p) => (p.fleet ?? 0) >= 1) || types.has('fleet')).toBe(true);
+    expect(types.has('bank')).toBe(true);
+    expect(types.has('law')).toBe(true);
+  });
+
+  it('only realms with a written code enact laws beyond land and service', () => {
+    for (const p of w.polities.values()) {
+      if (!p.laws) continue;
+      const fields = Object.keys(p.laws).filter((k) => k !== 'land' && k !== 'service');
+      if (fields.length) expect(p.inst.writtenLaw || !p.alive).toBe(true);
+    }
+  });
+});

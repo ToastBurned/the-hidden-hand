@@ -16,6 +16,7 @@ import {
 } from '../constants';
 import { ageOf, clamp, type Ctx } from '../context';
 import { headcount, householdSize } from '../entities';
+import { tariff } from './law';
 import { cropFactor, wildSeason, type ClimateField } from './environment';
 import type { Household, Person, Polity, Settlement } from '../types';
 import { planTrade, type Order } from './trade';
@@ -559,10 +560,13 @@ export function clearMarket(c: Ctx, sw: SettlementWork): void {
         } else if (o.h) {
           if (o.flag === 1 && o.h.cargo) o.h.cargo[g] -= q;
           else o.h.goods[g] -= q;
-          o.h.money += value * (1 - tax);
-          if (pol) { pol.treasury += value * tax; pol.revenue += value * tax; }
-          else o.h.money += value * tax;
-          o.h.income += value * (1 - tax);
+          // merchants from another realm pay the duty set by this realm's trade law
+          const duty = o.flag === 1 && pol && c.w.settlements.get(o.h.sid)?.polity !== pol.id ? tariff(pol) : 0;
+          const t = tax + duty;
+          o.h.money += value * (1 - t);
+          if (pol) { pol.treasury += value * t; pol.revenue += value * t; }
+          else o.h.money += value * t;
+          o.h.income += value * (1 - t);
         }
         revenue += value;
       }
