@@ -52,4 +52,4 @@
 }
 .hh button.ghost.codex-corner { position: absolute; top: 14px; right: 16px; z-index: 20; display: flex; align-items: center; gap: 6px; color: var(--parch-dim); background: rgba(11, 10, 9, 0.45); border-color: var(--rule); }
 .hh button.ghost.codex-corner:hover:not(:disabled) { color: var(--lamp-2); }
-.hh:has(.oath-skip) .codex-corner { display: none; }
+.hh:has(.oath-skip) button.ghost.codex-corner { display: none; }
