@@ -26,6 +26,12 @@ export interface HiddenHandDesktop {
   /** The folder saves are written to, and a way to show it in Explorer. */
   savesFolder(): Promise<string>;
   openSavesFolder(): Promise<void>;
+  /**
+   * Preferences kept in `preferences.json` in the app's data folder (see src/platform/storage.ts).
+   * `get` reads from a copy loaded when the page starts; `set` (null removes) is written to disk
+   * straight away by the main process. Missing in desktop builds older than 0.2.
+   */
+  readonly prefs?: { get(key: string): string | null; set(key: string, value: string | null): void };
 }
 
 declare global {

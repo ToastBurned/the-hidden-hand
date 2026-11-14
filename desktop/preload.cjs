@@ -3,6 +3,9 @@
 // src/platform/desktop.ts; the page itself gets no Node.js or file-system access.
 const { contextBridge, ipcRenderer } = require('electron');
 
+// The page's preferences, read once at start-up so reads stay synchronous (like localStorage).
+const prefs = { ...(ipcRenderer.sendSync('prefs:load') || {}) };
+
 contextBridge.exposeInMainWorld('hiddenHandDesktop', {
   isDesktop: true,
   version: ipcRenderer.sendSync('app:version'),
@@ -14,4 +17,11 @@ contextBridge.exposeInMainWorld('hiddenHandDesktop', {
   importFile: () => ipcRenderer.invoke('file:import'),
   savesFolder: () => ipcRenderer.invoke('saves:folder'),
   openSavesFolder: () => ipcRenderer.invoke('saves:open-folder'),
+  prefs: {
+    get: (key) => (Object.prototype.hasOwnProperty.call(prefs, key) ? prefs[key] : null),
+    set: (key, value) => {
+      if (value === null || value === undefined) delete prefs[key]; else prefs[key] = String(value);
+      ipcRenderer.send('prefs:set', String(key), value === null || value === undefined ? null : String(value));
+    },
+  },
 });

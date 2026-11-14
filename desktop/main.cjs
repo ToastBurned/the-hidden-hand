@@ -11,9 +11,6 @@ const fsp = require('node:fs/promises');
 const path = require('node:path');
 const { SaveStore, atomicWrite, EXT, LEGACY_EXT } = require('./storage.cjs');
 
-/** Developer mode shows the simulation tools (experiments, direct interventions): `--dev` or HIDDENHAND_DEV=1. */
-const devMode = process.argv.includes('--dev') || process.env.HIDDENHAND_DEV === '1';
-
 // --- Performance --------------------------------------------------------------------------------
 // Keep the simulation running at full speed when the window is minimised or covered (browsers
 // throttle background tabs, which slows or stalls a running world).
@@ -46,6 +43,37 @@ function saveSettings() {
   fs.mkdirSync(path.dirname(settingsFile()), { recursive: true });
   atomicWrite(settingsFile(), JSON.stringify(settings, null, 2)).catch(() => {});
 }
+// --- Preferences (the page's own settings: game settings, tutorial progress, Chronicles) ---------
+// Kept in their own file so the page's choices survive a reinstall, the portable build and a cleared
+// browser cache. The page reads a copy at start-up (prefs:load) and sends each change (prefs:set).
+const prefsFile = () => path.join(app.getPath('userData'), 'preferences.json');
+let prefs = {};
+let prefsWriting = null;
+let prefsDirty = false;
+function loadPrefs() {
+  try {
+    const p = JSON.parse(fs.readFileSync(prefsFile(), 'utf8'));
+    prefs = p && typeof p === 'object' && !Array.isArray(p) ? p : {};
+  } catch { prefs = {}; }
+}
+/** Writes the preferences file, one write at a time; changes made during a write are written next. */
+function writePrefs() {
+  prefsDirty = true;
+  if (prefsWriting) return;
+  prefsDirty = false;
+  fs.mkdirSync(path.dirname(prefsFile()), { recursive: true });
+  prefsWriting = atomicWrite(prefsFile(), JSON.stringify(prefs, null, 2))
+    .catch(() => {})
+    .finally(() => { prefsWriting = null; if (prefsDirty) writePrefs(); });
+}
+/** On quit, make sure the last change is on disk even if a write is still pending. */
+function flushPrefs() {
+  if (!prefsDirty && !prefsWriting) return;
+  try { fs.mkdirSync(path.dirname(prefsFile()), { recursive: true }); fs.writeFileSync(prefsFile(), JSON.stringify(prefs, null, 2)); } catch { /* ignore */ }
+  prefsDirty = false;
+}
+const PREF_KEY = /^[\w.-]{1,64}$/;
+
 const defaultSavesFolder = () => path.join(app.getPath('documents'), 'The Hidden Hand', 'Saves');
 /** Where saves lived before the project was renamed from The Noosphere. */
 const legacySavesFolder = () => path.join(app.getPath('documents'), 'Noosphere', 'Saves');
@@ -124,12 +152,20 @@ function createWindow() {
   win.on('close', remember);
   win.on('closed', () => { win = null; });
 
-  win.loadFile(path.join(__dirname, 'app', 'index.html'), devMode ? { query: { dev: '1' } } : undefined);
+  win.loadFile(path.join(__dirname, 'app', 'index.html'));
 }
 
 // --- Bridge (see src/platform/desktop.ts) -------------------------------------------------------
 function registerIpc() {
   ipcMain.on('app:version', (e) => { e.returnValue = app.getVersion(); });
+  ipcMain.on('prefs:load', (e) => { e.returnValue = prefs; });
+  ipcMain.on('prefs:set', (_e, key, value) => {
+    if (typeof key !== 'string' || !PREF_KEY.test(key)) return;
+    if (value === null || value === undefined) delete prefs[key];
+    else if (typeof value === 'string' && value.length <= 1_000_000) prefs[key] = value;
+    else return;
+    writePrefs();
+  });
   ipcMain.handle('saves:list', () => store.list());
   ipcMain.handle('saves:put', (_e, name, tick, data, note) => store.put(name, tick, data, note));
   ipcMain.handle('saves:get', (_e, id) => store.get(id));
@@ -226,6 +262,7 @@ function buildMenu() {
 
 app.whenReady().then(() => {
   loadSettings();
+  loadPrefs();
   carryOverLegacySaves();
   resetStore();
   registerIpc();
@@ -233,3 +270,4 @@ app.whenReady().then(() => {
   createWindow();
 });
 app.on('window-all-closed', () => app.quit());
+app.on('will-quit', flushPrefs);
