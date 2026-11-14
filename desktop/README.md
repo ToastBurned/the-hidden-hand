@@ -13,7 +13,8 @@ The same game as `app\HiddenHand.html`, packaged as an installed Windows program
 **Coming from The Noosphere?** The app was renamed, so it installs as a new program next to the old one
 (uninstall *The Noosphere* whenever you like). On first start, if `Documents\Noosphere\Saves` exists and the new
 saves folder does not, your old worlds are copied across; the old folder is left as it was. Old `.noosphere.json`
-files keep loading.
+files keep loading. They open as simulated worlds; campaigns of the game will use their own save format, and
+old worlds cannot be turned into campaigns.
 
 **Developer mode.** Start the app with `--dev` (for example a shortcut to `"The Hidden Hand.exe" --dev`) or set
 `HIDDENHAND_DEV=1` to show the simulation tools (Experiments and Intervene). Ctrl+Shift+D toggles them too.
