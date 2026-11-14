@@ -2,61 +2,76 @@
  * The Hidden Hand: the game's shell. Owns which screen is showing and the settings that
  * apply everywhere (text size, motion).
  */
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { sim } from '../client';
+import { useSim } from '../hooks';
+import { getSave } from '../saves';
+import { PlayScreen } from './PlayScreen';
+import { GameModal } from './Modal';
 import './theme.css';
 import { TitleScreen } from './TitleScreen';
 import { SettingsDialog } from './SettingsDialog';
 import { CampaignSetup, type CampaignStart } from './CampaignSetup';
 import { useSettings } from './settings';
-import { Mark } from './Icons';
 
 /** The tutorial's world: small, fixed, and predictable enough to teach from. */
 export const TUTORIAL_WORLD = { setup: { size: 'small' as const, temperament: 'temperate' as const, seed: 4127, years: 150 }, name: 'The Lantern Coast' };
 
-type Screen = { id: 'title' } | { id: 'setup'; tutorial: boolean } | { id: 'begun'; start: CampaignStart; tutorial: boolean };
+type Screen = { id: 'title' } | { id: 'setup'; tutorial: boolean } | { id: 'play'; tutorial: boolean } | { id: 'loading' };
 
 export function GameApp() {
   const settings = useSettings();
   const [screen, setScreen] = useState<Screen>({ id: 'title' });
-  const [dialog, setDialog] = useState<'settings' | null>(null);
+  const [dialog, setDialog] = useState<'settings' | 'chronicles' | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const st = useSim();
+  // a loaded campaign save opens straight into play
+  useEffect(() => { if (screen.id === 'loading' && st.ready && st.game) setScreen({ id: 'play', tutorial: false }); }, [screen.id, st.ready, st.game]);
+  const begin = async (start: CampaignStart, tutorial: boolean) => {
+    const r = await sim.game({ type: 'found', story: start.story.id, name: start.name, creed: start.creed });
+    if (!r.ok) { setError(`The Order could not be founded: ${r.error}.`); setScreen({ id: 'setup', tutorial }); return; }
+    setScreen({ id: 'play', tutorial });
+  };
+  const toTitle = () => { sim.pause(); setScreen({ id: 'title' }); };
   return (
     <div className="hh" style={{ ['--text-scale' as string]: settings.textScale }} data-motion={settings.reducedMotion ? 'reduced' : 'full'}>
       {screen.id === 'title' && (
         <TitleScreen
           onNew={() => setScreen({ id: 'setup', tutorial: false })}
-          onContinue={() => { /* campaign saves arrive with the play screens */ }}
+          onContinue={async (s) => { const data = await getSave(s.id); if (!data) { setError('That save could not be read.'); return; } setScreen({ id: 'loading' }); sim.load(data); }}
           onTutorial={() => setScreen({ id: 'setup', tutorial: true })}
           onSettings={() => setDialog('settings')}
-          onChronicles={() => { /* listed once campaigns can end */ }}
+          onChronicles={() => setDialog('chronicles')}
         />
       )}
+      {screen.id === 'loading' && <div className="ages"><div className="dim italic">Unsealing the record…</div></div>}
       {screen.id === 'setup' && (
         <CampaignSetup
           key={screen.tutorial ? 't' : 'c'}
           fixed={screen.tutorial ? TUTORIAL_WORLD : undefined}
           onBack={() => setScreen({ id: 'title' })}
-          onBegin={(start) => setScreen({ id: 'begun', start, tutorial: screen.tutorial })}
+          onBegin={(start) => begin(start, screen.tutorial)}
         />
       )}
-      {screen.id === 'begun' && <Begun start={screen.start} onTitle={() => setScreen({ id: 'title' })} />}
+      {screen.id === 'play' && <PlayScreen onTitle={toTitle} />}
       {dialog === 'settings' && <SettingsDialog onClose={() => setDialog(null)} />}
+      {dialog === 'chronicles' && <ChroniclesDialog onClose={() => setDialog(null)} />}
+      {error && <div className="hh-toast" role="alert" onClick={() => setError(null)}>{error}</div>}
     </div>
   );
 }
 
-/** Placeholder after the First Oath until the Order's screens land. */
-function Begun({ start, onTitle }: { start: CampaignStart; onTitle: () => void }) {
+function ChroniclesDialog({ onClose }: { onClose: () => void }) {
+  const s = useSettings();
   return (
-    <div className="ages">
-      <div className="ages-inner col" style={{ alignItems: 'center' }}>
-        <span className="gold"><Mark size={64} /></span>
-        <h1>{start.name}</h1>
-        {start.meaning && <p className="italic dim">“{start.meaning}”</p>}
-        <p>Founded in {start.story.settlementName} in the year {start.story.year} by {start.story.founder.name} and {start.story.companion.name}.</p>
-        <p className="gold italic">Your first task: find a third.</p>
-        <p className="small faint">The Order's screens come in the next part of this milestone.</p>
-        <button onClick={onTitle}>Return to the start screen</button>
-      </div>
-    </div>
+    <GameModal title="Chronicles" onClose={onClose}>
+      <p className="dim italic small">The Orders you have led.</p>
+      {s.chronicles.map((c, i) => (
+        <div key={i} style={{ padding: '10px 0', borderBottom: '1px solid var(--rule)' }}>
+          <b>{c.name}</b> <span className="small dim">in {c.world}, years {Math.floor(c.founded / 12)} to {Math.floor(c.ended / 12)}</span>
+          <div className="small italic">{c.ending}</div>
+        </div>
+      ))}
+    </GameModal>
   );
 }
