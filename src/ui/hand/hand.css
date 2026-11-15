@@ -314,3 +314,15 @@ html.framed .hand .membercards .facebtn { padding: 0 2px; }
 }
 .hand .lodgeline { font: 14px var(--pixel); color: var(--lamp); }
 .hand .titlecard .saves + p, .hand .titlecard > p:has(button) { margin-top: 14px; }
+.hand .ending { align-items: start; }
+
+/* undo the 0.2.0 stylesheet where its plain class names meet ours */
+.hand .topbar, .hand .tabs { background: none; border: 0; padding: 0; overflow: visible; }
+.hand .topbar { flex-wrap: wrap; }
+.hand .tabs > button { border-radius: 0; }
+.hand .row { min-height: 0; }
+.hand .card { margin: 0; border-radius: 0; }
+.hand label { display: revert; }
+.hand .ownname, .hand .free .axis, .hand .menu label { display: flex; }
+.hand .free .axis { display: grid; }
+.hand input[type='range'] { width: 100%; }

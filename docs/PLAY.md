@@ -1,10 +1,12 @@
 # Playing the one-city game (`src/ui/hand`)
 
 The interface for the Order on the city engine (docs/ORDER.md), drawn in the chosen
-pixel style, Ledger + fronts at 10 px a cell (docs/ART.md). It runs beside the 0.2.0 game
-until the rebuild replaces it:
+pixel style, Ledger + fronts at 10 px a cell (docs/ART.md). It is what the app opens to
+(Ed decided on 15 Nov 2026 that the game has fully pivoted to one city). The 0.2.0
+whole-world game in `src/ui/game` and `src/engine` is no longer offered; its code stays
+until a later cleanup, and the page still opens it with `#old`.
 
-- in the app: **One city** on the 0.2.0 title screen, or open the page with `#city`;
+- in the app: `npm run dev`, `npm run build` (app/HiddenHand.html, the desktop app);
 - on its own: `npm run play` (develop) or `npm run build:play` (one file,
   `dist-play/play-page.html`, React from a CDN).
 

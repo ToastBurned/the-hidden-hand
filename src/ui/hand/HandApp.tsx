@@ -64,7 +64,7 @@ function Title({ onNew, onLoad, onLeave }: { onNew: () => void; onLoad: (g: Hand
         )}
         {err && <p className="problem">{err}</p>}
         {onLeave && <p><button type="button" className="small" onClick={onLeave}>Back to the 0.2 game</button></p>}
-        <p className="muted small">An early build of the rebuild: everything plays, the balance is still being tuned.</p>
+        <p className="muted small">An early build: everything plays, the balance is still being tuned.</p>
       </div>
     </div>
   );
