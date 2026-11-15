@@ -12,7 +12,7 @@ import { useSettings } from './settings';
 
 const BACKDROP_YEARS = 70;
 
-export function TitleScreen(props: { onNew: () => void; onContinue: (s: SaveMeta) => void; onTutorial: () => void; onLoad: () => void; onSettings: () => void; onChronicles: () => void; savesVersion?: number }) {
+export function TitleScreen(props: { onNew: () => void; onContinue: (s: SaveMeta) => void; onTutorial: () => void; onLoad: () => void; onSettings: () => void; onChronicles: () => void; savesVersion?: number; onCity?: () => void }) {
   const st = useSim();
   const settings = useSettings();
   const [latest, setLatest] = useState<SaveMeta | null>(null);
@@ -56,6 +56,7 @@ export function TitleScreen(props: { onNew: () => void; onContinue: (s: SaveMeta
           <button onClick={props.onLoad}>Saved campaigns<span className="sub">{count > 1 ? `Load any of ${count} saves, or export and delete them` : count === 1 ? 'Load, export or delete a save, or import one' : 'Import a campaign from a file'}</span></button>
           <button onClick={props.onTutorial}>Tutorial<span className="sub">{settings.tutorialDone ? 'Play the first twenty years again' : 'Your first twenty years, guided'}</span></button>
           {settings.chronicles.length > 0 && <button onClick={props.onChronicles}>Chronicles<span className="sub">The Orders you have led</span></button>}
+          {props.onCity && <button onClick={props.onCity}>One city<span className="sub">Preview of the rebuild: a Renaissance port over two or three generations</span></button>}
           <button onClick={props.onSettings}>Settings</button>
         </nav>
       </div>

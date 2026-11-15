@@ -1,10 +1,12 @@
-// Turn dist-art/art.html (built by `npx vite build --config vite.art.config.ts`) into a
-// standalone page that loads React from cdnjs: art-page.html in the given folder.
-//   node tools/artpage.mjs [outDir]
+// Turn a page built by the art or play Vite config into a standalone page that loads React
+// from cdnjs.
+//   node tools/artpage.mjs [outDir] [source html] [output name]
+// Defaults: dist-art, dist-art/art.html, art-page.html.
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 
 const out = process.argv[2] ?? 'dist-art';
-const src = readFileSync('dist-art/art.html', 'utf8');
+const src = readFileSync(process.argv[3] ?? 'dist-art/art.html', 'utf8');
+const outName = process.argv[4] ?? 'art-page.html';
 const pick = (re) => { const m = src.match(re); if (!m) throw new Error(`missing ${re}`); return m[1]; };
 const title = pick(/<title>([\s\S]*?)<\/title>/);
 const style = pick(/<style[^>]*>([\s\S]*?)<\/style>/);
@@ -19,5 +21,5 @@ const page = `<title>${title}</title>
 <script>${script.replace(/<\/script/gi, '<\\/script')}</script>
 `;
 mkdirSync(out, { recursive: true });
-writeFileSync(`${out}/art-page.html`, page);
-console.log(`${out}/art-page.html`, page.length, 'bytes');
+writeFileSync(`${out}/${outName}`, page);
+console.log(`${out}/${outName}`, page.length, 'bytes');
