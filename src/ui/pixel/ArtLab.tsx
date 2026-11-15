@@ -15,54 +15,13 @@ import { lodgeDemo, type LodgeDemo } from './lodge';
 import { Px } from './px';
 import { renderFloor, type Figure } from './rooms';
 import { STYLES, type Season, type Style, type StyleId, type TimeOfDay } from './styles';
-import { buttonImage, insetImage, panelImage, parchmentImage } from './frame';
+import { PxView, toCanvas, useFrame } from './kit';
 import { renderPortrait } from './portrait';
 
 const SEASONS = ['Spring', 'Summer', 'Autumn', 'Winter'];
 const TIMES: TimeOfDay[] = ['day', 'dusk', 'night'];
 const ZOOMS = [0.25, 0.5, 1, 2, 3, 4];
 const FLOOR_NAMES: Record<number, string> = { [-1]: 'Cellar', 0: 'Ground floor', 1: 'Upper floor', 2: 'Second floor', 3: 'Garret' };
-
-function toCanvas(px: Px): HTMLCanvasElement {
-  const cv = document.createElement('canvas');
-  cv.width = px.w;
-  cv.height = px.h;
-  const ctx = cv.getContext('2d')!;
-  const img = ctx.createImageData(px.w, px.h);
-  new Uint32Array(img.data.buffer).set(px.data);
-  ctx.putImageData(img, 0, 0);
-  return cv;
-}
-
-/** A pixel buffer shown at an integer scale, crisp. */
-function PxView({ px, scale, label }: { px: Px; scale: number; label?: string }) {
-  const ref = useRef<HTMLCanvasElement>(null);
-  useEffect(() => {
-    const cv = ref.current;
-    if (!cv) return;
-    cv.width = px.w;
-    cv.height = px.h;
-    const ctx = cv.getContext('2d')!;
-    const img = ctx.createImageData(px.w, px.h);
-    new Uint32Array(img.data.buffer).set(px.data);
-    ctx.putImageData(img, 0, 0);
-  }, [px]);
-  return <canvas ref={ref} className="px" aria-label={label} style={{ width: px.w * scale, height: px.h * scale }} />;
-}
-
-/** Draw the pixel frame images once and hand them to the stylesheet as border images. */
-function useFrame(st: Style) {
-  useEffect(() => {
-    const url = (p: Px) => toCanvas(p).toDataURL();
-    const root = document.documentElement.style;
-    root.setProperty('--pf-panel', `url(${url(panelImage(st))})`);
-    root.setProperty('--pf-inset', `url(${url(insetImage(st))})`);
-    root.setProperty('--pf-btn', `url(${url(buttonImage(st, false))})`);
-    root.setProperty('--pf-btn-on', `url(${url(buttonImage(st, true))})`);
-    root.setProperty('--pf-paper', `url(${url(parchmentImage(st))})`);
-    document.documentElement.classList.add('framed');
-  }, [st]);
-}
 
 const ageOf = (c: City, p: Person) => Math.floor((c.day - p.born) / 364);
 const clsOf = (c: City, p: Person) => c.households.get(p.hh)?.cls ?? 0;

@@ -15,7 +15,9 @@
     "experiment": "tsx tools/experiment.ts",
     "art": "vite --config vite.art.config.ts --open /art.html",
     "build:art": "vite build --config vite.art.config.ts && node tools/artpage.mjs",
-    "artshots": "tsx tools/artshots.ts"
+    "artshots": "tsx tools/artshots.ts",
+    "play": "vite --config vite.play.config.ts --open /play.html",
+    "build:play": "vite build --config vite.play.config.ts && node tools/artpage.mjs dist-play dist-play/play.html play-page.html"
   },
   "devDependencies": {
     "@types/node": "22.10.2",

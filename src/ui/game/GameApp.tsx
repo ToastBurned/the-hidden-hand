@@ -23,7 +23,7 @@ export const TUTORIAL_WORLD = { setup: { size: 'small' as const, temperament: 't
 
 type Screen = { id: 'title' } | { id: 'setup'; tutorial: boolean } | { id: 'play'; tutorial: boolean } | { id: 'loading' };
 
-export function GameApp() {
+export function GameApp({ onCity }: { onCity?: () => void } = {}) {
   const settings = useSettings();
   const [screen, setScreen] = useState<Screen>({ id: 'title' });
   const [dialog, setDialog] = useState<'settings' | 'chronicles' | 'load' | null>(null);
@@ -58,6 +58,7 @@ export function GameApp() {
           onTutorial={() => setScreen({ id: 'setup', tutorial: true })}
           onSettings={() => setDialog('settings')}
           onChronicles={() => setDialog('chronicles')}
+          onCity={onCity ? () => { sim.pause(); onCity(); } : undefined}
         />
       )}
       {screen.id === 'loading' && <div className="ages"><div className="dim italic">Unsealing the record…</div></div>}
