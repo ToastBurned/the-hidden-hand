@@ -46,9 +46,9 @@ export interface LeverSpec extends LeverDef {
 const COUNCIL = ['councillor', 'mayor'];
 
 export const LEVERS: LeverSpec[] = [
-  { kind: 'sway-council', name: 'Sway the council', blurb: 'Work on your fellow councillors before a vote. A motion the council would not raise by itself is put on its agenda.', target: 'motion', seats: COUNCIL, upkeep: { influence: 0.12, wealth: 0 }, delay: 'At the next sitting (week 8 of each year)', resisters: 'Councillors who lean the other way', inf: 0.12, coin: 0, max: 0.4, trace: 0.004 },
+  { kind: 'sway-council', name: 'Sway the council', blurb: 'Work on your fellow councillors before a vote. A motion the council would not raise by itself is put on its agenda.', target: 'motion', seats: COUNCIL, upkeep: { influence: 0.12, wealth: 0 }, delay: 'At the next sitting (week 8 of each year)', resisters: 'Councillors who lean the other way', inf: 0.12, coin: 0, max: 0.5, trace: 0.004 },
   { kind: 'back-candidate', name: 'Back a candidate', blurb: 'Put the Order\'s patrons behind someone at the elections and appointments: a member, or a friend.', target: 'person', seats: ['mayor', 'councillor', 'treasurer', 'magistrate', 'bishop', 'guildmaster', 'warden', 'harbourmaster', 'captain', 'elder'], upkeep: { influence: 0.12, wealth: 0 }, delay: 'At the next election or vacancy', resisters: 'Rival candidates and their families', inf: 0.12, coin: 0, max: 0.45, trace: 0.004 },
-  { kind: 'endow-school', name: 'Endow a school', blurb: 'Pay teachers and, in time, a schoolhouse in a district. Children learn their letters.', target: 'district', seats: ['bishop', 'guildmaster', 'mayor', 'councillor'], open: true, upkeep: { influence: 0.03, wealth: 8 }, delay: 'Years; a schoolhouse after about 300 ducats', resisters: 'The Church, if the school is not its own', inf: 0.03, coin: 8, max: 1, trace: 0.002 },
+  { kind: 'endow-school', name: 'Endow a school', blurb: 'Pay teachers and, in time, a schoolhouse in a district. Children learn their letters.', target: 'district', seats: ['bishop', 'guildmaster', 'mayor', 'councillor'], open: true, upkeep: { influence: 0.03, wealth: 8 }, delay: 'Years; a schoolhouse after about 240 ducats', resisters: 'The Church, if the school is not its own', inf: 0.03, coin: 8, max: 1, trace: 0.002 },
   { kind: 'preach', name: 'Patronise preachers', blurb: 'Support preachers and pamphleteers who carry the creed; a district\'s beliefs drift towards it.', target: 'district', seats: ['bishop', 'elder'], open: true, upkeep: { influence: 0.06, wealth: 3 }, delay: 'Years to a generation', resisters: 'Whoever the ideas threaten', inf: 0.06, coin: 3, max: 1, trace: 0.004 },
   { kind: 'alms', name: 'Give alms', blurb: 'Coin to the hungriest households of a district, in the Order\'s name or none.', target: 'district', seats: ['bishop', 'elder'], open: true, upkeep: { influence: 0.02, wealth: 8 }, delay: 'At once', resisters: 'Few', inf: 0.02, coin: 8, max: 1, trace: 0.001 },
   { kind: 'fill-granary', name: 'Fill the granary', blurb: 'Steer coin into the city granary in cheap weeks, so the dear years find it full.', target: 'none', seats: ['treasurer', 'mayor', 'councillor', 'harbourmaster'], upkeep: { influence: 0.06, wealth: 10 }, delay: 'Months', resisters: 'Those who would spend it elsewhere', inf: 0.06, coin: 10, max: 1, trace: 0.002 },
@@ -154,7 +154,12 @@ export function leverForce(k: Campaign, lv: Pick<Lever, 'kind' | 'member' | 'tar
       const mo = MOTIONS[lv.target.key!];
       keys.push([`vote:${mo.vote}`, amt]);
       // members who sit on the council vote as the Order has agreed
-      for (const cp of councillors(k)) if (cp.id in o.members) keys.push([`p${cp.id}:vote:${mo.vote}`, 0.6 * sign]);
+      for (const cp of councillors(k)) {
+        if (cp.id in o.members) keys.push([`p${cp.id}:vote:${mo.vote}`, 0.6 * sign]);
+        // friends vote as a favour; the blackmailed vote as they are told
+        const al = o.allies.find((a) => a.pid === cp.id);
+        if (al) keys.push([`p${cp.id}:vote:${mo.vote}`, Math.min(0.8, al.strength * 0.6 + al.fear * 0.8) * sign]);
+      }
       if (mo.petition && sign > 0) keys.push([`petition:${mo.petition}`, 1]);
       if (mo.vote === 'openCouncil' && sign < 0) keys.push(['petition:closeCouncil', 1]);
       break;
@@ -231,10 +236,10 @@ function coinEffect(k: Campaign, lv: Lever, coin: number, share: number): void {
       }
       o.practice.good += 0.02 * share;
       if (lv.fund >= 0) {
-        lv.fund += paid * share;
+        lv.fund += paid; // the coin goes to the schoolhouse; the contest decides how well it teaches
         const has = [...c.buildings.values()].some((b) => b.kind === B.school && b.gone === undefined && b.district === d);
         if (has) lv.fund = -1;
-        else if (lv.fund >= 300) {
+        else if (lv.fund >= 240) {
           const b = placeBuilding(c, B.school, d, 3, 2, `The ${districtName(c, d).replace(/^the /i, '')} Free School`);
           if (b) {
             lv.fund = -1;
@@ -327,7 +332,7 @@ export function applyMods(k: Campaign, pushes: [string, number][]): void {
   const next: Record<string, number> = {};
   for (const [key, v] of Object.entries(sums)) {
     if (key.startsWith('petition:')) { next[key] = 1; continue; }
-    const bound = /^p\d+:/.test(key) ? 0.8 : key.startsWith('vote:') ? 0.5 : key === 'court:harsh' ? 0.35 : 0.3;
+    const bound = /^p\d+:/.test(key) ? 0.8 : key.startsWith('vote:') ? 0.6 : key === 'court:harsh' ? 0.35 : 0.3;
     next[key] = bound * Math.tanh(v / bound);
   }
   for (const [key, v] of Object.entries(o.own)) { c.mods[key] = (c.mods[key] ?? 0) - v; if (Math.abs(c.mods[key]) < 1e-9) delete c.mods[key]; }

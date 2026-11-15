@@ -16,7 +16,7 @@ import { creedDistance, updateGap } from './creed';
 import { NATIVE_CRAFT, mastery, practise } from './crafts';
 import { trace } from './suspicion';
 import type { Campaign, Cell, Lodge, LodgeRoom, Member, RoomKind } from './types';
-import { DAYS_PER_MONTH, clamp, districtName, homeDistrict, keep, members, name, nid, notice, orng as orngOf, report, seatsOf, seatWeight, spend as spendCoin, takeCoin, release } from './util';
+import { DAYS_PER_MONTH, clamp, buildingName, districtName, homeDistrict, keep, members, name, nid, notice, orng as orngOf, report, seatsOf, seatWeight, spend as spendCoin, takeCoin, release } from './util';
 
 export const ROOMS: Record<RoomKind, { name: string; cost: number; days: number; needs: string | null; tile: TileRoomKind; hidden: boolean; blurb: string }> = {
   'safe-room': { name: 'Safe room', cost: 40, days: 84, needs: 'tradecraft', tile: 'lodge-passage', hidden: true, blurb: 'A passage and a priest hole: inquiries close in more slowly on members of this lodge.' },
@@ -137,7 +137,7 @@ export function newLodge(k: Campaign, b: Building, how: string): Lodge {
   hall.hidden = true;
   hall.tags = ['lodge'];
   const id = nid(o);
-  const l: Lodge = { id, building: b.id, district: b.district, name: `The lodge ${how} at ${b.name}`, rooms: [], front: null, exposure: 0, found: -1, founded: k.city.day };
+  const l: Lodge = { id, building: b.id, district: b.district, name: `The lodge ${how} at ${buildingName(k.city, b.id)}`, rooms: [], front: null, exposure: 0, found: -1, founded: k.city.day };
   o.lodges[id] = l;
   cellIn(k, b.district).lodge = id;
   return l;
@@ -176,7 +176,7 @@ export function buildRoom(k: Campaign, lodgeId: number, kind: RoomKind): string 
   spendCoin(k, spec.cost, l.district);
   const lr: LodgeRoom = { kind, level: 1, doneAt: k.city.day + days, floor: slot.floor, room: slot.room };
   l.rooms.push(lr);
-  if (kind === 'front') l.front = `${b.name}, ${frontWord(b.kind)}`;
+  if (kind === 'front') l.front = `${buildingName(k.city, b.id)}, ${frontWord(b.kind)}`;
   return null;
 }
 
@@ -202,7 +202,7 @@ export function lodgeFound(k: Campaign, l: Lodge, by: number): void {
   const b = c.buildings.get(l.building);
   if (b?.interior) for (const f of b.interior.floors) for (const r of f.rooms) if (r.tags?.includes('lodge')) { r.hidden = false; r.tags = [...r.tags.filter((t) => t !== 'lodge'), 'found']; }
   for (const cell of Object.values(k.order.cells)) if (cell.lodge === l.id) cell.lodge = -1;
-  logEvent(c, { kind: 'lodge-found', imp: 4, text: `Hidden rooms were found beneath ${b?.name ?? 'a house'} in ${districtName(c, l.district)}: the meeting place of a secret society.`, people: by >= 0 ? [by] : [], buildings: b ? [b.id] : [], districts: [l.district] });
+  logEvent(c, { kind: 'lodge-found', imp: 4, text: `Hidden rooms were found beneath ${b ? buildingName(c, b.id) : 'a house'} in ${districtName(c, l.district)}: the meeting place of a secret society.`, people: by >= 0 ? [by] : [], buildings: b ? [b.id] : [], districts: [l.district] });
   notice(k, 'purge', 3, 'The lodge is found', `${l.name} has been found and its rooms stripped.`, b ? [{ kind: 'building', id: b.id }] : []);
 }
 
@@ -227,10 +227,10 @@ export function orderMonth(k: Campaign): void {
     const seat = seats.reduce((a, s) => Math.max(a, seatWeight(s)), 0);
     const earn = seat * 0.12 + (m.standing === 'elder' ? 0.03 : m.standing === 'adept' ? 0.015 : 0.005) + p.status * 0.03
       + (p.guildRank === 2 ? 0.03 : p.guildRank === 1 ? 0.01 : 0) + Math.max(0, p.rep) * 0.03;
-    m.influence = Math.min(30, m.influence * 0.995 + earn);
+    m.influence = Math.min(30, m.influence * 0.96 + earn);
     // tithe: a share of the household's earnings, more if zealous
     const h = c.households.get(p.hh);
-    if (h && h.money > 4) takeCoin(k, h, Math.min(h.money * 0.15, Math.max(0, h.income) * 4 * 0.06 * (0.5 + m.zeal)));
+    if (h && h.money > 4) takeCoin(k, h, Math.min(h.money * 0.05, 1.5, Math.max(0, h.income) * 4 * 0.04 * (0.5 + m.zeal)));
   }
   // fronts earn from their customers
   for (const l of Object.values(o.lodges)) {
@@ -263,7 +263,7 @@ export function orderMonth(k: Campaign): void {
 export function orderYear(k: Campaign): void {
   const o = k.order;
   const c = k.city;
-  const r = orngOf(k);
+  const r = orngOf(k.order);
   updateGap(o);
   const shrine = (district: number) => roomReady(k, district, 'shrine');
   for (const m of members(o)) {

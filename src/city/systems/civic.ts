@@ -159,8 +159,20 @@ export function councilElection(c: City): void {
   const famSeats = new Map<number, number>();
   for (const id of sitting) { const f = c.people.get(id)?.family ?? -1; famSeats.set(f, (famSeats.get(f) ?? 0) + 1); }
   const winners: Person[] = [];
+  // an opened council keeps a third of the seats due for men of the guild halls
+  if (c.treasury.laws.openCouncil) {
+    const plain = (p: Person) => p.guildRank >= 1 && c.households.get(p.hh)?.cls !== CLASS_WEALTHY && !familyOf(c, p)?.great;
+    const want = Math.round(due.length / 3);
+    for (const { p } of scored) {
+      if (winners.length >= want) break;
+      if (!plain(p) || (famSeats.get(p.family) ?? 0) >= 3) continue;
+      winners.push(p);
+      famSeats.set(p.family, (famSeats.get(p.family) ?? 0) + 1);
+    }
+  }
   for (const { p } of scored) {
     if (winners.length >= due.length) break;
+    if (winners.includes(p)) continue;
     if ((famSeats.get(p.family) ?? 0) >= 3) continue;
     winners.push(p);
     famSeats.set(p.family, (famSeats.get(p.family) ?? 0) + 1);
@@ -393,7 +405,7 @@ export function councilBusiness(c: City, crisisOnly = false): void {
     motions.push({
       key: 'openCouncil', title: 'opening the council to the journeymen of the guilds', imp: 4,
       why: 'A petition from the guild halls asked that the men who do the city\'s work have a say in its council.',
-      lean: (p) => -p.values[V_HIER] * 0.45 + (p.guildRank >= 1 && !wealthy(p) ? 0.3 : 0) - wealthy(p) * 0.25 - (familyOf(c, p)?.great ? 0.25 : 0) + p.values[V_INNOV] * 0.1 - 0.05,
+      lean: (p) => -p.values[V_HIER] * 0.35 + (p.guildRank >= 1 && !wealthy(p) ? 0.3 : 0) - wealthy(p) * 0.2 - (familyOf(c, p)?.great ? 0.2 : 0) + p.values[V_INNOV] * 0.15,
       pass: () => { t.laws.openCouncil = c.day; return 'From the next election the journeymen of every guild may stand and vote.'; },
     });
   }

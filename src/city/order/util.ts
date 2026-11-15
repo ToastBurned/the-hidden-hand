@@ -64,6 +64,13 @@ export function homeDistrict(c: City, p: Person): number {
   return b?.district ?? -1;
 }
 
+/** A building's name, or a description for the unnamed houses of the city. */
+export function buildingName(c: City, id: number): string {
+  const b = c.buildings.get(id);
+  if (!b) return 'a building';
+  return b.name || `a house on ${c.streets[b.street]?.name ?? 'a lane'}`;
+}
+
 export function districtName(c: City, id: number): string { return c.districts.find((d) => d.id === id)?.name ?? 'the city'; }
 
 export function tradeName(p: { trade: number }): string { return TRADES[p.trade]?.name ?? 'Dependent'; }

@@ -86,7 +86,7 @@ export function suspicionWeek(k: Campaign): void {
     const d = Number(dS);
     const lodge = Object.values(o.lodges).find((x) => x.district === d && x.found < 0);
     const front = lodge?.rooms.find((x) => x.kind === 'front' && x.doneAt <= c.day)?.level ?? 0;
-    const decay = 0.003 + front * 0.002 + (quiet ? 0.002 : cautious ? 0.001 : 0) + (byDistrict.has(d) ? 0 : 0.005);
+    const decay = 0.005 + front * 0.002 + (quiet ? 0.002 : cautious ? 0.001 : 0) + (byDistrict.has(d) ? 0 : 0.005);
     l.level = clamp(l.level * (1 - decay));
     // in hard times people look for someone to blame
     const crisis = (c.bread > 1.45 ? 0.4 : 0) + (plague ? 0.4 : 0) + ((c.districts.find((x) => x.id === d)?.unrest ?? 0) > 0.5 ? 0.3 : 0);
@@ -151,8 +151,8 @@ function investigate(k: Campaign, inv: Investigation, quiet: boolean): void {
     const hidden = m.hiddenUntil > c.day ? 0.25 : 1;
     const named = inv.found.some((f) => o.fallen.find((x) => x.id === f) || (o.members[f]?.knows.includes(m.pid))) ? 2.5 : 1;
     const localLv = here ? l.level : (o.local[d]?.level ?? 0) * 0.6;
-    const talk = 1 + talkOf(k, m.pid) * 3;
-    const rate = 0.04 * skill * (0.25 + localLv) * (1 - m.discretion * 0.6) * safe * hidden * named * talk * (quiet ? 0.45 : o.order.posture === 'cautious' ? 0.75 : 1) * (here ? 1 : 0.4);
+    const talk = 1 + talkOf(k, m.pid) * 1.5;
+    const rate = 0.025 * skill * (0.25 + localLv) * (1 - m.discretion * 0.6) * safe * hidden * named * talk * (quiet ? 0.45 : o.order.posture === 'cautious' ? 0.75 : 1) * (here ? 1 : 0.4);
     const before = inv.trail[m.pid] ?? 0;
     const after = before + rate * (0.6 + r.next() * 0.8);
     inv.trail[m.pid] = after;
@@ -192,7 +192,7 @@ export function arrest(k: Campaign, inv: Investigation, m: Member): void {
   for (const id of m.knows) {
     const x = o.members[id];
     if (!x || x.imprisoned >= 0) continue;
-    const talk = (1 - m.discretion * 0.8) * (1 - m.zeal * 0.6) * (m.wavering ? 1.4 : 1) * 0.8;
+    const talk = (1 - m.discretion * 0.8) * (1 - m.zeal * 0.6) * (m.wavering ? 1.4 : 1) * 0.6;
     if (r.chance(talk)) { inv.trail[id] = Math.max(inv.trail[id] ?? 0, 0.85); named.push(id); }
   }
   const cell = o.cells[m.cell];
@@ -206,7 +206,7 @@ export function arrest(k: Campaign, inv: Investigation, m: Member): void {
   });
   remember(p, c.day, M.persecuted, -0.9, inv.pid, ev);
   startRumour(c, p, R.society, true, ev);
-  trace(k, homeDistrict(c, p), 0.12);
+  trace(k, homeDistrict(c, p), 0.05);
   o.order.cohesion = clamp(o.order.cohesion - 0.06);
   notice(k, 'purge', 3, 'A member arrested', `${name(c, m.pid)} has been taken by ${name(c, inv.pid)}.${named.length ? ` Under questioning they named ${named.map((id) => name(c, id)).join(', ')}.` : ' They named no one.'}`, [{ kind: 'member', id: m.pid }, { kind: 'person', id: inv.pid }]);
 }

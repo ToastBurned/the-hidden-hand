@@ -17,12 +17,12 @@ import { mastery, practise, unlocked, unlockerOf } from './crafts';
 import { admit, anyRoom, newLodge } from './order';
 import { closeInquiry, localOf, talkOf, trace } from './suspicion';
 import type { Campaign, Member, Operation, OperationDef, OperationPreview, OrderCommand, RecruitSignal, Target } from './types';
-import { clamp, districtName, homeDistrict, isMember, keep, members, name, nid, notice, orng, release, seatsOf, sigmoid, spend, tradeName } from './util';
+import { clamp, buildingName, districtName, homeDistrict, isMember, keep, members, name, nid, notice, orng, release, seatsOf, sigmoid, spend, tradeName } from './util';
 
 export interface OpSpec extends OperationDef { craft: string; base: number; trace: number; dark: number }
 
 export const OPS: OpSpec[] = [
-  { kind: 'recruit', family: 'growth', name: 'Recruit', blurb: 'Approach someone to swear the oath.', target: 'person', approaches: ['through friendship', 'by conviction', 'with coin'], cost: { influence: 1, wealth: 0 }, days: 14, needs: [], craft: 'rhetoric', base: -0.5, trace: 0.015, dark: 0 },
+  { kind: 'recruit', family: 'growth', name: 'Recruit', blurb: 'Approach someone to swear the oath.', target: 'person', approaches: ['through friendship', 'by conviction', 'with coin'], cost: { influence: 1, wealth: 0 }, days: 28, needs: [], craft: 'rhetoric', base: -0.5, trace: 0.015, dark: 0 },
   { kind: 'favour', family: 'growth', name: 'Do a favour', blurb: 'Lend coin, settle a quarrel, find a place for a son. A favour done is a favour owed: the agent gains influence, and a friend.', target: 'person', approaches: ['with coin', 'with help'], cost: { influence: 0, wealth: 4 }, days: 14, needs: [], craft: 'rhetoric', base: 1.1, trace: 0.003, dark: 0 },
   { kind: 'win-seat', family: 'growth', name: 'Stand for office', blurb: 'Gather patrons and votes for the agent. The seat is still decided at the election or the appointment, against every rival.', target: 'office', approaches: ['through patronage', 'with coin', 'on merit'], cost: { influence: 2, wealth: 0 }, days: 42, needs: [], craft: 'rhetoric', base: 0.6, trace: 0.02, dark: 0 },
   { kind: 'found-lodge', family: 'growth', name: 'Found a lodge', blurb: 'Make a hidden meeting place in a building the agent can use: their home, their workplace, a tavern cellar.', target: 'building', approaches: ['in the cellar', 'behind the shop'], cost: { influence: 0, wealth: 40 }, days: 42, needs: [], craft: 'tradecraft', base: 1.2, trace: 0.02, dark: 0 },
@@ -83,6 +83,8 @@ export function opProblem(k: Campaign, cmd: Cmd): string | null {
     const tm = o.members[t.id];
     if (SELF.has(spec.kind)) { if (!tm) return 'not a member'; if (spec.kind === 'rescue' && tm.imprisoned < 0) return 'not imprisoned'; if (spec.kind === 'hide' && tm.imprisoned >= 0) return 'in the gaol'; }
     else if (tm) return 'that is one of our own';
+    if (spec.kind === 'recruit' && m.standing === 'initiate' && c.day - m.joined < 364) return `${ap.first} is too new to the oath to bring others to it`;
+    if (spec.kind === 'favour' && affinity(t, ap.id) > 0.7) return `${t.first} already owes ${ap.first} more than they can repay`;
     if (spec.kind === 'discredit' && !o.investigations.some((i) => !i.closed && i.pid === t.id)) return 'they are not investigating us';
   }
   if (spec.target === 'office') {
@@ -98,7 +100,7 @@ export function opProblem(k: Campaign, cmd: Cmd): string | null {
     if (spec.kind === 'found-lodge') {
       const h = c.households.get(ap.hh);
       const ok = h && (b.id === h.home || b.owner === h.id) || ap.work === b.id || b.kind === B.tavern || b.kind === B.warehouse;
-      if (!ok) return `${ap.first} has no way into ${b.name}`;
+      if (!ok) return `${ap.first} has no way into ${buildingName(c, b.id)}`;
       if (b.body >= 0 && b.kind !== B.tavern) return 'a public building cannot hide a lodge';
       if (Object.values(o.lodges).some((l) => l.found < 0 && l.district === b.district)) return 'there is already a lodge in this district';
       if (Object.values(o.lodges).some((l) => l.building === b.id)) return 'this building has been found once already';
@@ -132,6 +134,7 @@ export function opOdds(k: Campaign, cmd: Cmd): { odds: number; risk: number; adv
     if (spec.kind === 'recruit') {
       const dist = creedDistance(o.creed, t.values);
       const wound = grievanceOf(t);
+      x -= Math.max(0, members(o).length - 8) * 0.15; // a large Order is harder to vet and to hide
       x += aff * 2 + (0.45 - dist) * 3 + (wound ? 0.5 : 0) + t.open * 0.5 - t.status * 0.8 - (t.offices.length ? 0.4 : 0);
       if (cmd.approach === 'with coin') x += (t.ambition - 0.4) * 1.5 + ((c.households.get(t.hh)?.money ?? 0) < 30 ? 0.4 : -0.3);
       if (cmd.approach === 'through friendship') x += aff > 0.3 ? 0.6 : -0.6;
@@ -306,7 +309,7 @@ function resolve(k: Campaign, op: Operation, m: Member): boolean {
   }
   if (!ok) {
     op.status = 'failed';
-    trace(k, d, op.risk * 1.8, op.agent);
+    trace(k, d, op.risk * 0.45, op.agent);
     if (spec.dark >= 1 && r.chance(0.25 + op.risk)) {
       op.status = 'exposed';
       m.wanted = true;
@@ -328,7 +331,7 @@ function resolve(k: Campaign, op: Operation, m: Member): boolean {
   }
   op.status = 'succeeded';
   o.log.opsOk++;
-  trace(k, d, op.risk * 0.5, op.agent);
+  trace(k, d, op.risk * 0.12, op.agent);
   op.outcome = apply(k, op, m, ap!, t);
   notice(k, op.kind === 'recruit' ? 'recruit' : 'operation', 2, `${spec.name} succeeded`, op.outcome, [{ kind: 'operation', id: op.id }, { kind: 'member', id: m.pid }]);
   return false;
@@ -360,7 +363,7 @@ function apply(k: Campaign, op: Operation, m: Member, ap: Person, t: Person | un
     case 'favour': {
       if (!t) return '';
       relate(t, ap.id, 0.3); relate(ap, t.id, 0.2);
-      m.influence += 1 + t.status * 1.5;
+      m.influence += 0.5 + t.status;
       const al = o.allies.find((x) => x.pid === t.id);
       if (al) al.strength = clamp(al.strength + 0.15); else if (t.offices.length) { o.allies.push({ pid: t.id, strength: 0.25, fear: 0, since: c.day }); keep(t); }
       return `${t.first} owes ${ap.first} a favour, and the city knows ${ap.first} as someone who gets things done.`;
@@ -378,7 +381,7 @@ function apply(k: Campaign, op: Operation, m: Member, ap: Person, t: Person | un
       const b = c.buildings.get(op.target.id);
       if (!b) return '';
       const l = newLodge(k, b, op.approach);
-      return `A lodge now meets ${op.approach} of ${b.name} in ${districtName(c, b.district)}. ${l.name}.`;
+      return `A lodge now meets ${op.approach} of ${buildingName(c, b.id)} in ${districtName(c, b.district)}. ${l.name}.`;
     }
     case 'scout': localOf(k, op.target.id).seenUntil = c.day + 728; return `${a} knows ${districtName(c, op.target.id)} now: who is angry, and who is watching.`;
     case 'shadow': {
@@ -450,7 +453,7 @@ function apply(k: Campaign, op: Operation, m: Member, ap: Person, t: Person | un
       if (!b || b.gone !== undefined) return 'The building was already gone.';
       if (b.kind === B.granary) c.treasury.granary *= 0.4;
       const n = burn(c, b, 'a fire set at night');
-      return `${b.name} burned${n > 1 ? `, and the fire took ${n - 1} more buildings with it` : ''}.`;
+      return `${buildingName(c, b.id)} burned${n > 1 ? `, and the fire took ${n - 1} more buildings with it` : ''}.`;
     }
     case 'poison': case 'assassinate': {
       if (!t) return 'The target was already dead.';

@@ -242,7 +242,7 @@ export function makeLesserWorks(kind: WorkKind): WorkState[] {
 }
 
 /** Weeks held lost for each week the condition fails: a bad season is survivable, a lucky year between failures is not. */
-export const GRACE = 4;
+export const GRACE = 2;
 
 /** Whether the Order is big enough to claim the work: four members and a seat. */
 export function atWork(k: Campaign): boolean {
