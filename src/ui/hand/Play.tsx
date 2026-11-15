@@ -9,15 +9,19 @@ import { AssignDialog, type AssignPreset } from './Assign';
 import { Meter, Modal, cap, pct } from './common';
 import { MapView, type MapFocus } from './MapView';
 import { BuildingPanel, ChroniclePanel, LeversPanel, LodgesPanel, MembersPanel, PersonDialog, WorksPanel } from './Panels';
-import { useGame, type HandGame } from './store';
+import { CouncilPanel, LettersPanel, OrdersDesk, SLICE_QUESTIONS, TablePanel, WhyDialog } from './SlicePanels';
+import { SPEED_NAMES, useGame, type HandGame } from './store';
 
-type Tab = 'city' | 'order' | 'lodges' | 'levers' | 'work' | 'chronicle';
+type Tab = 'city' | 'desk' | 'council' | 'table' | 'letters' | 'order' | 'lodges' | 'levers' | 'work' | 'chronicle';
 const TABS: [Tab, string][] = [['city', 'City'], ['order', 'Order'], ['lodges', 'Lodges'], ['levers', 'Levers'], ['work', 'Great Work'], ['chronicle', 'Chronicle']];
+const SLICE_TABS: [Tab, string][] = [['city', 'City'], ['desk', 'Orders'], ['council', 'Council'], ['table', 'The Table'], ['letters', 'Letters'], ['order', 'Members'], ['lodges', 'Lodges'], ['chronicle', 'Chronicle']];
 
 export function Play({ g, onQuit }: { g: HandGame; onQuit: () => void }) {
   const v = useGame(g);
   const c = g.k.city;
-  const [tab, setTab] = useState<Tab>('city');
+  const slice = !!v.slice;
+  const [tab, setTab] = useState<Tab>(slice ? 'desk' : 'city');
+  const [why, setWhy] = useState<'cohesion' | 'suspicion' | null>(null);
   const [sel, setSel] = useState<Building | null>(null);
   const [assign, setAssign] = useState<AssignPreset | null>(null);
   const [person, setPerson] = useState<number | null>(null);
@@ -36,6 +40,7 @@ export function Play({ g, onQuit }: { g: HandGame; onQuit: () => void }) {
     const k = (e: KeyboardEvent) => {
       if ((e.target as HTMLElement)?.closest('input, textarea, select, [role=dialog]')) return;
       if (e.code === 'Space') { e.preventDefault(); g.toggle(); }
+      else if (g.mode === 'living' && /^Digit[1-3]$/.test(e.code)) g.setSpeed(Number(e.code.slice(5)));
     };
     window.addEventListener('keydown', k);
     return () => window.removeEventListener('keydown', k);
@@ -59,15 +64,33 @@ export function Play({ g, onQuit }: { g: HandGame; onQuit: () => void }) {
         <dl className="res">
           <div title="Influence: earned by members' seats, standing and good name; spent on assignments and levers"><dt>Influence</dt><dd>{r.influence.toFixed(1)} {delta(r.delta.influence, (x) => x.toFixed(1))}</dd></div>
           <div title="Coin: tithed from members' households"><dt>Ducats</dt><dd>{Math.floor(r.wealth)} {delta(r.delta.wealth, (x) => x.toFixed(0))}</dd></div>
-          <div title="Secrecy: how well hidden the Order is"><dt>Secrecy</dt><dd><Meter v={r.secrecy} tone="green" label="Secrecy" /></dd></div>
-          <div title="Cohesion: how firmly the members hold together"><dt>Cohesion</dt><dd><Meter v={r.cohesion} label="Cohesion" /></dd></div>
+          {slice ? <>
+            <div><dt>Secrecy</dt><dd><button type="button" className="whybtn" title="Secrecy: how well hidden the Order is. Click to see why it moved." onClick={() => setWhy('suspicion')}><Meter v={r.secrecy} tone="green" label="Secrecy" /> why?</button></dd></div>
+            <div><dt>Cohesion</dt><dd><button type="button" className="whybtn" title="Cohesion: how firmly the members hold together. Click to see why it moved." onClick={() => setWhy('cohesion')}><Meter v={r.cohesion} label="Cohesion" /> why?</button></dd></div>
+          </> : <>
+            <div title="Secrecy: how well hidden the Order is"><dt>Secrecy</dt><dd><Meter v={r.secrecy} tone="green" label="Secrecy" /></dd></div>
+            <div title="Cohesion: how firmly the members hold together"><dt>Cohesion</dt><dd><Meter v={r.cohesion} label="Cohesion" /></dd></div>
+          </>}
         </dl>
         <div className="clock">
           <span className="date">{v.date}</span>
-          <div className="speeds" role="group" aria-label="Speed">
-            <button type="button" className={g.speed === 0 ? 'on' : ''} aria-pressed={g.speed === 0} onClick={() => g.setSpeed(0)} title="Pause (space)">❚❚ Pause</button>
-            <button type="button" className={g.speed === 1 ? 'on' : ''} aria-pressed={g.speed === 1} onClick={() => g.setSpeed(1)} title="Play (space)">▶ Play</button>
+          {v.slice && <small className="ends">ends {v.slice.endsDate}</small>}
+          <div className="clockmode" role="group" aria-label="Clock">
+            <button type="button" className={g.mode === 'living' ? 'on' : ''} aria-pressed={g.mode === 'living'} disabled={g.rushing} onClick={() => g.setMode('living')} title="A living clock: time runs until you pause it">Living</button>
+            <button type="button" className={g.mode === 'skip' ? 'on' : ''} aria-pressed={g.mode === 'skip'} disabled={g.rushing} onClick={() => g.setMode('skip')} title="Turn by turn: time jumps to the next thing that needs you">Skip</button>
           </div>
+          {g.rushing ? (
+            <div className="speeds"><span className="rushing">Time passes…</span><button type="button" className="on" onClick={() => g.stopRun()} title="Stop (space)">■ Stop</button></div>
+          ) : g.mode === 'living' ? (
+            <div className="speeds" role="group" aria-label="Speed">
+              {SPEED_NAMES.map((nm, i) => (
+                <button type="button" key={nm} className={g.speed === i ? 'on' : ''} aria-pressed={g.speed === i} onClick={() => g.setSpeed(i)} title={i === 0 ? 'Pause (space)' : `${nm} (key ${i})`}>{i === 0 ? '❚❚' : '▶'.repeat(i)}<span className="sr"> {nm}</span></button>
+              ))}
+              <button type="button" onClick={() => void g.runToNext()} title="Run quickly until something needs you">Until something happens</button>
+            </div>
+          ) : (
+            <div className="speeds"><button type="button" className="primary" onClick={() => void g.runToNext()} title="Jump to the next thing that needs you (space)">Next ▸</button></div>
+          )}
         </div>
         <div className="menuwrap">
           <button type="button" onClick={() => setMenu(!menu)} aria-expanded={menu}>Menu</button>
@@ -87,13 +110,13 @@ export function Play({ g, onQuit }: { g: HandGame; onQuit: () => void }) {
           )}
         </div>
       </header>
-      {g.pauseReason && g.speed === 0 && (
-        <div className="pausebar" role="status"><b>Paused:</b> {g.pauseReason} <button type="button" className="small" onClick={() => g.toggle()}>Carry on</button></div>
+      {g.pauseReason && g.speed === 0 && !g.rushing && (
+        <div className="pausebar" role="status"><b>{g.mode === 'skip' ? 'Stopped:' : 'Paused:'}</b> {g.pauseReason} <button type="button" className="small" onClick={() => g.toggle()}>{g.mode === 'skip' ? 'Next ▸' : 'Carry on'}</button></div>
       )}
       {toast && <div className={`toast ${toast.warn ? 'warn' : ''}`} role="status">{toast.text}</div>}
 
       <nav className="tabs main" aria-label="Views">
-        {TABS.map(([t, label]) => (
+        {(slice ? SLICE_TABS : TABS).map(([t, label]) => (
           <button type="button" key={t} id={`tab-${t}`} className={tab === t ? 'on' : ''} aria-pressed={tab === t} onClick={() => setTab(t)}>
             {label}{t === 'chronicle' && unread.length > 0 && <small className="new"> {unread.length}</small>}
           </button>
@@ -112,6 +135,10 @@ export function Play({ g, onQuit }: { g: HandGame; onQuit: () => void }) {
               </aside>
             </div>
           )}
+          {tab === 'desk' && <OrdersDesk g={g} onAssign={openAssign} onPerson={setPerson} />}
+          {tab === 'council' && v.slice && <CouncilPanel g={g} onAssign={openAssign} onPerson={setPerson} />}
+          {tab === 'table' && v.slice && <TablePanel g={g} onAssign={openAssign} onPerson={setPerson} />}
+          {tab === 'letters' && v.slice && <LettersPanel g={g} />}
           {tab === 'order' && <MembersPanel g={g} onAssign={openAssign} onPerson={setPerson} />}
           {tab === 'lodges' && <LodgesPanel g={g} onAssign={openAssign} onShow={showOnMap} />}
           {tab === 'levers' && <LeversPanel g={g} />}
@@ -153,6 +180,7 @@ export function Play({ g, onQuit }: { g: HandGame; onQuit: () => void }) {
         </aside>
       </main>
 
+      {why && <WhyDialog g={g} what={why} onClose={() => setWhy(null)} />}
       {assign && <AssignDialog g={g} preset={assign} onClose={() => setAssign(null)} />}
       {person !== null && <PersonDialog g={g} id={person} onClose={() => setPerson(null)} onAssign={openAssign} />}
       {v.conclave && conclaveOpen && <ConclaveDialog g={g} onLater={() => setConclaveOpen(false)} />}
@@ -210,6 +238,13 @@ function Ending({ g, onQuit }: { g: HandGame; onQuit: () => void }) {
         <h2>The chapters</h2>
         {v.chapters.map((ch) => <section key={ch.day}><h3>{ch.title}</h3>{ch.paragraphs.map((p, i) => <p key={i}>{p}</p>)}</section>)}
         <p className="muted">{v.fallen.length} members fell along the way. The Order kept {pct(v.resources.secrecy)} of its secrecy to the end.</p>
+        {e.kind === 'slice' || g.k.order.slice ? (
+          <section className="questions">
+            <h2>Five questions</h2>
+            <p className="muted">This was the opening of the game. Before you play again, think over these and tell us your answers.</p>
+            <ol>{SLICE_QUESTIONS.map((q) => <li key={q}>{q}</li>)}</ol>
+          </section>
+        ) : null}
         <div className="actions"><button type="button" className="primary" onClick={onQuit}>Back to the title</button></div>
       </article>
     </div>

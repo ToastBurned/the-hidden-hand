@@ -26,6 +26,8 @@ import { opsDay, startOp } from './ops';
 import { localOf, patternsYear, secrecy, suspicionWeek, trialsWeek } from './suspicion';
 import type { Campaign, Chapter, CommandResult, Creed, Ending, FounderOffer, FoundingCandidate, OrderCommand, OrderState } from './types';
 import { baseline, greatCondition, greatWorkFor, makeGreatWork, makeLesserWorks, worksWeek } from './works';
+import { allPushes, sliceDay, sliceDistricts, sliceMonth, sliceWeek, startSlice } from './slice';
+import { buyVote, makeDeal, putMotion } from './scheme';
 import { clamp, date, dropOrderRng, homeDistrict, members, name, notice, syncOrderRng, takeCoin } from './util';
 
 // ---------------------------------------------------------------- founding
@@ -33,13 +35,18 @@ import { clamp, date, dropOrderRng, homeDistrict, members, name, notice, syncOrd
 const offered = new WeakMap<City, FoundingCandidate[]>();
 
 /** Step 4: three founders for the finished creed. Call again with reroll > 0 for others. */
-export function founderOffers(c: City, creed: Creed, reroll = 0): FounderOffer[] {
-  const cands = foundersFor(c, creed, reroll);
+export function founderOffers(c: City, creed: Creed, reroll = 0, slice = false): FounderOffer[] {
+  const ds = slice ? sliceDistricts(c) : null;
+  const cands = foundersFor(c, creed, reroll, ds ? [ds.crafts, ds.harbour, ds.hill] : undefined);
   offered.set(c, [...(offered.get(c) ?? []).filter((x) => !cands.some((y) => y.id === x.id)), ...cands]);
   return cands.map((cd) => offerOf(c, cd, creed));
 }
 
-export interface FoundOptions { creed: Creed; founder: number; name?: string; meaning?: string; seed?: number }
+export interface FoundOptions {
+  creed: Creed; founder: number; name?: string; meaning?: string; seed?: number;
+  /** Play the vertical slice: five years, three districts, a rival, sourced reports and the open-council scheme (docs/SLICE.md). */
+  slice?: boolean;
+}
 
 /** Step 5: the First Oath. The Great Work is decided here from the creed as it now stands. */
 export function foundOrder(c: City, opt: FoundOptions): Campaign {
@@ -75,7 +82,8 @@ export function foundOrder(c: City, opt: FoundOptions): Campaign {
   logEvent(c, { kind: 'founding', imp: 1, text: `${name(c, f.pid)} and ${name(c, comp.pid)} met in secret in ${c.districts.find((d) => d.id === o.order.home)?.name ?? c.name}.`, people: [f.pid, comp.pid] });
   o.chapters.push({ generation: 1, day: c.day, title: 'The founding', paragraphs: [`${o.order.name} was founded in ${calendarYear(c)} by ${name(c, f.pid)} and ${name(c, comp.pid)}.`, creed.oath, `Its Great Work: ${o.greatWork.title}. ${o.greatWork.text}`] });
   notice(k, 'info', 3, 'The First Oath', `${o.order.name} is founded. Your first task: find a third. A favour done for a neighbour earns the influence a recruit costs.`, [{ kind: 'member', id: f.pid }]);
-  applyMods(k, leversMonth(k, false));
+  if (opt.slice) startSlice(k);
+  applyMods(k, allPushes(k, false));
   return k;
 }
 
@@ -107,13 +115,18 @@ function orderDay(k: Campaign): void {
   const c = k.city;
   if (o.phase !== 'play') return;
   opsDay(k);
+  if (o.slice) sliceDay(k);
   if (c.day % DAYS_PER_WEEK !== 0) return;
   trialsWeek(k);
   suspicionWeek(k);
-  // the Great Work done and held: the campaign ends, and the creed is judged
-  if (worksWeek(k)) { end(k, 'won'); return; }
+  if (o.slice) {
+    // the slice's own objective and its five years
+    const r = sliceWeek(k);
+    if (r === 'won') { end(k, 'won'); return; }
+    if (r === 'over') { end(k, 'slice'); return; }
+  } else if (worksWeek(k)) { end(k, 'won'); return; } // the Great Work done and held: the campaign ends, and the creed is judged
   const week = Math.floor(c.day / DAYS_PER_WEEK);
-  if (week % 4 === 0) { orderMonth(k); applyMods(k, leversMonth(k, true)); }
+  if (week % 4 === 0) { orderMonth(k); if (o.slice) sliceMonth(k); applyMods(k, allPushes(k, true)); }
   if (c.day % DAYS_PER_YEAR === 0 && c.day > o.order.founded) {
     orderYear(k);
     patternsYear(k);
@@ -174,19 +187,28 @@ function checkEnding(k: Campaign): void {
   if (o.asked.abandoned !== undefined) { end(k, 'abandoned'); return; }
   const ms = members(o);
   const freeMs = ms.filter((m) => m.imprisoned < 0);
+  if (o.slice && ms.length <= 1 && o.log.recruits > 0) { end(k, o.log.arrests > 0 ? 'destroyed' : 'withered'); return; }
   if (!ms.length || !freeMs.length) { end(k, o.log.arrests > 0 && (ms.length > 0 || o.fallen.slice(0, 4).some((f) => /hanged|banished|broken|informer/.test(f.how))) ? 'destroyed' : 'withered'); return; }
   const elders = freeMs.filter((m) => m.standing === 'elder');
   o.leaderless = elders.length ? 0 : o.leaderless + 1;
   if (o.leaderless > 26 && !pendingItems(k).some((x) => x.item.kind === 'leader')) end(k, 'leaderless');
 }
 
-function end(k: Campaign, kind: Ending['kind']): void {
+export function end(k: Campaign, kind: Ending['kind']): void {
   const o = k.order;
   const c = k.city;
   if (o.ending) return;
   o.phase = 'ended';
   const e: Ending = { kind, title: '', chronicle: chronicleOf(k), day: c.day };
-  if (kind === 'won') {
+  if (kind === 'slice' || (kind === 'won' && o.slice)) {
+    const s = o.slice!;
+    const sc = s.scheme;
+    const where = sc.stage === 'won' ? 'The council was opened, and it held.' : sc.stage === 'passed' ? 'The council was opened, but its test was still to come.' : sc.stage === 'votes' ? 'The motion was before the council, its votes still uncertain.' : sc.milestones.some((m) => m.id === 'sponsor') ? 'A sponsor was ready, but the motion was never carried.' : 'No councillor would yet put the motion for the Order.';
+    e.title = sc.stage === 'won' ? `${o.order.name} opens the council` : `${o.order.name}: the first five years`;
+    e.score = Math.round(100 * clamp((sc.stage === 'won' ? 0.6 : sc.stage === 'passed' ? 0.45 : sc.stage === 'votes' ? 0.25 : 0.1) + 0.2 * o.order.cohesion + 0.2 * (1 - o.creed.gap)));
+    e.chronicle.push(where, `${members(o).length} members, ${Object.values(o.lodges).filter((l) => l.found < 0).length} lodge${Object.values(o.lodges).filter((l) => l.found < 0).length === 1 ? '' : 's'} standing, and ${s.rival.name} ${s.rival.attention > 0.6 ? 'hunting the Order' : s.rival.attention > 0.3 ? 'watching the Order' : 'still about its own business'}.`);
+    if (kind === 'won') e.verdict = !o.creed.amended && o.creed.gap < 0.2 ? 'true' : o.creed.gap > 0.45 ? 'hollow' : 'changed';
+  } else if (kind === 'won') {
     const [holds] = greatCondition(k);
     const gap = o.creed.gap;
     const score = Math.round(100 * clamp(0.4 * (1 - gap) + (o.creed.amended ? 0 : 0.2) + (holds ? 0.25 : 0.08) + 0.15 * o.order.cohesion));
@@ -197,8 +219,9 @@ function end(k: Campaign, kind: Ending['kind']): void {
       : e.verdict === 'changed' ? `It did so, but it was not quite the Order its founder made${o.creed.amended ? ': its creed had been amended to say whatever must be done would be done' : ''}.`
         : `It won, but it was not the Order it set out to be. Its deeds had long since parted from its words.`);
   } else {
-    e.title = { destroyed: `${o.order.name} is destroyed`, withered: `${o.order.name} has withered away`, leaderless: `${o.order.name} has no one to lead it`, abandoned: `${o.order.name} renounced its creed`, won: '' }[kind];
-    e.chronicle.push({ destroyed: `In ${calendarYear(c)} its last free member was taken, and ${o.order.name} was no more.`, withered: 'No purge ended it. Its members grew old, died or left, and no one took their places.', leaderless: 'Its elders died one by one, and no one was raised in their place. The members drifted apart.', abandoned: 'At a conclave its elders gave up what they had sworn, and the Order dissolved into the city.', won: '' }[kind]);
+    const k2 = kind as Exclude<Ending['kind'], 'won' | 'slice'>;
+    e.title = { destroyed: `${o.order.name} is destroyed`, withered: `${o.order.name} has withered away`, leaderless: `${o.order.name} has no one to lead it`, abandoned: `${o.order.name} renounced its creed` }[k2];
+    e.chronicle.push({ destroyed: `In ${calendarYear(c)} its last free member was taken, and ${o.order.name} was no more.`, withered: 'No purge ended it. Its members grew old, died or left, and no one took their places.', leaderless: 'Its elders died one by one, and no one was raised in their place. The members drifted apart.', abandoned: 'At a conclave its elders gave up what they had sworn, and the Order dissolved into the city.' }[k2]);
   }
   o.ending = e;
   notice(k, 'ending', 3, e.title, e.chronicle[e.chronicle.length - 1]);
@@ -240,8 +263,11 @@ export function applyCommand(k: Campaign, cmd: OrderCommand): CommandResult {
       const m = o.members[op.agent]; if (m) m.task = null;
       return { ok: true };
     }
-    case 'lever': { const e = pullLever(k, cmd.kind, cmd.member, cmd.target, cmd.strength); if (!e) applyMods(k, leversMonth(k, false)); return err(e); }
-    case 'release-lever': if (!o.levers[cmd.id]) return { ok: false, error: 'no such lever' }; delete o.levers[cmd.id]; applyMods(k, leversMonth(k, false)); return { ok: true };
+    case 'lever': { const e = pullLever(k, cmd.kind, cmd.member, cmd.target, cmd.strength); if (!e) applyMods(k, allPushes(k, false)); return err(e); }
+    case 'release-lever': if (!o.levers[cmd.id]) return { ok: false, error: 'no such lever' }; delete o.levers[cmd.id]; applyMods(k, allPushes(k, false)); return { ok: true };
+    case 'scheme-put': { if (!o.slice) return { ok: false, error: 'there is no scheme' }; const e = putMotion(k, cmd.sponsor); if (!e) applyMods(k, allPushes(k, false)); return err(e); }
+    case 'scheme-buy': { if (!o.slice) return { ok: false, error: 'there is no scheme' }; const e = buyVote(k, cmd.councillor, cmd.agent); if (!e) applyMods(k, allPushes(k, false)); return err(e); }
+    case 'rival-deal': { if (!o.slice) return { ok: false, error: 'there is no rival' }; const e = makeDeal(k, cmd.agent); if (!e) applyMods(k, allPushes(k, false)); return err(e); }
     case 'build': return err(buildRoom(k, cmd.lodge, cmd.room));
     case 'warden': {
       const cell = o.cells[cmd.cell];

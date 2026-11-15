@@ -153,6 +153,13 @@ returns `{ ok }` or `{ ok: false, error }`. `orderView(k)` gives the interface o
 object: members with what each can do, the work and its blocker, levers with their
 contests, inquiries, notices and reports.
 
+## The vertical slice
+
+The game opens with a five-year slice (docs/SLICE.md): `order.slice` holds its districts,
+the rival table, letters and sources, the open-council scheme and the why-ledger, and the
+slice hooks into the daily, weekly and monthly steps. Operations explain their odds as
+labelled factors (`why` on the preview and the operation) and say what was rolled.
+
 ## Balance tools
 
 - `npx tsx tools/order.ts <seeds e.g. 1-4> <years> <bot,passive,idle> [pick|all]`, with

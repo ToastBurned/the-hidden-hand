@@ -99,6 +99,11 @@ export function AssignDialog({ g, preset, onClose }: { g: HandGame; preset: Assi
               <span>The elders think it <Odds odds={preview.odds} /> ({pct(preview.chance)}), with {riskWord(preview.risk)} of being seen.</span>
               <span>About {preview.days} days. Costs {preview.cost.influence ? `${preview.cost.influence} influence` : ''}{preview.cost.influence && preview.cost.wealth ? ' and ' : ''}{preview.cost.wealth ? `${preview.cost.wealth} ducats` : ''}{!preview.cost.influence && !preview.cost.wealth ? 'nothing' : ''}.</span>
               {preview.advice && <span className="muted">{preview.advice}</span>}
+              {preview.why && preview.why.length > 0 && (
+                <ul className="whylist" aria-label="Why these odds">
+                  {preview.why.slice(0, 5).map((f) => <li key={f.label} className={f.value > 0 ? 'up' : 'down'}><b>{f.value > 0 ? '+' : '−'}{Math.abs(f.value)}</b> {f.label}</li>)}
+                </ul>
+              )}
             </div>
           )}
           {err && <p className="problem">{cap(err)}.</p>}

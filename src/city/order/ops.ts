@@ -15,9 +15,9 @@ import type { Person } from '../types';
 import { creedDistance } from './creed';
 import { mastery, practise, unlocked, unlockerOf } from './crafts';
 import { admit, anyRoom, newLodge } from './order';
-import { closeInquiry, localOf, talkOf, trace } from './suspicion';
-import type { Campaign, Member, Operation, OperationDef, OperationPreview, OrderCommand, RecruitSignal, Target } from './types';
-import { clamp, buildingName, districtName, homeDistrict, isMember, keep, members, name, nid, notice, orng, release, seatsOf, sigmoid, spend, tradeName } from './util';
+import { closeInquiry, coolTrail, localOf, talkOf, trace } from './suspicion';
+import type { Campaign, Factor, Member, Operation, OperationDef, OperationPreview, OrderCommand, RecruitSignal, Target } from './types';
+import { clamp, buildingName, districtName, homeDistrict, isMember, keep, members, name, nid, notice, orng, release, routes, seatsOf, sigmoid, spend, tradeName } from './util';
 
 export interface OpSpec extends OperationDef { craft: string; base: number; trace: number; dark: number }
 
@@ -36,6 +36,7 @@ export const OPS: OpSpec[] = [
   { kind: 'blackmail', family: 'coercion', name: 'Blackmail', blurb: 'Find something they fear to have known. While they fear you, they serve you; an investigator drops the inquiry.', target: 'person', approaches: ['with what we know', 'with what we can invent'], cost: { influence: 2, wealth: 6 }, days: 28, needs: ['tradecraft'], craft: 'tradecraft', base: 0, trace: 0.04, dark: 1 },
   { kind: 'forge-letter', family: 'coercion', name: 'Forge a letter', blurb: 'A letter in their hand ruins them: they lose their offices and their good name.', target: 'person', approaches: ['to the council', 'to the bishop'], cost: { influence: 2, wealth: 8 }, days: 21, needs: ['forgery'], craft: 'forgery', base: 0.1, trace: 0.05, dark: 1 },
   { kind: 'discredit', family: 'coercion', name: 'Discredit an investigator', blurb: 'Make the inquiry look like a private vendetta. If it works, the inquiry ends.', target: 'person', approaches: ['before the council', 'in the taverns'], cost: { influence: 3, wealth: 10 }, days: 21, needs: [], craft: 'rhetoric', base: -0.2, trace: 0.06, dark: 0.7 },
+  { kind: 'sow-discord', family: 'coercion', name: 'Sow discord at the table', blurb: 'Feed the old feud between two families of the rival table: a slight remembered, a letter misread. While they quarrel the table cannot act as one.', target: 'person', approaches: ['with a slight remembered', 'with a letter misread'], cost: { influence: 1.5, wealth: 6 }, days: 21, needs: [], craft: 'rhetoric', base: 0.2, trace: 0.02, dark: 0.3 },
   { kind: 'incite-riot', family: 'violence', name: 'Incite a riot', blurb: 'Turn a district\'s anger into the street.', target: 'district', approaches: ['over bread', 'over faith'], cost: { influence: 2, wealth: 12 }, days: 14, needs: [], craft: 'rhetoric', base: 0.2, trace: 0.08, dark: 2 },
   { kind: 'sabotage', family: 'violence', name: 'Set a fire', blurb: 'Burn a building. Fire spreads as it will.', target: 'building', approaches: ['by night', 'as an accident'], cost: { influence: 1, wealth: 10 }, days: 14, needs: [], craft: 'tradecraft', base: 0.3, trace: 0.08, dark: 2 },
   { kind: 'poison', family: 'violence', name: 'Poison', blurb: 'A death the physicians will call a fever.', target: 'person', approaches: ['in their wine', 'through their physician'], cost: { influence: 3, wealth: 16 }, days: 14, needs: ['poisons'], craft: 'poisons', base: -0.2, trace: 0.06, dark: 3 },
@@ -66,6 +67,8 @@ export function opProblem(k: Campaign, cmd: Cmd): string | null {
   const c = k.city;
   const spec = OP_BY_KIND[cmd.kind];
   if (!spec) return 'unknown operation';
+  const slice = routes.opProblem?.(k, cmd.kind, cmd.target, cmd.agent);
+  if (slice) return slice;
   const m = o.members[cmd.agent];
   const ap = c.people.get(cmd.agent);
   if (!m || !ap) return 'the agent is not a member';
@@ -110,63 +113,88 @@ export function opProblem(k: Campaign, cmd: Cmd): string | null {
   return null;
 }
 
-/** The elders' estimate: odds, trace and advice. */
-export function opOdds(k: Campaign, cmd: Cmd): { odds: number; risk: number; advice: string } {
+/** In the slice the opening is scarcer: an ordinary recruit is 40 to 65%, not 70 to 94% (paper playtest). */
+const SLICE_BASE: Record<string, number> = { recruit: -1.0, favour: -0.9, befriend: -0.6, scout: -0.7, shadow: -0.5, 'found-lodge': -0.6, 'read-letters': -0.3, 'sow-discord': 0 };
+
+/** The elders' estimate: odds, trace, advice, and the reasons behind the odds. */
+export function opOdds(k: Campaign, cmd: Cmd): { odds: number; risk: number; advice: string; why: Factor[] } {
   const o = k.order;
   const c = k.city;
   const spec = OP_BY_KIND[cmd.kind];
   const m = o.members[cmd.agent];
   const ap = c.people.get(cmd.agent)!;
-  let x = spec.base + (agentSkill(k, spec, m, ap) - 0.45) * 3;
+  const parts: Factor[] = [];
+  let x = spec.base + (o.slice ? SLICE_BASE[spec.kind] ?? 0 : 0);
+  const add = (label: string, v: number) => { x += v; if (Math.abs(v) > 0.04) parts.push({ label, value: v }); };
+  const skill = (agentSkill(k, spec, m, ap) - 0.45) * 3;
+  add(skill >= 0 ? `${ap.first} is good at this` : `${ap.first} has little skill at this`, skill);
   let advice = '';
   const t = spec.target === 'person' ? c.people.get(cmd.target.id) : undefined;
   if (t) {
     const resist = t.intel * 0.4 + t.status * 0.35 + t.consc * 0.25;
-    x -= (resist - 0.45) * 2.4;
+    add(resist > 0.45 ? `${t.first} is ${t.status > 0.6 ? 'well placed' : 'sharp and careful'}` : `${t.first} is easily led`, -(resist - 0.45) * 2.4);
     const aff = affinity(t, ap.id);
     if (spec.kind === 'recruit') {
       const dist = creedDistance(o.creed, t.values);
       const wound = grievanceOf(t);
-      x -= Math.max(0, members(o).length - 8) * 0.15; // a large Order is harder to vet and to hide
-      x += aff * 2 + (0.45 - dist) * 3 + (wound ? 0.5 : 0) + t.open * 0.5 - t.status * 0.8 - (t.offices.length ? 0.4 : 0);
-      if (cmd.approach === 'with coin') x += (t.ambition - 0.4) * 1.5 + ((c.households.get(t.hh)?.money ?? 0) < 30 ? 0.4 : -0.3);
-      if (cmd.approach === 'through friendship') x += aff > 0.3 ? 0.6 : -0.6;
-      if (cmd.approach === 'by conviction') x += (0.4 - dist) * 2;
+      add('a large Order is harder to vet and hide', -Math.max(0, members(o).length - 8) * 0.15);
+      add(aff > 0.1 ? `${t.first} trusts ${ap.first}` : aff < -0.1 ? `${t.first} dislikes ${ap.first}` : `${t.first} hardly knows ${ap.first}`, aff * 2);
+      add(dist < 0.45 ? `${t.first} already thinks as we do` : `${t.first} does not share our beliefs`, (0.45 - dist) * 3);
+      if (wound) add(`${t.first} ${wound}; the creed speaks to it`, 0.5);
+      add(t.open > 0.5 ? `${t.first} is open to new ideas` : `${t.first} is set in their ways`, t.open * 0.5 - 0.25);
+      add(t.status > 0.5 ? `${t.first} has a place in the city to lose` : 'little to lose', -t.status * 0.8 + 0.25);
+      if (t.offices.length) add(`${t.first} holds office`, -0.4);
+      if (cmd.approach === 'with coin') { add(t.ambition > 0.4 ? `${t.first} wants more than they have` : `${t.first} is not greedy`, (t.ambition - 0.4) * 1.5); add((c.households.get(t.hh)?.money ?? 0) < 30 ? 'their household is short of coin' : 'their household needs no coin', (c.households.get(t.hh)?.money ?? 0) < 30 ? 0.4 : -0.3); }
+      if (cmd.approach === 'through friendship') add(aff > 0.3 ? 'an old friendship to lean on' : 'no friendship to lean on', aff > 0.3 ? 0.6 : -0.6);
+      if (cmd.approach === 'by conviction') add(dist < 0.4 ? 'conviction suits them' : 'conviction will not move them', (0.4 - dist) * 2);
+      if (o.slice) { const sl = o.slice; const lodge = Object.values(o.lodges).some((l) => l.found < 0 && l.district === sl.districts.crafts); if (lodge && homeDistrict(c, t) === sl.districts.crafts && t.guildRank >= 1) add('the workshop lodge knows the guildsmen', 0.4); }
       advice = aff > 0.3 ? `${t.first} already trusts ${ap.first}.` : dist > 0.5 ? `${t.first} does not share our beliefs.` : wound ? `${t.first} ${wound}; the creed speaks to it.` : `${t.first} hardly knows ${ap.first}.`;
     } else if (spec.kind === 'befriend' || spec.kind === 'favour') {
-      x += aff + (cmd.approach === 'through shared faith' ? (t.faith === ap.faith ? 0.6 : -0.8) : 0) + (cmd.approach === 'with gifts' || cmd.approach === 'with coin' ? t.ambition - 0.5 : 0);
+      add(aff > 0.1 ? `${t.first} already likes ${ap.first}` : `${t.first} hardly knows ${ap.first}`, aff);
+      if (cmd.approach === 'through shared faith') add(t.faith === ap.faith ? 'they pray in the same church' : 'they pray in different churches', t.faith === ap.faith ? 0.6 : -0.8);
+      if (cmd.approach === 'with gifts' || cmd.approach === 'with coin') add(t.ambition > 0.5 ? `${t.first} likes gifts` : `${t.first} cares little for gifts`, t.ambition - 0.5);
       advice = t.faith === ap.faith ? `They pray in the same church.` : `They have little in common.`;
     } else {
-      x += aff > 0.3 ? 0.3 : 0;
+      if (aff > 0.3) add(`${t.first} trusts ${ap.first}`, 0.3);
       advice = t.status > 0.7 ? `${t.first} is well guarded by rank.` : t.intel > 0.7 ? `${t.first} is sharp and suspicious.` : `${t.first} will not see it coming.`;
+    }
+    if (o.slice && ['befriend', 'favour', 'read-letters'].includes(spec.kind) && c.families.get(t.family)?.great && Object.values(o.lodges).some((l) => l.found < 0 && l.district === o.slice!.districts.hill)) add('the hill lodge opens the great houses', 0.6);
+    if (o.slice && spec.kind === 'sow-discord') {
+      const feud = o.slice.rival.feud;
+      add(feud && feud.includes(t.family) ? 'an old feud to feed' : 'no feud to feed', feud && feud.includes(t.family) ? 0.8 : -0.8);
+      advice = feud && feud.includes(t.family) ? `The ${c.families.get(t.family)?.name ?? ''} feud is old and raw.` : `${t.first}'s family has no feud at the table.`;
     }
     if (spec.kind === 'blackmail' && cmd.approach === 'with what we know') {
       const known = secretsOf(k, t);
-      x += known ? 0.8 : -0.4;
+      add(known ? `the city whispers that ${t.first} is ${known}` : `we know nothing against ${t.first} yet`, known ? 0.8 : -0.4);
       advice = known ? `The city already whispers that ${t.first} is ${known}.` : `We know nothing against ${t.first} yet.`;
     }
     if (spec.kind === 'spread-rumour') {
       const fits = cmd.approach === 'of debts' ? (c.households.get(t.hh)?.debt ?? 0) > 20 : cmd.approach === 'of heresy' ? !c.faiths.get(t.faith)?.established || t.values[2] < -0.3 : t.trade === T.merchant || t.trade === T.shopkeeper;
-      x += fits ? 0.5 : 0;
+      if (fits) add('the tale fits', 0.5);
       advice = fits ? 'The tale fits; it will be believed.' : 'The tale fits poorly; it may die in the telling.';
     }
   }
   if (spec.kind === 'win-seat') {
     const off = c.offices.get(cmd.target.id);
-    if (cmd.approach === 'with coin') x += 0.3;
-    if (cmd.approach === 'on merit') x += ap.skill - 0.5 + ap.rep;
+    if (cmd.approach === 'with coin') add('coin buys patrons', 0.3);
+    if (cmd.approach === 'on merit') add(ap.skill + ap.rep > 0.5 ? `${ap.first} is respected at their trade` : `${ap.first} has little name to stand on`, ap.skill - 0.5 + ap.rep);
     const filled = off && off.holder >= 0 && (off.term === 0 || off.chosen === 'succession');
     advice = filled ? `${off!.title} is held for life; the backing counts only when it falls vacant.` : ap.status > 0.55 ? `${ap.first} is already respected.` : `${ap.first} will need patrons.`;
   }
   if (spec.kind === 'incite-riot') {
     const d = c.districts.find((z) => z.id === cmd.target.id)!;
-    x += (d.unrest - 0.25) * 4 + (cmd.approach === 'over bread' ? (c.bread - 1) * 3 : 0);
+    add(d.unrest > 0.25 ? 'the district is angry' : 'the district is content', (d.unrest - 0.25) * 4 + (cmd.approach === 'over bread' ? (c.bread - 1) * 3 : 0));
     advice = d.unrest > 0.35 ? 'The district is already angry.' : 'The district is content; it will not rise easily.';
   }
   const posture = o.order.posture === 'bold' ? 0.3 : o.order.posture === 'cautious' ? -0.2 : 0;
-  const odds = clamp(sigmoid(x + posture), 0.03, 0.97);
+  if (posture) add(posture > 0 ? 'a bold posture' : 'a cautious posture', posture);
+  const odds = clamp(sigmoid(x), 0.03, 0.97);
   const risk = clamp(spec.trace * (1 + (1 - m.discretion)) * (1 - (m.crafts[spec.craft] ?? 0) * 0.4) * (o.order.posture === 'bold' ? 1.3 : o.order.posture === 'cautious' ? 0.8 : 1) * 6);
-  return { odds, risk, advice };
+  // each reason in points of chance, at the slope of the final odds
+  const slope = odds * (1 - odds) * 100;
+  const why = parts.map((f) => ({ label: f.label, value: Math.round(f.value * slope) })).filter((f) => f.value !== 0).sort((a, b) => Math.abs(b.value) - Math.abs(a.value));
+  return { odds, risk, advice, why };
 }
 
 function grievanceOf(t: Person): string | null {
@@ -195,9 +223,9 @@ export function previewOp(k: Campaign, cmd: Cmd): OperationPreview | { error: st
   const bad = opProblem(k, cmd);
   if (bad) return { error: bad };
   const spec = OP_BY_KIND[cmd.kind];
-  const { odds, risk, advice } = opOdds(k, cmd);
+  const { odds, risk, advice, why } = opOdds(k, cmd);
   const ap = k.city.people.get(cmd.agent)!;
-  return { odds: odds > 0.62 ? 'likely' : odds > 0.35 ? 'uncertain' : 'long shot', chance: odds, risk, days: daysFor(k, spec, ap, spec.target === 'person' ? k.city.people.get(cmd.target.id) : undefined), cost: spec.cost, advice };
+  return { odds: odds > 0.62 ? 'likely' : odds > 0.35 ? 'uncertain' : 'long shot', chance: odds, risk, days: daysFor(k, spec, ap, spec.target === 'person' ? k.city.people.get(cmd.target.id) : undefined), cost: spec.cost, advice, why };
 }
 
 export function targetName(k: Campaign, t: Target): string {
@@ -221,14 +249,14 @@ export function startOp(k: Campaign, cmd: Cmd): string | null {
   const m = o.members[cmd.agent];
   const ap = c.people.get(cmd.agent)!;
   const t = spec.target === 'person' ? c.people.get(cmd.target.id) : undefined;
-  const { odds, risk } = opOdds(k, cmd);
+  const { odds, risk, why } = opOdds(k, cmd);
   m.influence -= spec.cost.influence;
   // the coin goes somewhere real: to the people bribed, paid or hired
   if (spec.cost.wealth) spend(k, spec.cost.wealth, t ? homeDistrict(c, t) : homeDistrict(c, ap), cmd.agent);
   if (t) keep(t);
   const id = nid(o);
   const days = daysFor(k, spec, ap, t);
-  const op: Operation = { id, kind: spec.kind, agent: cmd.agent, target: cmd.target, approach: cmd.approach, started: c.day, due: c.day + days, odds, risk, status: 'running', resolved: -1 };
+  const op: Operation = { id, kind: spec.kind, agent: cmd.agent, target: cmd.target, approach: cmd.approach, started: c.day, due: c.day + days, odds, risk, status: 'running', resolved: -1, why: why.slice(0, 4) };
   o.ops[id] = op;
   m.task = `${spec.name}: ${targetName(k, cmd.target)}`;
   o.log.ops++;
@@ -269,27 +297,32 @@ function resolve(k: Campaign, op: Operation, m: Member): void {
   const ap = c.people.get(op.agent);
   const d = districtOf(k, op, ap);
   const t = op.target.kind === 'person' ? c.people.get(op.target.id) : undefined;
-  const ok = r.chance(op.odds);
+  const u = r.next();
+  const ok = u < op.odds;
+  op.roll = Math.min(100, Math.floor(u * 100) + 1);
+  op.needed = Math.round(op.odds * 100);
   op.resolved = c.day;
   o.practice.families[spec.family] = (o.practice.families[spec.family] ?? 0) + 1;
   practise(o, m, spec.craft, ok ? 0.08 : 0.04);
   if (spec.dark) { o.practice.dark += spec.dark; m.dark += spec.dark; }
   if (!ok) {
     op.status = 'failed';
-    trace(k, d, op.risk * 0.45, op.agent);
+    trace(k, d, op.risk * 0.45, op.agent, `${spec.name.toLowerCase()} by ${ap?.first ?? 'a member'} failed`);
     if (spec.dark >= 1 && r.chance(0.25 + op.risk)) {
       op.status = 'exposed';
       m.wanted = true;
       for (const inv of o.investigations) if (!inv.closed) inv.trail[m.pid] = Math.max(inv.trail[m.pid] ?? 0, 0.6);
-      trace(k, d, 0.1, op.agent);
+      trace(k, d, 0.1, op.agent, `${ap?.first ?? 'a member'} was seen at it`);
     }
-    op.outcome = failText(k, op, t);
+    op.outcome = failText(k, op, t) + whyText(op, false);
+    const extra = routes.op?.(k, op, false);
+    if (extra) op.outcome += ` ${extra}`;
     notice(k, 'operation', op.status === 'exposed' ? 3 : 2, `${spec.name} failed`, op.outcome, [{ kind: 'operation', id: op.id }, { kind: 'member', id: m.pid }]);
     if (spec.kind === 'recruit' && t) {
       o.log.refusals++;
       if (r.chance(0.25 + t.consc * 0.2 - affinity(t, op.agent) * 0.3)) {
         o.knowers.push(t.id);
-        trace(k, d, 0.05, op.agent);
+        trace(k, d, 0.05, op.agent, `${t.first} refused the oath and talks`);
         if (ap) startRumour(c, ap, R.society, true, -1, t);
         op.outcome += ' They refused loudly, and they will talk.';
       }
@@ -298,9 +331,22 @@ function resolve(k: Campaign, op: Operation, m: Member): void {
   }
   op.status = 'succeeded';
   o.log.opsOk++;
-  trace(k, d, op.risk * 0.12, op.agent);
+  trace(k, d, op.risk * 0.12, op.agent, `${spec.name.toLowerCase()} by ${ap?.first ?? 'a member'}`);
   op.outcome = apply(k, op, m, ap!, t);
+  const extra = routes.op?.(k, op, true);
+  if (extra) op.outcome = `${op.outcome} ${extra}`.trim();
+  op.outcome += whyText(op, true);
   notice(k, op.kind === 'recruit' ? 'recruit' : 'operation', 2, `${spec.name} succeeded`, op.outcome, [{ kind: 'operation', id: op.id }, { kind: 'member', id: m.pid }]);
+}
+
+/** The reasons behind an outcome, worded plainly with their weight: the two or three biggest, then the roll. */
+export function whyText(op: Operation, ok: boolean): string {
+  const why = (op.why ?? []).filter((f) => (ok ? f.value > 0 : f.value < 0)).slice(0, 3);
+  const other = (op.why ?? []).filter((f) => (ok ? f.value < 0 : f.value > 0)).slice(0, 1);
+  const fmt = (f: Factor) => `${f.label} (${f.value > 0 ? '+' : '−'}${Math.abs(f.value)})`;
+  const luck = op.roll === undefined ? '' : ok ? (op.needed ?? 0) - op.roll < 10 && (op.needed ?? 0) < 75 ? `luck held (rolled ${op.roll}, needed ${op.needed} or less)` : `rolled ${op.roll}, needed ${op.needed} or less` : (op.needed ?? 0) >= 65 ? `bad luck (rolled ${op.roll}, needed ${op.needed} or less)` : `rolled ${op.roll}, needed ${op.needed} or less`;
+  const parts = [...why.map(fmt), ...(why.length ? [] : other.map((f) => `despite ${fmt(f)}`)), luck].filter(Boolean);
+  return parts.length ? ` Why: ${parts.join('; ')}.` : '';
 }
 
 function failText(k: Campaign, op: Operation, t: Person | undefined): string {
@@ -363,7 +409,7 @@ function apply(k: Campaign, op: Operation, m: Member, ap: Person, t: Person | un
       return `${t.first}'s letters have been read and resealed. We hold their secrets${inv ? `, and we know of ${inv} inquiry${inv > 1 ? 'ies' : ''} into us` : ''}.`;
     }
     case 'hide': { const tm = o.members[op.target.id]; if (tm) { tm.hiddenUntil = c.day + 182; tm.wanted = false; for (const inv of o.investigations) if (inv.trail[tm.pid]) inv.trail[tm.pid] *= 0.5; } return `${name(c, op.target.id)} has gone to ground.`; }
-    case 'rescue': { const tm = o.members[op.target.id]; if (tm) { tm.imprisoned = -1; tm.hiddenUntil = c.day + 182; } o.practice.good += 1; return `${name(c, op.target.id)} is out of the gaol.`; }
+    case 'rescue': { const tm = o.members[op.target.id]; if (tm) { tm.imprisoned = -1; tm.hiddenUntil = c.day + 182; coolTrail(k, tm.pid); } o.practice.good += 1; return `${name(c, op.target.id)} is out of the gaol.`; }
     case 'befriend': {
       if (!t) return '';
       relate(t, ap.id, 0.45); relate(ap, t.id, 0.35);
@@ -436,13 +482,17 @@ export function opDefs(): OperationDef[] {
   return OPS.map(({ kind, family, name: n, blurb, target, approaches, cost, days, needs }) => ({ kind, family, name: n, blurb, target, approaches, cost, days, needs }));
 }
 
+/** Operations of the vertical slice (slice.ts keeps the authoritative list). */
+const SLICE_OP_KINDS = new Set(['recruit', 'favour', 'befriend', 'scout', 'shadow', 'read-letters', 'found-lodge', 'win-seat', 'spread-rumour', 'blackmail', 'hide', 'sow-discord']);
+const SLICE_ONLY_OK = (kind: string) => SLICE_OP_KINDS.has(kind);
+
 /** Operations a member could start now, with locked ones left out (playtest item F7). */
 export function availableOps(k: Campaign, pid: number): string[] {
   const o = k.order;
   const m = o.members[pid];
   if (!m || m.imprisoned >= 0 || m.hiddenUntil > k.city.day) return [];
   if (Object.values(o.ops).some((x) => x.status === 'running' && x.agent === pid)) return [];
-  return OPS.filter((s) => unlocked(o, s.kind) && s.needs.every((n) => mastery(o, n) >= 0.25)).map((s) => s.kind);
+  return OPS.filter((s) => unlocked(o, s.kind) && s.needs.every((n) => mastery(o, n) >= 0.25) && (o.slice ? SLICE_ONLY_OK(s.kind) : s.kind !== 'sow-discord')).map((s) => s.kind);
 }
 
 /**

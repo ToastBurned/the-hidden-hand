@@ -129,6 +129,11 @@ export interface Operation {
   status: 'running' | 'succeeded' | 'failed' | 'exposed' | 'abandoned';
   outcome?: string;
   resolved: number;
+  /** The biggest reasons behind the odds, in points of chance. */
+  why?: Factor[];
+  /** The roll, 1..100, and the most it could be to succeed. */
+  roll?: number;
+  needed?: number;
 }
 
 export interface Investigation {
@@ -182,7 +187,7 @@ export interface Notice {
   read: boolean;
 }
 
-export interface Report { id: number; day: number; from: number; voice: 'cautious' | 'zealous' | 'plain' | 'ambitious'; text: string }
+export interface Report { id: number; day: number; from: number; voice: 'cautious' | 'zealous' | 'plain' | 'ambitious'; text: string; claim?: number }
 
 export interface ConclaveItem {
   id: string;
@@ -199,7 +204,7 @@ export interface Conclave { reason: string; day: number; items: ConclaveItem[] }
 export interface Chapter { generation: number; day: number; title: string; paragraphs: string[] }
 
 export interface Ending {
-  kind: 'won' | 'destroyed' | 'withered' | 'leaderless' | 'abandoned';
+  kind: 'won' | 'destroyed' | 'withered' | 'leaderless' | 'abandoned' | 'slice';
   /** For a win: how far the deeds kept the creed while the Great Work was done. */
   verdict?: 'true' | 'changed' | 'hollow';
   /** 0..100 */
@@ -273,6 +278,131 @@ export interface OrderState {
   leaderless: number;
   lastRes: { influence: number; wealth: number; secrecy: number; cohesion: number };
   log: { recruits: number; refusals: number; arrests: number; seats: number; ops: number; opsOk: number; levers: number; conclaves: number; schools: number };
+  /** The vertical slice: the first five years of a campaign, with a rival, sourced reports and one big scheme. */
+  slice?: SliceState;
+}
+
+// ---------------------------------------------------------------- the vertical slice (docs/SLICE.md)
+
+/** One weighted reason, in points of chance or in units of the number it moved. */
+export interface Factor { label: string; value: number }
+
+/** A line of the why-ledger: a number the player watches, how much it moved, and why. */
+export interface LedgerLine { day: number; what: 'cohesion' | 'secrecy' | 'suspicion' | 'attention'; district?: number; delta: number; parts: Factor[] }
+
+export type RivalGoal = 'suppress' | 'mayoralty' | 'hold';
+
+export interface RivalMove {
+  id: number;
+  day: number;
+  kind: 'goal' | 'watch' | 'strike-inquiry' | 'strike-rumour' | 'strike-buy' | 'defend' | 'close' | 'quarrel' | 'recruit';
+  text: string;
+  /** Why it did this, in the rival's own terms. */
+  why: string;
+  target?: number;
+}
+
+export interface RivalState {
+  name: string;
+  /** People of the city who sit at its table. */
+  members: number[];
+  head: number;
+  goal: RivalGoal;
+  goalText: string;
+  goalsDone: RivalGoal[];
+  /** 0..1 how much the rival is looking at the Order. */
+  attention: number;
+  /** Two families of the table at feud; the Order can feed it. */
+  feud: [number, number] | null;
+  /** The table quarrels until this day and loses its moves. */
+  splitUntil: number;
+  /** Members and informants of ours the rival has bought. */
+  bought: number[];
+  /** Where its clerks are watching, until when. */
+  watching: { district: number; until: number }[];
+  /** Members of ours it suspects by name. */
+  suspects: number[];
+  /** It knows there is a lodge on the hill. */
+  knowsHillLodge: boolean;
+  moves: RivalMove[];
+  lastRecruit: number;
+  /** Pushes on the city's decisions, renewed each season. */
+  mods: { key: string; amount: number; until: number }[];
+  /** A deal with the Order holds until this day. */
+  dealUntil: number;
+}
+
+/** Something true that happened, which sources may report and the city will in time reveal. */
+export interface Fact {
+  id: number;
+  day: number;
+  kind: 'rival' | 'inquiry' | 'wavering' | 'agenda' | 'bought' | 'harbour';
+  district: number;
+  /** About the rival's own business: those close to the table hear it first. */
+  rival: boolean;
+  truth: string;
+  partial: string;
+  wrong: string;
+  /** Day the truth comes out in public, when claims are checked. */
+  reveal: number;
+  revealText: string;
+  revealed: boolean;
+  /** People who must not be sources (the subject themselves). */
+  not: number[];
+  urgent: boolean;
+}
+
+export interface Claim {
+  id: number;
+  fact: number;
+  /** The source's person id; -1 is talk in the lodge. */
+  from: number;
+  arrives: number;
+  text: string;
+  /** Sealed truth of the letter; the interface never shows it before the check. */
+  quality: 'true' | 'partial' | 'false' | 'planted';
+  delivered: boolean;
+  checked: 'right' | 'wrong' | null;
+}
+
+export interface SourceRecord { right: number; wrong: number }
+
+export type SchemeStage = 'sponsor' | 'votes' | 'passed' | 'won';
+
+export interface SchemeState {
+  stage: SchemeStage;
+  sponsor: number;
+  /** Day the motion was put to the council (the petition stands until the sitting). */
+  putAt: number;
+  /** Votes bought for the next sitting: councillor id -> the sitting's year. */
+  bought: Record<number, number>;
+  /** The law passed on this day; the test is the next election and sitting. */
+  passedAt: number;
+  tries: number;
+  milestones: { id: string; title: string; done: number }[];
+  /** What happened at each sitting, for the board. */
+  sittings: { day: number; motion: string; ayes: number; noes: number; passed: boolean }[];
+}
+
+export interface SliceState {
+  v: 1;
+  endsAt: number;
+  /** District ids of the craft quarter, the harbour and the old families' hill. */
+  districts: { crafts: number; harbour: number; hill: number };
+  rival: RivalState;
+  facts: Fact[];
+  claims: Claim[];
+  sources: Record<number, SourceRecord>;
+  scheme: SchemeState;
+  ledger: LedgerLine[];
+  /** Suspicion added this month by district and reason, folded into the ledger monthly. */
+  traces: Record<number, Record<string, number>>;
+  /** Guild support for the scheme, recounted monthly. */
+  guild: number;
+  lastSeason: number;
+  /** Ops started from the proposed orders, for the playtest log. */
+  approved: number;
+  over: boolean;
 }
 
 export interface Campaign {
@@ -335,6 +465,8 @@ export interface OperationPreview {
   days: number;
   cost: { influence: number; wealth: number };
   advice: string;
+  /** The biggest reasons behind the odds, in points of chance. */
+  why?: Factor[];
 }
 
 /** Signals shown beside each person in the Recruit list (playtest item F6). */
@@ -414,6 +546,43 @@ export interface OrderView {
   ending: Ending | null;
   /** Clarity per district id; facts about the Order itself are always known. */
   veil: Record<number, Clarity>;
+  slice?: SliceView;
+}
+
+export interface SliceView {
+  endsAt: number;
+  endsDate: string;
+  districts: { kind: 'crafts' | 'harbour' | 'hill'; id: number; name: string; gives: string; risks: string; lodge: number | null }[];
+  rival: {
+    name: string;
+    goal: string;
+    members: { id: number; name: string; title: string; family: string; ours: 'friend' | 'fear' | null; feud: boolean }[];
+    /** Our man at the table, if any: then its moves are reported quickly and truly. */
+    insider: number | null;
+    split: boolean;
+    deal: boolean;
+  };
+  letters: { id: number; day: number; date: string; from: number; source: string; role: string; right: number; wrong: number; text: string; checked: 'right' | 'wrong' | null; about: string }[];
+  sources: { id: number; name: string; role: string; right: number; wrong: number }[];
+  scheme: {
+    stage: SchemeStage;
+    sponsor: number | null;
+    sponsors: { id: number; name: string; how: 'member' | 'friend' | 'fear' }[];
+    motion: 'openCouncil' | 'closeCouncil';
+    board: { id: number; name: string; family: string; great: boolean; wealthy: boolean; guild: boolean; ours: string | null; rival: boolean; believed: -1 | 0 | 1; known: 'sure' | 'fair' | 'guess'; sponsor: boolean }[];
+    forCount: number;
+    sure: number;
+    needed: number;
+    voteCost: number;
+    guild: number;
+    nextSitting: string;
+    nextElection: string;
+    daysToSitting: number;
+    milestones: { id: string; title: string; date: string }[];
+    sittings: { date: string; motion: string; ayes: number; noes: number; passed: boolean }[];
+    putAt: number;
+  };
+  ledger: { day: number; date: string; what: LedgerLine['what']; district: string | null; delta: number; parts: Factor[] }[];
 }
 
 /** One founder the game offers for a finished creed. */
@@ -447,6 +616,9 @@ export type OrderCommand =
   | { type: 'conclave-decide'; item: string; option: string }
   | { type: 'conclave-close' }
   | { type: 'go-quiet' }
-  | { type: 'read'; notice: number | 'all' };
+  | { type: 'read'; notice: number | 'all' }
+  | { type: 'scheme-put'; sponsor: number }
+  | { type: 'scheme-buy'; councillor: number; agent: number }
+  | { type: 'rival-deal'; agent: number };
 
 export type CommandResult = { ok: true } | { ok: false; error: string };

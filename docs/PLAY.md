@@ -13,11 +13,15 @@ whole-world game was removed the same day; it lives on in the git history.
 
 - **Title**: new game, or carry on from a save. City saves carry the note `city`; the title
   lists only those.
-- **New game, creed first** (`Setup.tsx`): the city and its troubles; the creed by one of
-  three ways (what the city needs, five questions, or the free editor), with the oath and
-  the Great Work shown as the creed changes; three founders for that creed, each with a
+- **New game, creed first** (`Setup.tsx`): the city and its troubles (it lives three years
+  first); the creed by the five questions (the other two ways, what the city needs and the
+  free editor, are kept behind `SLICE` in the file), with the oath and the slice's first
+  aim; three founders for that creed, each with a
   companion, belief and difficulty; the Order's name; the First Oath.
-- **Play** (`Play.tsx`): resources and the clock across the top, then six views:
+- **Play** (`Play.tsx`): resources and the clock across the top. The game opens with the
+  vertical slice (docs/SLICE.md), whose views are City, Orders, Council, The Table, Letters,
+  Members, Lodges and Chronicle (`SlicePanels.tsx`); secrecy and cohesion open their
+  why-ledgers. Outside the slice there are six views:
   - *City*: the live map with member homes, lodges, the homes of investigators, and each
     district's suspicion (grey where the Order has no eyes). Click a building for who lives
     and works there; click a person for what the Order could do with them.
@@ -39,11 +43,16 @@ whole-world game was removed the same day; it lives on in the git history.
 
 ## The clock
 
-`store.ts` runs the city on the main thread a day at a time (about 3 ms a day) at one
-steady pace, with no fast-forward, as decided in the redesign doc: a week in about 20
-seconds (`WEEK_SECONDS`), so a year in about 17 minutes. Play and pause, or the space
-bar. It stops by
-itself when `stepCampaign` says the interrupt setting wants it to, and shows why. It
+`store.ts` runs the city on the main thread a day at a time (about 3 ms a day). Two clock
+models, switchable at any time and remembered in the browser (`hiddenhand.clock.v1`), are
+both to be playtested:
+
+- **Living**: pause, 1x (a week in about 20 seconds, `WEEK_SECONDS`), 2x and 4x (keys 1 to
+  3, space to pause), and "until something happens", which runs fast to the next stop.
+- **Skip**: time stands still until you press Next (or space), then jumps to the next thing
+  that needs you, or a season if nothing does.
+
+It stops by itself when `stepCampaign` says the interrupt setting wants it to, and shows why. It
 autosaves once a game year, keeping one autosave.
 
 The map keeps one drawn sheet per season and draws again only when the city's buildings

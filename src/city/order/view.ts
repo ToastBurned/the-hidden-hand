@@ -5,7 +5,11 @@ import { LEVER_BY_KIND, leverForce } from './levers';
 import { OP_BY_KIND, availableOps, targetName } from './ops';
 import { resources } from './order';
 import { localOf, secrecy } from './suspicion';
-import type { Campaign, Clarity, OrderView, WorkState } from './types';
+import type { Campaign, Clarity, OrderView, SliceView, WorkState } from './types';
+import { knownWavering, sourceOf } from './intel';
+import { nextElection, nextSitting, ourManAtTable } from './rival';
+import { VOTES_NEEDED, VOTE_COST, sponsors, voteBoard } from './scheme';
+import { LODGE_YIELD } from './slice';
 import { greatWorkFor, workReason } from './works';
 import { age, districtName, homeDistrict, members, name, seatsOf, tradeName, traitsOf } from './util';
 
@@ -38,7 +42,7 @@ export function orderView(k: Campaign): OrderView {
       const who = p ?? d;
       if (!who) return [];
       const flags: OrderView['members'][number]['flags'] = [];
-      if (m.wavering) flags.push('wavering');
+      if (m.wavering && (!o.slice || knownWavering(k, m.pid))) flags.push('wavering');
       if (m.wanted) flags.push('wanted');
       if (m.imprisoned >= 0) flags.push('imprisoned');
       if (m.hiddenUntil > c.day) flags.push('hidden');
@@ -76,6 +80,46 @@ export function orderView(k: Campaign): OrderView {
     interrupts: o.interrupts,
     ending: o.ending,
     veil,
+    ...(o.slice ? { slice: sliceView(k) } : {}),
+  };
+}
+
+function sliceView(k: Campaign): SliceView {
+  const o = k.order;
+  const c = k.city;
+  const s = o.slice!;
+  const rv = s.rival;
+  const lodgeAt = (d: number) => Object.values(o.lodges).find((l) => l.found < 0 && l.district === d)?.id ?? null;
+  const board = voteBoard(k);
+  const sitting = nextSitting(c.day);
+  const factOf = (cl: { fact: number }) => s.facts.find((f) => f.id === cl.fact);
+  const about: Record<string, string> = { rival: 'the table', bought: 'the table', inquiry: 'the hunters', wavering: 'our own', agenda: 'the council', harbour: 'the harbour' };
+  const letters = s.claims.filter((cl) => cl.delivered).sort((a, b) => b.arrives - a.arrives).slice(0, 60).map((cl) => {
+    const src = sourceOf(k, cl.from);
+    return { id: cl.id, day: cl.arrives, date: dateLabel(c, cl.arrives), from: cl.from, source: src.name, role: src.role, right: src.right, wrong: src.wrong, text: cl.text, checked: cl.checked, about: about[factOf(cl)?.kind ?? ''] ?? '' };
+  });
+  const srcIds = new Set<number>([...Object.keys(s.sources).map(Number), ...s.claims.filter((cl) => cl.delivered).map((cl) => cl.from)]);
+  const man = ourManAtTable(k);
+  return {
+    endsAt: s.endsAt, endsDate: dateLabel(c, s.endsAt),
+    districts: (['crafts', 'harbour', 'hill'] as const).map((kind) => ({ kind, id: s.districts[kind], name: districtName(c, s.districts[kind]), gives: LODGE_YIELD[kind].gives, risks: LODGE_YIELD[kind].risks, lodge: lodgeAt(s.districts[kind]) })),
+    rival: {
+      name: rv.name, goal: rv.goalText,
+      members: rv.members.map((id) => { const p = c.people.get(id); const a = o.allies.find((x) => x.pid === id); return { id, name: name(c, id), title: seatsOf(c, id).map((x) => x.title).join(', '), family: c.families.get(p?.family ?? -1)?.name ?? '', ours: a && a.fear > 0.3 ? 'fear' as const : a && a.strength >= 0.4 ? 'friend' as const : null, feud: !!rv.feud && !!p && rv.feud.includes(p.family) }; }),
+      insider: man, split: rv.splitUntil > c.day, deal: rv.dealUntil > c.day,
+    },
+    letters,
+    sources: [...srcIds].map((id) => ({ id, ...sourceOf(k, id) })).sort((a, b) => b.right + b.wrong - (a.right + a.wrong)),
+    scheme: {
+      stage: s.scheme.stage, sponsor: s.scheme.sponsor >= 0 ? s.scheme.sponsor : null,
+      sponsors: sponsors(k).map((x) => ({ ...x, name: name(c, x.id) })),
+      motion: board.motion, board: board.rows, forCount: board.forCount, sure: board.sure, needed: VOTES_NEEDED, voteCost: VOTE_COST, guild: s.guild,
+      nextSitting: dateLabel(c, sitting), nextElection: dateLabel(c, nextElection(c.day)), daysToSitting: sitting - c.day,
+      milestones: s.scheme.milestones.map((m) => ({ id: m.id, title: m.title, date: dateLabel(c, m.done) })),
+      sittings: s.scheme.sittings.map((x) => ({ date: dateLabel(c, x.day), motion: x.motion, ayes: x.ayes, noes: x.noes, passed: x.passed })),
+      putAt: s.scheme.putAt,
+    },
+    ledger: s.ledger.slice(0, 120).map((l) => ({ day: l.day, date: dateLabel(c, l.day), what: l.what, district: l.district !== undefined ? districtName(c, l.district) : null, delta: l.delta, parts: l.parts })),
   };
 }
 

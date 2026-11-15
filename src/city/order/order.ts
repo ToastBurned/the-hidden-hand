@@ -16,7 +16,7 @@ import { creedDistance, updateGap } from './creed';
 import { NATIVE_CRAFT, mastery, practise } from './crafts';
 import { trace } from './suspicion';
 import type { Campaign, Cell, Lodge, LodgeRoom, Member, RoomKind } from './types';
-import { DAYS_PER_MONTH, clamp, buildingName, districtName, homeDistrict, keep, members, name, nid, notice, orng as orngOf, report, seatsOf, seatWeight, spend as spendCoin, takeCoin, release } from './util';
+import { DAYS_PER_MONTH, clamp, buildingName, districtName, homeDistrict, keep, ledger, members, name, nid, notice, orng as orngOf, report, seatsOf, seatWeight, spend as spendCoin, takeCoin, release } from './util';
 
 export const ROOMS: Record<RoomKind, { name: string; cost: number; days: number; needs: string | null; tile: TileRoomKind; hidden: boolean; blurb: string }> = {
   'safe-room': { name: 'Safe room', cost: 40, days: 84, needs: 'tradecraft', tile: 'lodge-passage', hidden: true, blurb: 'A passage and a priest hole: inquiries close in more slowly on members of this lodge.' },
@@ -85,6 +85,7 @@ export function removeMember(k: Campaign, m: Member, how: string): void {
   o.fallen.unshift({ id: m.pid, name: name(c, m.pid), died: c.day, how });
   if (o.fallen.length > 80) o.fallen.pop();
   o.order.cohesion = clamp(o.order.cohesion - (m.standing === 'elder' ? 0.04 : 0.015));
+  ledger(k, { what: 'cohesion', delta: -(m.standing === 'elder' ? 0.04 : 0.015), parts: [{ label: `${name(c, m.pid)} ${how}`, value: -(m.standing === 'elder' ? 0.04 : 0.015) }] });
   notice(k, 'death', m.standing === 'elder' || m.founder ? 3 : 2, m.founder ? 'The founder is gone' : m.standing === 'elder' ? 'An elder is gone' : 'A member lost', `${name(c, m.pid)}: ${how}.`, [{ kind: 'person', id: m.pid }]);
   if (m.standing === 'elder') o.asked[`elder-lost-${m.pid}`] = -1; // a conclave trigger: an elder is gone
   const p = c.people.get(m.pid);
@@ -249,7 +250,15 @@ export function orderMonth(k: Campaign): void {
     const zeal = ms.reduce((s, m) => s + m.zeal, 0) / ms.length;
     const recent = ms.filter((m) => c.day - m.joined < 3 * 364).length / ms.length;
     const target = clamp(zeal * 0.9 + 0.15 - o.creed.gap * 0.35 - Math.max(0, recent - 0.4) * 0.3);
+    const before = o.order.cohesion;
     o.order.cohesion = clamp(o.order.cohesion + (target - o.order.cohesion) * 0.04);
+    // why: the pull towards the members' zeal, less the gap and the strain of fast growth
+    const step = 0.04;
+    ledger(k, { what: 'cohesion', delta: o.order.cohesion - before, parts: [
+      { label: `members' zeal (average ${zeal.toFixed(2)}) against cohesion now`, value: (clamp(zeal * 0.9 + 0.15) - before) * step },
+      { label: 'the gap between word and deed', value: -o.creed.gap * 0.35 * step },
+      { label: `fast growth (${Math.round(recent * 100)}% joined in the last three years)`, value: -Math.max(0, recent - 0.4) * 0.3 * step },
+    ].filter((f) => Math.abs(f.value) >= 1e-4) });
   }
   // allies' fear fades; friendship fades slower
   for (const a of o.allies) { a.fear = Math.max(0, a.fear - 0.012); a.strength = Math.max(0, a.strength - 0.004); }
@@ -286,7 +295,7 @@ export function orderYear(k: Campaign): void {
     if (m.wavering && r.chance(0.25 * (0.3 - m.zeal) * 6)) {
       if (r.chance((1 - p.agree) * 0.5 + p.ambition * 0.3)) {
         o.knowers.push(p.id);
-        trace(k, homeDistrict(c, p), 0.25, p.id);
+        trace(k, homeDistrict(c, p), 0.25, p.id, `${p.first} turned informer`);
         notice(k, 'wavering', 3, 'Betrayed', `${name(c, m.pid)} has gone to the magistrate with what they know.`, [{ kind: 'person', id: m.pid }]);
         const known = m.knows.slice();
         removeMember(k, m, 'turned informer');

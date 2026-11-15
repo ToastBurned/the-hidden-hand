@@ -47,7 +47,7 @@ function Title({ onNew, onLoad }: { onNew: () => void; onLoad: (g: HandGame) => 
   return (
     <div className="titlescreen">
       <div className="titlecard">
-        <p className="kicker">One city · two or three generations</p>
+        <p className="kicker">One city · the first five years</p>
         <h1>The Hidden Hand</h1>
         <p>A Renaissance port, its council, its guilds and its church. Found a secret society, decide what it believes, and work unseen until the city is what you swore it would be.</p>
         <div className="actions"><button type="button" className="primary big" onClick={onNew}>New game</button></div>
