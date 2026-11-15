@@ -220,10 +220,11 @@ export const DEATH_NAMES: Record<number, string> = {
 };
 
 // ------------------------------------------------------------------ rumours
-export const R = { debt: 1, drink: 2, affair: 3, heresy: 4, theft: 5, charity: 6, bravery: 7, cruelty: 8, piety: 9, cheat: 10 } as const;
+export const R = { debt: 1, drink: 2, affair: 3, heresy: 4, theft: 5, charity: 6, bravery: 7, cruelty: 8, piety: 9, cheat: 10, society: 11 } as const;
 export const RUMOUR_NAMES: Record<number, string> = {
   1: 'deep in debt', 2: 'a drunkard', 3: 'carrying on an affair', 4: 'holding heretical views', 5: 'a thief',
   6: 'generous to the poor', 7: 'brave', 8: 'cruel', 9: 'devout', 10: 'a cheat in trade',
+  11: 'seen going to secret meetings',
 };
 /** Effect of a rumour on reputation (-1..1 scale), per unit weight. */
-export const RUMOUR_REP: Record<number, number> = { 1: -0.15, 2: -0.1, 3: -0.2, 4: -0.25, 5: -0.35, 6: 0.25, 7: 0.2, 8: -0.25, 9: 0.12, 10: -0.25 };
+export const RUMOUR_REP: Record<number, number> = { 1: -0.15, 2: -0.1, 3: -0.2, 4: -0.25, 5: -0.35, 6: 0.25, 7: 0.2, 8: -0.25, 9: 0.12, 10: -0.25, 11: -0.12 };
