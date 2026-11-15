@@ -1,8 +1,7 @@
 # The Order on the city engine (`src/city/order`)
 
 Phase 3 of the one-city redesign. The secret society the player leads, rebuilt to run
-on the day-by-day city in `src/city` (see docs/CITY.md). The 0.2.0 game in
-`src/engine/game` is untouched; this is a separate layer.
+on the day-by-day city in `src/city` (see docs/CITY.md), as a separate layer over it.
 
 ## Shape
 
@@ -65,7 +64,7 @@ and map to interior tile rooms, so the art thread can draw them.
 
 `OPS` in `ops.ts`: recruit, favour, win a seat, found a lodge, scout, shadow, read
 letters, hide, rescue, befriend, spread a rumour, blackmail, forge a letter, discredit,
-incite a riot, sabotage, poison, assassinate, and go beyond the walls. Each takes days
+incite a riot, sabotage, poison and assassinate. Each takes days
 or weeks, has visible odds and a visible risk, and leaves a trace in the agent's
 district on failure (more) and success (less).
 
@@ -123,24 +122,27 @@ Held time counts in weeks. While the condition fails, it loses two weeks a week.
 Order must also be at work: four members and one seat. Each work has three lesser works
 that reward influence, cohesion or zeal along the way.
 
-## The closing act: beyond the walls
+## Endings and generations
 
-Once the Great Work has been held long enough, `beyond` opens. A member with zeal
-sends themself on `go-beyond` to a neighbouring town (two years, 150 coin, 1 influence). They leave
-the city's records. When they arrive the campaign ends in a win, and the creed is
-judged at that moment: **true** (no amendment, a small gap between word and deed, and
-the work still standing), **changed**, or **hollow**. Otherwise it ends destroyed,
-withered, leaderless or abandoned.
+The week the Great Work has been held long enough, the campaign ends in a win, and the
+creed is judged at that moment: **true** (no amendment, a small gap between word and
+deed, and the work still standing), **changed**, or **hollow**. Otherwise it ends
+destroyed, withered, leaderless or abandoned. (The earlier closing act, carrying the
+creed beyond the walls to another town, was dropped on 15 Nov 2026.)
 
-Acts break at the founder's death and when the second generation's leaders are gone;
-each act adds a chapter to the chronicle.
+There are no acts. Generations come from the simulation: the second begins when the
+founder is gone, and each after that when the last of the previous generation's leaders
+is gone, at least five years on. Each one writes a chapter of the Chronicle and calls a
+conclave; it does not stop the game with a page of its own. Saves from before this
+change load: the act becomes the generation, and a member already on the road beyond
+the walls is counted among the fallen.
 
 ## Conclaves
 
 A conclave sits only when there is something to decide (`pendingItems`): choosing a
 leader, raising an elder after one is lost, expelling a traitor, what to do about the
 hunted, a seat falling vacant, an election near, an amendment of the creed, a member
-ready for promotion, and going beyond the walls. Urgent items sit at once; others at
+ready for promotion. Urgent items sit at once; others at
 most once a quarter. **Posture** (cautious, measured, bold) is a standing setting
 changed at any time, not a conclave ritual.
 

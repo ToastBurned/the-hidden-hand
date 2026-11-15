@@ -16,7 +16,7 @@ import { Meter, Modal, Odds, PersonFace, ST, buildingLabel, cap, districtLabel, 
 import type { HandGame } from './store';
 
 const FLOOR_NAMES: Record<number, string> = { [-1]: 'Cellar', 0: 'Ground floor', 1: 'Upper floor', 2: 'Second floor', 3: 'Garret' };
-const FLAG_WORD: Record<MemberView['flags'][number], string> = { wavering: 'wavering', wanted: 'wanted', imprisoned: 'in the gaol', hidden: 'lying low', away: 'beyond the walls', founder: 'founder', ill: 'ill' };
+const FLAG_WORD: Record<MemberView['flags'][number], string> = { wavering: 'wavering', wanted: 'wanted', imprisoned: 'in the gaol', hidden: 'lying low', founder: 'founder', ill: 'ill' };
 
 type Assign = (p: AssignPreset) => void;
 
@@ -300,7 +300,7 @@ function LeverDialog({ g, onClose }: { g: HandGame; onClose: () => void }) {
   const v = g.view;
   const c = g.k.city;
   const able = (pid: number) => LEVER_DEFS.filter((d) => leverSeat(g.k, LEVER_BY_KIND[d.kind], pid));
-  const pullers = v.members.filter((m) => !m.flags.includes('imprisoned') && !m.flags.includes('away') && able(m.id).length);
+  const pullers = v.members.filter((m) => !m.flags.includes('imprisoned') && able(m.id).length);
   const [member, setMember] = useState<number | null>(pullers[0]?.id ?? null);
   const kinds = member !== null ? able(member) : [];
   const [kind, setKind] = useState<string | null>(null);
@@ -376,7 +376,6 @@ export function WorksPanel({ g, onAssign }: { g: HandGame; onAssign: Assign }) {
   const v = g.view;
   const gw = v.greatWork;
   const def = GREAT_WORKS[gw.kind];
-  const goer = v.members.filter((m) => m.canDo.includes('go-beyond'));
   return (
     <div className="works">
       <section className="greatwork">
@@ -408,11 +407,6 @@ export function WorksPanel({ g, onAssign }: { g: HandGame; onAssign: Assign }) {
         <div className="row"><small>Gap between word and deed</small><Meter v={v.creed.gap} tone="red" label="Gap between word and deed" /></div>
         {v.creed.amended !== undefined && <p className="warn">The creed was amended: whatever must be done, we will do.</p>}
       </section>
-      <section className="beyond">
-        <h3>Beyond the walls</h3>
-        <p>{v.beyond.text}</p>
-        {v.beyond.state === 'open' && (goer.length ? <button type="button" className="primary" onClick={() => onAssign({ kind: 'go-beyond', agent: goer[0].id })}>Choose who goes…</button> : <p className="muted">No member with the zeal to leave for good is free. It costs 150 ducats.</p>)}
-      </section>
     </div>
   );
 }
@@ -428,7 +422,7 @@ export function ChroniclePanel({ g, onRead }: { g: HandGame; onRead: (id: number
         <h2>Chapters</h2>
         {v.chapters.map((ch) => (
           <article key={ch.day} className="chapter">
-            <p className="kicker">Act {ch.act}</p>
+            <p className="kicker">{g.k.city.config.startYear + Math.floor(ch.day / 364)}</p>
             <h3>{ch.title}</h3>
             {ch.paragraphs.map((p, i) => <p key={i}>{p}</p>)}
           </article>

@@ -1,13 +1,12 @@
 /**
- * Sound: the cue rules, and the engine against a fake AudioContext (node has no Web Audio),
+ * Sound: the cues, and the engine against a fake AudioContext (node has no Web Audio),
  * checking that it builds its graph, schedules music and ambience, plays every stinger
  * without throwing, suspends when muted or hidden, and that sound settings persist.
  */
 import { describe, expect, it } from 'vitest';
 import { AudioEngine } from '../src/ui/audio/engine';
-import { CUES, endingCue, noticeCue, pickCue, seasonOf, tension, workStep } from '../src/ui/audio/cues';
-import { AUDIO_DEFAULTS } from '../src/ui/game/settings';
-import type { GameView, Notice } from '../src/game/view';
+import { CUES, cuePriority, seasonOf } from '../src/ui/audio/cues';
+import { AUDIO_DEFAULTS } from '../src/ui/audio/settings';
 
 // ---------------------------------------------------------------- a fake Web Audio
 class Param {
@@ -52,47 +51,11 @@ class FakeCtx {
 
 const make = () => { const c = new FakeCtx(); return { c, e: new AudioEngine(() => c as unknown as AudioContext, { ...AUDIO_DEFAULTS }) }; };
 
-// ---------------------------------------------------------------- a minimal view
-function view(p: Partial<GameView> = {}): GameView {
-  return {
-    phase: 'play', tick: 2400, date: '', speed: 2,
-    order: { name: 'The Lamp', meaning: '', founded: 2400, home: 1, founder: 1, posture: 'measured' },
-    resources: { influence: 1, wealth: 10, secrecy: 0.95, cohesion: 0.9, delta: { influence: 0, wealth: 0, secrecy: 0, cohesion: 0 } },
-    members: [], fallen: [], cells: [], lodges: [], levers: [], operations: [], crafts: [], suspicion: [], investigators: [],
-    greatWork: { id: 'w', title: 'W', text: '', progress: 0.1, done: false, blocker: null }, lesserWorks: [], notices: [],
-    conclave: null, nextConclave: 2412, interrupts: 'important', ending: null, veil: { settlements: {}, polities: {} },
-    ...p,
-  } as unknown as GameView;
-}
-const note = (kind: Notice['kind'], title: string, urgency: 1 | 2 | 3 = 2, id = 1): Notice => ({ id, tick: 2400, kind, urgency, title, text: '', refs: [], read: false });
-
 describe('audio cues', () => {
-  it('maps notices to stingers', () => {
-    expect(noticeCue(note('operation', 'Scout succeeded'))).toBe('op-success');
-    expect(noticeCue(note('operation', 'Scout failed'))).toBe('op-fail');
-    expect(noticeCue(note('operation', 'Scout failed', 3))).toBe('exposed');
-    expect(noticeCue(note('purge', 'A member arrested', 3))).toBe('arrest');
-    expect(noticeCue(note('investigator', 'An inquiry opens', 3))).toBe('inquiry');
-    expect(noticeCue(note('investigator', 'An inquiry ends'))).toBe('notice');
-    expect(noticeCue(note('wavering', 'Betrayed', 3))).toBe('betrayal');
-    expect(noticeCue(note('death', 'A member lost'))).toBe('death');
-    expect(noticeCue(note('info', 'The First Oath', 3))).toBe('founding');
-    expect(noticeCue(note('arrival', 'Arrived', 1))).toBeNull();
-    expect(noticeCue(note('info', 'A room is finished', 1))).toBeNull();
-  });
-  it('plays only the most important of several', () => {
-    expect(pickCue([note('seat', 'A seat won'), note('purge', 'A member arrested', 3), note('operation', 'Scout succeeded')])).toBe('arrest');
-    expect(pickCue([])).toBeNull();
-  });
-  it('reads tension, season, endings and Great Work steps from the view', () => {
-    expect(tension(view())).toBeLessThan(0.1);
-    expect(tension(view({ resources: { ...view().resources, secrecy: 0.2 } }))).toBeCloseTo(0.8);
-    expect(tension(view({ investigators: [{ progress: 0.9 }] as never }))).toBeGreaterThan(0.85);
+  it('ranks stingers and follows the seasons', () => {
+    expect(cuePriority('arrest')).toBeGreaterThan(cuePriority('seat'));
+    expect(cuePriority('victory')).toBeGreaterThan(cuePriority('notice'));
     expect(seasonOf(0)).toBe('winter'); expect(seasonOf(3)).toBe('spring'); expect(seasonOf(6)).toBe('summer'); expect(seasonOf(9)).toBe('autumn'); expect(seasonOf(11)).toBe('winter');
-    expect(endingCue(view({ ending: { kind: 'won' } as never }))).toBe('victory');
-    expect(endingCue(view({ ending: { kind: 'destroyed' } as never }))).toBe('defeat');
-    expect(workStep(view())).toBe(0);
-    expect(workStep(view({ greatWork: { ...view().greatWork, progress: 0.55 } }))).toBe(2);
   });
 });
 
@@ -165,19 +128,19 @@ describe('sound settings', () => {
     (globalThis as { localStorage?: unknown }).localStorage = {
       getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, v: string) => { store.set(k, v); }, removeItem: (k: string) => { store.delete(k); },
     };
-    // an older settings file with no sound section, and one with a partial one
+    // a settings record from an earlier build, with a partial sound section
     store.set('hiddenhand.settings.v1', JSON.stringify({ textScale: 1.12, audio: { music: 0.2 } }));
     const { vi } = await import('vitest');
     vi.resetModules();
-    const s = await import('../src/ui/game/settings');
-    expect(s.getSettings().textScale).toBe(1.12);
-    expect(s.getSettings().audio).toEqual({ ...AUDIO_DEFAULTS, music: 0.2 });
-    s.setSettings((x) => ({ ...x, audio: { ...x.audio, muted: true, effects: 0.3 } }));
+    const s = await import('../src/ui/audio/settings');
+    expect(s.getAudioSettings()).toEqual({ ...AUDIO_DEFAULTS, music: 0.2 });
+    s.setAudioSettings((x) => ({ ...x, muted: true, effects: 0.3 }));
     const saved = JSON.parse(store.get('hiddenhand.settings.v1')!);
     expect(saved.audio).toMatchObject({ muted: true, effects: 0.3, music: 0.2 });
+    expect(saved.textScale).toBe(1.12); // the rest of the record is kept
     vi.resetModules();
-    const again = await import('../src/ui/game/settings');
-    expect(again.getSettings().audio.muted).toBe(true);
+    const again = await import('../src/ui/audio/settings');
+    expect(again.getAudioSettings().muted).toBe(true);
     delete (globalThis as { localStorage?: unknown }).localStorage;
   });
 });

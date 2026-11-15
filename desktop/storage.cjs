@@ -1,6 +1,6 @@
 'use strict';
 /**
- * Saved worlds as plain files in a folder on disk.
+ * Saved games as plain files in a folder on disk.
  *
  * Each save is one `<name>-year<N>-<stamp>.hiddenhand.json` file in exactly the format the browser
  * version exports, so files move freely between the two: drop an exported world into the folder and
@@ -29,10 +29,22 @@ function stamp(d = new Date()) {
   return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}${p(d.getMilliseconds(), 3)}`;
 }
 
-/** Reads just enough of a world file to label it. Returns null if it is not a world file. */
+/** Saves of the one-city game carry this note (see src/ui/hand/store.ts); their tick is the city's day. */
+const CITY_NOTE = 'city';
+const DAYS_PER_YEAR = 364;
+
+/**
+ * Reads just enough of a save file to label it. Returns null if it is not a save. A one-city
+ * campaign (`kind: 'hidden-hand-city'`) is labelled with its Order and day; a world from the
+ * earlier whole-world game is still recognised, though the game no longer opens it.
+ */
 function describeWorld(text) {
   try {
     const w = JSON.parse(text);
+    if (w && w.kind === 'hidden-hand-city' && w.order && typeof w.city === 'string') {
+      const day = Number(JSON.parse(w.city).day) || 0;
+      return { name: `${w.order.order?.name ?? 'The Order'}, year ${Math.floor(day / DAYS_PER_YEAR) + 1}`, tick: day, note: CITY_NOTE };
+    }
     if (!w || !w.version || !w.tiles) return null;
     return { name: String(w.config?.name ?? 'Unnamed world'), tick: Number(w.tick) || 0 };
   } catch {
@@ -83,7 +95,7 @@ class SaveStore {
         // A file we have not seen (or one changed outside the app): read it once to label it.
         const d = describeWorld(await fsp.readFile(path.join(this.folder, id), 'utf8').catch(() => ''));
         if (!d) continue;
-        e = { name: d.name, tick: d.tick, savedAt: e?.savedAt ?? Math.round(st.mtimeMs), note: e?.note, size: st.size, mtimeMs: st.mtimeMs };
+        e = { name: d.name, tick: d.tick, savedAt: e?.savedAt ?? Math.round(st.mtimeMs), note: e?.note ?? d.note, size: st.size, mtimeMs: st.mtimeMs };
       }
       next[id] = e;
       out.push({ id, name: e.name, tick: e.tick, savedAt: e.savedAt, size: e.size, ...(e.note ? { note: e.note } : {}) });
@@ -96,7 +108,8 @@ class SaveStore {
     if (typeof data !== 'string' || !data) throw new Error('Nothing to save.');
     await this.ensure();
     const now = new Date();
-    const id = `${slug(name)}-year${Math.floor((Number(tick) || 0) / 12)}-${stamp(now)}${EXT}`;
+    const year = Math.floor((Number(tick) || 0) / (note === CITY_NOTE ? DAYS_PER_YEAR : 12));
+    const id = `${slug(name)}-year${year}-${stamp(now)}${EXT}`;
     const file = this.file(id);
     await atomicWrite(file, data);
     const st = await fsp.stat(file);

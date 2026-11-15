@@ -1,7 +1,7 @@
 /**
  * Creating a city: the map, the people and the institutions, from a seed.
  */
-import { Rng } from '../engine/core/rng';
+import { Rng } from './base/rng';
 import { townName as placeName } from './names';
 import { generateMap } from './gen/map';
 import { populate } from './gen/populate';

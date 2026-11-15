@@ -6,8 +6,8 @@
  * The output is the bare fabric: buildings have kinds, footprints and districts but
  * no residents. populate.ts fills it with families.
  */
-import { fbm } from '../../engine/core/noise';
-import type { Rng } from '../../engine/core/rng';
+import { fbm } from '../base/noise';
+import type { Rng } from '../base/rng';
 import { townName as placeName } from '../names';
 import { B, type DistrictKind } from '../constants';
 import {

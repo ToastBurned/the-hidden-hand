@@ -2,7 +2,7 @@
   "name": "the-hidden-hand",
   "version": "0.1.0",
   "private": true,
-  "description": "The Hidden Hand: steer a living, procedurally generated civilisation from the shadows as a secret order.",
+  "description": "The Hidden Hand: build a secret society in a living Renaissance port city and reshape it from the shadows.",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -10,9 +10,6 @@
     "start": "node launcher/serve.mjs",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "sim": "tsx tools/cli.ts",
-    "validate": "tsx tools/validate.ts",
-    "experiment": "tsx tools/experiment.ts",
     "art": "vite --config vite.art.config.ts --open /art.html",
     "build:art": "vite build --config vite.art.config.ts && node tools/artpage.mjs",
     "artshots": "tsx tools/artshots.ts",

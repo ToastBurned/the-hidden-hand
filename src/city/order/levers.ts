@@ -187,7 +187,7 @@ export function leversMonth(k: Campaign, charge: boolean): [string, number][] {
   for (const lv of Object.values(o.levers)) {
     const spec = LEVER_BY_KIND[lv.kind];
     const m = o.members[lv.member];
-    if (!spec || !m || m.imprisoned >= 0 || m.away) { delete o.levers[lv.id]; continue; }
+    if (!spec || !m || m.imprisoned >= 0) { delete o.levers[lv.id]; continue; }
     const f = leverForce(k, lv);
     if (!f) {
       delete o.levers[lv.id];
@@ -304,7 +304,7 @@ export function pullLever(k: Campaign, kind: string, member: number, target: Tar
   if (!spec) return 'unknown lever';
   const m = o.members[member];
   if (!m || !c.people.has(member)) return 'not a member';
-  if (m.imprisoned >= 0 || m.away) return 'the member cannot act';
+  if (m.imprisoned >= 0) return 'the member cannot act';
   if (!leverSeat(k, spec, member)) return `${name(c, member)} holds no seat that can pull this`;
   if (spec.target !== target.kind) return `this lever needs a ${spec.target}`;
   if (spec.target === 'motion' && !MOTIONS[target.key ?? '']) return 'no such motion';

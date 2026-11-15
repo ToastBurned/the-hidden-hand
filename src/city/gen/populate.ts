@@ -3,7 +3,7 @@
  * households, every person with a trade, the city's institutions and their office
  * holders, the region outside the walls and a few lines of recent history.
  */
-import type { Rng } from '../../engine/core/rng';
+import type { Rng } from '../base/rng';
 import { givenName as personName, saintName as deityName, surname as familyName, townName as placeName } from '../names';
 import {
   B, CLASS_MIDDLING, CLASS_POOR, CLASS_WEALTHY, DAYS_PER_YEAR, GUILDS, NV, T, TRADES, V_HIER, V_INDIV, V_INNOV, V_MILIT, V_PIETY,

@@ -1,10 +1,12 @@
 'use strict';
 /**
- * End-to-end check of the desktop app: changes settings and checks they reach preferences.json,
- * founds an Order in a small world, saves the campaign from the pause menu and confirms a real file
- * appears in the saves folder, checks the folder rules (dropped-in files, old .noosphere.json saves,
- * paths outside the folder), restarts the app, confirms settings and the save are still there, loads
- * the campaign from Saved campaigns and re-saves it at the same point, and deletes a save from the list.
+ * End-to-end check of the desktop app on the one-city game: checks the bridge and that the old
+ * whole-world game's address now opens the game, writes a preference and checks it reaches
+ * preferences.json, starts a new game (city, creed first, founder, First Oath), saves it from the
+ * menu and confirms real files appear in the saves folder (the opening autosave and the save),
+ * checks the folder rules (dropped-in files, files that are not saves, paths outside the folder),
+ * restarts the app, confirms the preference and the saves are still there, opens the save from
+ * the title's list, re-saves it at the same day, and leaves to the title.
  *
  * Needs a display (on Linux: xvfb-run -a npm test).
  * Usage: npm test            (after npm run prepare-app)
@@ -38,22 +40,22 @@ async function launch() {
   });
   const page = await app.firstWindow();
   page.on('pageerror', (e) => console.error('page error:', e.message));
-  // CI runners have no GPU and the start screen draws a living world behind the menu, so the page
-  // can be slow to respond there: allow generous time, and turn off motion so buttons hold still.
+  // CI runners have no GPU and the city is generated and drawn on the page, so it can be slow
+  // to respond there: allow generous time, and turn off motion so buttons hold still.
   page.setDefaultTimeout(120000);
   await page.emulateMedia({ reducedMotion: 'reduce' }).catch(() => {});
-  await page.getByRole('button', { name: /New campaign/ }).waitFor();
+  await page.getByRole('button', { name: 'New game' }).waitFor();
   return { app, page };
 }
 
-/** Opens the pause menu in a campaign and saves; returns the new save file's name. */
-async function saveCampaign(page, count) {
-  await page.keyboard.press('Escape');
-  // A freshly loaded campaign can keep the page busy for a while on a slow machine: allow time.
-  await page.getByRole('button', { name: 'Save the campaign' }).click({ timeout: 120000 });
-  const files = await until(() => saves().length === count && saves(), `save number ${count}`);
-  return files;
+/** Saves from the game's menu; waits for the saves folder to hold `count` files and returns them. */
+async function saveGame(page, count) {
+  await page.getByRole('button', { name: 'Menu' }).click();
+  await page.getByRole('menuitem', { name: 'Save' }).click();
+  return until(() => saves().length === count && saves(), `save number ${count}`);
 }
+const readSave = (f) => JSON.parse(fs.readFileSync(path.join(savesDir, f), 'utf8'));
+const dayOf = (save) => JSON.parse(save.city).day;
 
 (async () => {
   let { app, page } = await launch();
@@ -61,93 +63,73 @@ async function saveCampaign(page, count) {
   assert(await page.evaluate(() => typeof require === 'undefined' && typeof process === 'undefined'), 'page has no Node.js access');
   assert((await page.evaluate(() => window.hiddenHandDesktop.savesFolder())) === savesDir, 'saves folder is the configured one');
 
-  // The old simulation sandbox is gone: its address now opens the game.
-  await page.evaluate(() => { location.hash = 'sandbox'; location.reload(); });
-  await page.getByRole('button', { name: /New campaign/ }).waitFor();
-  assert(!(await page.getByRole('button', { name: '+1 yr' }).isVisible()), 'the old sandbox address opens the game, not the sandbox');
+  // The old whole-world game is gone: its address now opens the one-city game.
+  await page.evaluate(() => { location.hash = 'old'; location.reload(); });
+  await page.getByRole('button', { name: 'New game' }).waitFor();
+  assert(!(await page.getByRole('button', { name: /New campaign/ }).isVisible()), 'the old game\'s address opens the one-city game');
 
-  // Settings are kept in preferences.json. The shortest history also keeps this test quick.
-  await page.getByRole('button', { name: 'Settings' }).click();
-  await page.getByRole('button', { name: 'Large', exact: true }).click();
-  await page.getByLabel('History length').selectOption('120');
-  await page.getByRole('button', { name: 'Done' }).click();
-  const settingsOnDisk = () => JSON.parse(prefsOnDisk()['hiddenhand.settings.v1'] || '{}');
-  assert(await until(() => settingsOnDisk().textScale === 1.12 && settingsOnDisk().historyYears === 120, 'settings in preferences.json'), 'changed settings are written to preferences.json');
+  // Preferences are kept in preferences.json.
+  await page.evaluate(() => window.hiddenHandDesktop.prefs.set('hiddenhand.smoke', 'kept'));
+  assert(await until(() => prefsOnDisk()['hiddenhand.smoke'] === 'kept', 'preference in preferences.json'), 'a preference is written to preferences.json');
 
-  // Found an Order in a small world.
-  await page.getByRole('button', { name: /New campaign/ }).click();
-  await page.getByRole('button', { name: /A corner of the world/ }).click();
-  await page.getByRole('button', { name: 'Make the world' }).click();
-  const story = page.locator('.story-card').first();
-  await story.waitFor({ timeout: 600000 });
-  log('world made');
-  await story.click();
-  await page.getByRole('button', { name: /^Begin with/ }).click();
-  await page.getByRole('button', { name: 'This is what we believe' }).click();
-  await page.locator('.name-card').first().click();
-  await page.getByRole('button', { name: 'Swear the oath' }).click();
-  await page.getByRole('button', { name: 'Skip' }).click();
+  // A new game, creed first: the city, a creed the city needs, a founder, the First Oath.
+  await page.getByRole('button', { name: 'New game' }).click();
+  await page.getByRole('button', { name: 'Set the creed' }).click({ timeout: 300000 });
+  log('city made');
+  await page.locator('.creedstep .cards .card').first().click();
+  await page.getByRole('button', { name: 'Find the founders' }).click();
+  await page.locator('.card.founder').first().click();
+  await page.getByRole('button', { name: 'Name the Order' }).click();
+  await page.getByRole('button', { name: 'Swear the First Oath' }).click();
+  await page.getByRole('button', { name: 'Menu' }).waitFor();
+  const [auto] = await until(() => saves().length === 1 && saves(), 'the opening autosave');
+  assert(readSave(auto).kind === 'hidden-hand-city', `the game autosaves when it begins: ${auto}`);
   await page.waitForTimeout(1500);
-  if (shots) await page.screenshot({ path: path.join(shots, 'desktop-campaign.png') });
+  if (shots) await page.screenshot({ path: path.join(shots, 'desktop-game.png') });
 
-  const [first] = await saveCampaign(page, 1);
+  const two = await saveGame(page, 2);
+  const first = two.find((f) => f !== auto);
   const firstText = fs.readFileSync(path.join(savesDir, first), 'utf8');
-  const firstWorld = JSON.parse(firstText);
-  assert(firstWorld.version && firstWorld.tiles && firstWorld.game, `saving wrote a campaign file to disk: ${first} (${(firstText.length / 1e6).toFixed(1)} MB, tick ${firstWorld.tick})`);
-  assert(firstWorld.tick >= 120 * 12, 'saved campaign is after the 120 years of history');
+  const firstSave = JSON.parse(firstText);
+  assert(firstSave.kind === 'hidden-hand-city' && firstSave.v === 1 && firstSave.order?.order?.name, `saving wrote a one-city save to disk: ${first} (${(firstText.length / 1e6).toFixed(1)} MB, day ${dayOf(firstSave)})`);
+  const order = firstSave.order.order.name;
+  assert(!('act' in firstSave.order) && !('beyond' in firstSave.order) && firstSave.order.generation?.n === 1, 'the save has generations, not acts or the road beyond the walls');
 
-  // A world exported elsewhere and dropped into the folder appears in the Library.
-  // A world exported elsewhere and dropped into the folder appears in the Library.
+  // A save copied in from elsewhere appears in the list; files that are not saves are ignored.
   fs.copyFileSync(path.join(savesDir, first), path.join(savesDir, 'dropped-in.hiddenhand.json'));
-  fs.writeFileSync(path.join(savesDir, 'not-a-world.hiddenhand.json'), '{"hello":1}');
+  fs.writeFileSync(path.join(savesDir, 'not-a-save.hiddenhand.json'), '{"hello":1}');
   const listed = await page.evaluate(() => window.hiddenHandDesktop.listSaves());
-  assert(listed.some((m) => m.id === 'dropped-in.hiddenhand.json' && m.tick === firstWorld.tick), 'a file dropped into the folder is listed with its year');
-  assert(!listed.some((m) => m.id === 'not-a-world.hiddenhand.json'), 'files that are not worlds are ignored');
-  fs.rmSync(path.join(savesDir, 'not-a-world.hiddenhand.json'));
-  // Worlds saved before the rename from The Noosphere still load.
-  fs.copyFileSync(path.join(savesDir, first), path.join(savesDir, 'old-world.noosphere.json'));
-  const withLegacy = await page.evaluate(() => window.hiddenHandDesktop.listSaves());
-  assert(withLegacy.some((m) => m.id === 'old-world.noosphere.json' && m.tick === firstWorld.tick), 'a save from before the rename is listed');
-  await page.evaluate(() => window.hiddenHandDesktop.deleteSave('old-world.noosphere.json'));
-  assert(!fs.existsSync(path.join(savesDir, 'old-world.noosphere.json')), 'a save from before the rename can be deleted');
+  assert(listed.some((m) => m.id === 'dropped-in.hiddenhand.json' && m.note === 'city' && m.tick === dayOf(firstSave)), 'a save dropped into the folder is listed as a one-city game with its day');
+  assert(!listed.some((m) => m.id === 'not-a-save.hiddenhand.json'), 'files that are not saves are ignored');
+  fs.rmSync(path.join(savesDir, 'not-a-save.hiddenhand.json'));
   assert(await page.evaluate(() => window.hiddenHandDesktop.getSave('../../etc/passwd').then(() => false, () => true)), 'paths outside the saves folder are refused');
-
   await page.evaluate(() => window.hiddenHandDesktop.deleteSave('dropped-in.hiddenhand.json'));
   assert(!saves().includes('dropped-in.hiddenhand.json'), 'delete removes the file');
 
-  // Saves and settings survive a restart, and Continue picks the campaign up where it was saved.
+  // Saves and preferences survive a restart, and the title offers the saves.
   await app.close();
   ({ app, page } = await launch());
   const after = await page.evaluate(() => window.hiddenHandDesktop.listSaves());
-  assert(after.length === 1 && after[0].tick === firstWorld.tick, 'the campaign save is listed after restarting the app');
-  assert(await page.evaluate(() => window.hiddenHandDesktop.prefs.get('hiddenhand.settings.v1')).then((v) => JSON.parse(v).textScale === 1.12), 'settings are back after restarting the app');
-  const cont = page.getByRole('button', { name: /^Continue/ });
-  await until(() => cont.isEnabled(), 'Continue to be offered');
+  assert(after.length === 2 && after.every((m) => m.note === 'city'), 'both saves are listed after restarting the app');
+  assert((await page.evaluate(() => window.hiddenHandDesktop.prefs.get('hiddenhand.smoke'))) === 'kept', 'the preference is back after restarting the app');
 
-  // Saved campaigns: load a save from the list.
-  await page.getByRole('button', { name: /^Saved campaigns/ }).click();
-  const dialog = page.getByRole('dialog', { name: 'Saved campaigns' });
-  await dialog.getByRole('button', { name: /^Load / }).first().click();
-  // Wait for the play screen of the loaded campaign before opening the pause menu.
-  await page.getByRole('button', { name: /Conclave/ }).waitFor({ timeout: 120000 });
-  await page.waitForTimeout(3000);
-  const both = await saveCampaign(page, 2);
-  const second = both.find((f) => f !== first);
-  const secondWorld = JSON.parse(fs.readFileSync(path.join(savesDir, second), 'utf8'));
-  assert(secondWorld.game && secondWorld.tick === firstWorld.tick, `loading from Saved campaigns restored the campaign at tick ${firstWorld.tick} (got ${secondWorld.tick})`);
+  // Open the save (not the autosave) from the title, and save it again at the same day.
+  const carryOn = page.locator('.titlescreen .saves li button');
+  await until(async () => (await carryOn.count()) === 2, 'the title to list both saves');
+  if (shots) await page.screenshot({ path: path.join(shots, 'desktop-title-saves.png') });
+  await carryOn.filter({ hasNotText: '(autosave)' }).first().click();
+  await page.getByRole('button', { name: 'Menu' }).waitFor();
+  await page.waitForTimeout(1000);
+  const three = await saveGame(page, 3);
+  const second = three.find((f) => !two.includes(f));
+  const secondSave = readSave(second);
+  assert(secondSave.order.order.name === order && dayOf(secondSave) === dayOf(firstSave), `opening the save from the title restored ${order} at day ${dayOf(firstSave)} (got ${dayOf(secondSave)})`);
 
-  // Save and return to the start screen, then delete a save from the list.
-  await page.keyboard.press('Escape');
-  await page.getByRole('button', { name: 'Save and return to the start screen' }).click({ timeout: 120000 });
-  await until(() => saves().length === 3, 'third save');
-  await page.getByRole('button', { name: /^Saved campaigns/ }).click();
-  await dialog.getByRole('button', { name: /^Delete / }).first().waitFor();
-  assert((await dialog.getByRole('button', { name: /^Load / }).count()) === 3, 'Saved campaigns lists all three saves');
-  if (shots) await page.screenshot({ path: path.join(shots, 'desktop-saved-campaigns.png') });
-  await dialog.getByRole('button', { name: /^Delete / }).first().click();
-  await dialog.getByRole('button', { name: 'Delete', exact: true }).click();
-  await until(() => saves().length === 2, 'delete from Saved campaigns');
-  assert(await until(async () => (await dialog.getByRole('button', { name: /^Load / }).count()) === 2, 'list refresh'), 'deleting from Saved campaigns removes the file and the row');
+  // Leave to the title: it lists all three.
+  await page.getByRole('button', { name: 'Menu' }).click();
+  await page.getByRole('menuitem', { name: 'Leave to the title' }).click();
+  await page.getByRole('button', { name: 'New game' }).waitFor();
+  assert(await until(async () => (await carryOn.count()) === 3, 'the title to list three saves'), 'the title lists all three saves');
   await app.close();
   fs.rmSync(tmp, { recursive: true, force: true });
   console.log('\nDesktop smoke test passed.');

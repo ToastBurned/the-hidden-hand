@@ -13,7 +13,7 @@ import type { HandGame } from './store';
 
 const DEFS = opDefs();
 const DEF = Object.fromEntries(DEFS.map((d) => [d.kind, d]));
-const FAMILY: Record<OperationDef['family'], string> = { growth: 'Grow the Order', knowledge: 'Learn', protection: 'Protect our own', persuasion: 'Persuade', coercion: 'Coerce', violence: 'Violence', beyond: 'Beyond the walls' };
+const FAMILY: Record<OperationDef['family'], string> = { growth: 'Grow the Order', knowledge: 'Learn', protection: 'Protect our own', persuasion: 'Persuade', coercion: 'Coerce', violence: 'Violence' };
 const FAMILIES = Object.keys(FAMILY) as OperationDef['family'][];
 
 export interface AssignPreset { agent?: number; kind?: string; target?: Target }
@@ -121,7 +121,7 @@ function TargetPicker({ g, agent, kind, def, target, onTarget }: { g: HandGame; 
 
   if (def.target === 'person') {
     let ids: number[];
-    if (kind === 'hide') ids = v.members.filter((m) => !m.flags.includes('imprisoned') && !m.flags.includes('away')).map((m) => m.id);
+    if (kind === 'hide') ids = v.members.filter((m) => !m.flags.includes('imprisoned')).map((m) => m.id);
     else if (kind === 'rescue') ids = v.members.filter((m) => m.flags.includes('imprisoned')).map((m) => m.id);
     else if (kind === 'discredit') ids = v.investigators.map((i) => i.id);
     else ids = notablePeople(g, agent);
@@ -222,20 +222,6 @@ function TargetPicker({ g, agent, kind, def, target, onTarget }: { g: HandGame; 
     );
   }
 
-  if (def.target === 'neighbour') {
-    return (
-      <ul className="pick plain-pick">
-        {c.region.neighbours.map((n) => {
-          const t: Target = { kind: 'neighbour', id: n.id };
-          return (
-            <li key={n.id}><button type="button" className={sel(t) ? 'on' : ''} onClick={() => onTarget(t)}>
-              <span><b>{n.name}</b><small>A {n.kind}, {n.dist} days&apos; travel, {n.relation > 0.3 ? 'friendly' : n.relation < -0.3 ? 'hostile' : 'neither friend nor foe'}</small></span>
-            </button></li>
-          );
-        })}
-      </ul>
-    );
-  }
   return null;
 }
 

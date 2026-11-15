@@ -2,7 +2,7 @@
  * Shared helpers for the city engine: random numbers, dates, people, households,
  * memory, relations and the chronicle.
  */
-import { Rng } from '../engine/core/rng';
+import { Rng } from './base/rng';
 import { givenName } from './names';
 import { DAYS_PER_YEAR, DAYS_PER_WEEK, WEEKS_PER_SEASON, SEASON_NAMES, NV, M, D, isDwelling, DWELLING_PER_FLOOR, STACKED, TRADES } from './constants';
 import type { Building, City, CityEvent, DeadPerson, Family, Household, Looks, Person } from './types';

@@ -1,8 +1,7 @@
 /**
  * Conclaves meet only when there is a real decision to make (playtest item F11): an elder
  * is gone, a member wavers, a seat opens or an election is near, an inquiry closes in on
- * someone, the deeds and the creed drift apart, too few elders lead too many members, or
- * the Great Work is held and someone must carry it beyond the walls. There is no yearly
+ * someone, the deeds and the creed drift apart, or too few elders lead too many members. There is no yearly
  * sitting, and posture is a standing setting on the Order screen, not a conclave item.
  */
 import { CAL, DAYS_PER_WEEK, V_MILIT } from '../constants';
@@ -11,13 +10,12 @@ import { eligibleFor } from '../systems/civic';
 import { oathText } from './creed';
 import { mastery } from './crafts';
 import { removeMember } from './order';
-import { OP_BY_KIND, opProblem, startOp } from './ops';
 import type { Campaign, ConclaveItem, Member } from './types';
 import { clamp, members, name, notice, seatsOf } from './util';
 
-const URGENT = new Set(['leader', 'seat', 'hunted', 'beyond', 'act']);
+const URGENT = new Set(['leader', 'seat', 'hunted']);
 
-function free(k: Campaign): Member[] { return members(k.order).filter((m) => m.imprisoned < 0 && !m.away && k.city.people.has(m.pid)); }
+function free(k: Campaign): Member[] { return members(k.order).filter((m) => m.imprisoned < 0 && k.city.people.has(m.pid)); }
 
 function promotionItems(k: Campaign, max: number): ConclaveItem[] {
   const o = k.order;
@@ -110,15 +108,6 @@ export function pendingItems(k: Campaign): { key: string; item: ConclaveItem }[]
   }
   // too few elders for the Order's size
   if (elders.length && !lost.length && !asked('promote', 2 * 364)) for (const it of promotionItems(k, 1)) out.push({ key: 'promote', item: it });
-  // the Great Work is held: carry the creed beyond the walls
-  if (o.beyond.state === 'open' && !asked('beyond', 364)) {
-    const cands = ms.filter((m) => m.zeal >= 0.55).sort((a, b) => b.zeal - a.zeal || a.pid - b.pid).slice(0, 3);
-    const nb = [...c.region.neighbours].sort((a, b) => b.relation - a.relation || a.dist - b.dist)[0];
-    if (cands.length && nb) out.push({ key: 'beyond', item: {
-      id: 'beyond', kind: 'beyond', title: 'Beyond the walls', text: `The Great Work is done and held. One of us could leave for ${nb.name} with coin, and found a lodge there. It takes about two years, and the creed will be judged when it is done.`, by: null,
-      options: [...cands.map((m) => ({ id: `${m.pid}:${nb.id}`, label: `Send ${name(c, m.pid)}`, effect: `They leave the city for good (${OP_BY_KIND['go-beyond'].cost.wealth} ducats, ${OP_BY_KIND['go-beyond'].cost.influence} of their influence).` })), { id: 'wait', label: 'Not yet', effect: 'We hold the city a while longer.' }],
-    } });
-  }
   return out;
 }
 
@@ -150,7 +139,6 @@ function reasonOf(k: Campaign, items: ConclaveItem[]): string {
     case 'hunted': return `${first.title}: an inquiry is closing in.`;
     case 'expel': return 'A member wavers.';
     case 'amendment': return 'Our deeds have strayed from our creed.';
-    case 'beyond': return 'The Great Work is done and held.';
     default: return 'The elders meet.';
   }
 }
@@ -166,7 +154,7 @@ export function decide(k: Campaign, itemId: string, option: string): string | nu
   const raise = (m: Member) => {
     m.standing = 'elder'; m.elderSince = c.day;
     for (const x of members(o)) if (x.standing === 'elder' && x !== m) { if (!m.knows.includes(x.pid)) m.knows.push(x.pid); if (!x.knows.includes(m.pid)) x.knows.push(m.pid); }
-    if (o.act.n >= 2 && !o.act.leaders.includes(m.pid)) o.act.leaders.push(m.pid);
+    if (o.generation.n >= 2 && !o.generation.leaders.includes(m.pid)) o.generation.leaders.push(m.pid);
   };
   switch (it.kind) {
     case 'promotion': if (option === 'yes') { const m = o.members[Number(itemId.split('-')[1])]; if (m) raise(m); } break;
@@ -216,15 +204,6 @@ export function decide(k: Campaign, itemId: string, option: string): string | nu
         o.order.cohesion = clamp(o.order.cohesion - 0.05);
       } else if (option === 'refuse') o.order.cohesion = clamp(o.order.cohesion - 0.08);
       else if (option === 'abandon') o.asked['abandoned'] = c.day;
-      break;
-    }
-    case 'beyond': {
-      if (option === 'wait') break;
-      const [pid, nb] = option.split(':').map(Number);
-      const cmd = { type: 'operation' as const, kind: 'go-beyond', agent: pid, target: { kind: 'neighbour' as const, id: nb }, approach: 'as a merchant' };
-      const bad = opProblem(k, cmd);
-      if (bad) return bad;
-      startOp(k, cmd);
       break;
     }
   }

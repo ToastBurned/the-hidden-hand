@@ -1,5 +1,5 @@
 /**
- * Saved worlds live in the browser's IndexedDB (they survive closing the app) and can
+ * Saved games live in the browser's IndexedDB (they survive closing the app) and can
  * also be exported to and imported from files for backup and sharing.
  * In the desktop app (desktop/) every call is routed to real files in a folder on disk instead.
  */
@@ -7,7 +7,7 @@ import { desktop } from '../platform/desktop';
 
 export interface SaveMeta { id: string; name: string; tick: number; savedAt: number; size: number; note?: string }
 
-// Storage name kept from before the rename (The Noosphere) so worlds already saved in this browser stay listed.
+// Storage name kept from before the rename (The Noosphere), so saves already in this browser stay where they are.
 const DB = 'noosphere';
 const META = 'meta';
 const DATA = 'data';

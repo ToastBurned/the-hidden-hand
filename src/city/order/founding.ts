@@ -7,7 +7,7 @@
  */
 import { CLASS_MIDDLING, CLASS_POOR, CLASS_WEALTHY, DISTRICT_LABEL, M } from '../constants';
 import { affinity, ageOf, dateLabel } from '../core';
-import { Rng } from '../../engine/core/rng';
+import { Rng } from '../base/rng';
 import type { City, Person } from '../types';
 import { creedDistance } from './creed';
 import type { Creed, FounderOffer, FoundingCandidate, WorkKind } from './types';

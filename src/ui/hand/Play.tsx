@@ -1,7 +1,7 @@
 /**
  * The play screen: the Order's state and the clock across the top, the city map and the
  * Order's panels in the middle, what has happened down the side, and the dialogs that
- * interrupt (assignments, the conclave, a new chapter, the ending).
+ * interrupt (assignments, the conclave, the ending).
  */
 import { useEffect, useRef, useState } from 'react';
 import type { Building } from '../../city/types';
@@ -24,20 +24,10 @@ export function Play({ g, onQuit }: { g: HandGame; onQuit: () => void }) {
   const [focus, setFocus] = useState<MapFocus | null>(null);
   const [menu, setMenu] = useState(false);
   const [conclaveOpen, setConclaveOpen] = useState(true);
-  const seenChapters = useRef(v.chapters.length);
-  const [chapter, setChapter] = useState<number | null>(null);
   const [toast, setToast] = useState<{ text: string; warn?: boolean } | null>(null);
   useEffect(() => { if (!toast) return; const t = setTimeout(() => setToast(null), 4000); return () => clearTimeout(t); }, [toast]);
   const alertLater = (text: string) => setToast({ text: cap(text) + '.', warn: true });
 
-  // a new chapter: stop and show it
-  useEffect(() => {
-    if (v.chapters.length > seenChapters.current) {
-      seenChapters.current = v.chapters.length;
-      setChapter(v.chapters.length - 1);
-      g.setSpeed(0);
-    }
-  }, [v.chapters.length]);
   // a conclave that sits opens its dialog
   useEffect(() => { if (v.conclave) setConclaveOpen(true); }, [v.conclave?.day]);
 
@@ -64,7 +54,7 @@ export function Play({ g, onQuit }: { g: HandGame; onQuit: () => void }) {
       <header className="topbar">
         <div className="title">
           <h1>{v.order.name}</h1>
-          <small>Act {v.act.n}: {v.act.title} · {c.name}</small>
+          <small>{v.generation.title} · {c.name}</small>
         </div>
         <dl className="res">
           <div title="Influence: earned by members' seats, standing and good name; spent on assignments and levers"><dt>Influence</dt><dd>{r.influence.toFixed(1)} {delta(r.delta.influence, (x) => x.toFixed(1))}</dd></div>
@@ -167,13 +157,6 @@ export function Play({ g, onQuit }: { g: HandGame; onQuit: () => void }) {
       {person !== null && <PersonDialog g={g} id={person} onClose={() => setPerson(null)} onAssign={openAssign} />}
       {v.conclave && conclaveOpen && <ConclaveDialog g={g} onLater={() => setConclaveOpen(false)} />}
       {v.conclave && !conclaveOpen && <button type="button" className="conclave-tab" onClick={() => setConclaveOpen(true)}>The conclave is waiting</button>}
-      {chapter !== null && v.chapters[chapter] && (
-        <Modal title={`Act ${v.chapters[chapter].act}`} onClose={() => setChapter(null)} className="chapterpage">
-          <h2 className="chaptertitle">{v.chapters[chapter].title}</h2>
-          {v.chapters[chapter].paragraphs.map((p, i) => <p key={i}>{p}</p>)}
-          <button type="button" className="primary" onClick={() => setChapter(null)}>Continue</button>
-        </Modal>
-      )}
     </div>
   );
 }
@@ -215,7 +198,7 @@ function ConclaveDialog({ g, onLater }: { g: HandGame; onLater: () => void }) {
 function Ending({ g, onQuit }: { g: HandGame; onQuit: () => void }) {
   const v = g.view;
   const e = v.ending!;
-  const verdict = e.verdict ? { true: 'The creed was kept true.', changed: 'The creed was kept, but changed by what was done for it.', hollow: 'The creed went beyond the walls hollow: the words survived the deeds.' }[e.verdict] : null;
+  const verdict = e.verdict ? { true: 'The creed was kept true.', changed: 'The creed was kept, but changed by what was done for it.', hollow: 'The creed was hollow: the words survived the deeds.' }[e.verdict] : null;
   return (
     <div className={`ending ${e.kind}`}>
       <article>

@@ -27,8 +27,21 @@ export const CAL = {
 } as const;
 
 // ------------------------------------------------------------------ values
-// The same five value axes as the world engine (src/engine/constants.ts), each -1..1.
-export { V_INNOV, V_INDIV, V_PIETY, V_MILIT, V_HIER, NV, VALUE_NAMES, VALUE_POLES } from '../engine/constants';
+// Five value axes, each -1..1.
+export const V_INNOV = 0; // tradition (-) vs innovation (+)
+export const V_INDIV = 1; // collectivism (-) vs individualism (+)
+export const V_PIETY = 2; // secular (-) vs devout (+)
+export const V_MILIT = 3; // pacifist (-) vs martial (+)
+export const V_HIER = 4; // egalitarian (-) vs hierarchical (+)
+export const NV = 5;
+export const VALUE_NAMES = ['Innovation', 'Individualism', 'Piety', 'Militarism', 'Hierarchy'] as const;
+export const VALUE_POLES: [string, string][] = [
+  ['Traditional', 'Innovative'],
+  ['Communal', 'Individualist'],
+  ['Secular', 'Devout'],
+  ['Peaceable', 'Martial'],
+  ['Egalitarian', 'Hierarchical'],
+];
 
 // ------------------------------------------------------------------ classes
 export const CLASS_POOR = 0;

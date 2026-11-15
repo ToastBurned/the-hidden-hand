@@ -1,5 +1,5 @@
 /** Print a generated city map as text, for eyeballing the generator. */
-import { Rng } from '../src/engine/core/rng';
+import { Rng } from '../src/city/base/rng';
 import { generateMap } from '../src/city/gen/map';
 import { U_BRIDGE, U_FIELD, U_GARDEN, U_GATE, U_GRAVES, U_LOT, U_MAIN, U_QUAY, U_ROAD, U_SQUARE, U_STREET, U_WALL, G_DEEP, G_WATER, G_MARSH } from '../src/city/types';
 

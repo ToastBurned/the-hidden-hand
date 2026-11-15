@@ -61,8 +61,6 @@ export interface Member {
   hiddenUntil: number;
   /** Day they were raised to elder, or -1. */
   elderSince: number;
-  /** Away beyond the walls on the final journey. */
-  away: { neighbour: number; since: number } | null;
 }
 
 /** A circle of members in one district of the city. */
@@ -101,7 +99,7 @@ export interface Lodge {
 }
 
 /** What an operation or a lever is aimed at. */
-export type TargetKind = 'person' | 'district' | 'building' | 'office' | 'motion' | 'neighbour' | 'none';
+export type TargetKind = 'person' | 'district' | 'building' | 'office' | 'motion' | 'none';
 export interface Target { kind: TargetKind; id: number; key?: string }
 
 export interface Lever {
@@ -188,7 +186,7 @@ export interface Report { id: number; day: number; from: number; voice: 'cautiou
 
 export interface ConclaveItem {
   id: string;
-  kind: 'promotion' | 'amendment' | 'expel' | 'seat' | 'hunted' | 'beyond' | 'leader' | 'act';
+  kind: 'promotion' | 'amendment' | 'expel' | 'seat' | 'hunted' | 'leader';
   title: string;
   text: string;
   by: number | null;
@@ -197,12 +195,12 @@ export interface ConclaveItem {
 
 export interface Conclave { reason: string; day: number; items: ConclaveItem[] }
 
-/** A chapter page at an act break. */
-export interface Chapter { act: 1 | 2 | 3; day: number; title: string; paragraphs: string[] }
+/** A page of the Order's Chronicle, written at the founding and when a generation passes. */
+export interface Chapter { generation: number; day: number; title: string; paragraphs: string[] }
 
 export interface Ending {
   kind: 'won' | 'destroyed' | 'withered' | 'leaderless' | 'abandoned';
-  /** For a win: how far the deeds kept the creed when it went beyond the walls. */
+  /** For a win: how far the deeds kept the creed while the Great Work was done. */
   verdict?: 'true' | 'changed' | 'hollow';
   /** 0..100 */
   score?: number;
@@ -220,16 +218,6 @@ export interface FoundingCandidate {
   event: number;
   title: string;
   score: number;
-}
-
-/** The final act: a lodge beyond the walls, opened once the Great Work is held. */
-export interface Beyond {
-  state: 'locked' | 'open' | 'under way' | 'done';
-  op: number;
-  neighbour: number;
-  member: number;
-  /** Attempts that failed. */
-  failed: number;
 }
 
 export interface OrderState {
@@ -270,8 +258,8 @@ export interface OrderState {
   knowers: number[];
   greatWork: WorkState;
   lesserWorks: WorkState[];
-  beyond: Beyond;
-  act: { n: 1 | 2 | 3; since: number; leaders: number[] };
+  /** Which generation leads the Order: it passes when the last of the last one's leaders is gone. */
+  generation: { n: number; since: number; leaders: number[] };
   chapters: Chapter[];
   notices: Notice[];
   reports: Report[];
@@ -322,7 +310,7 @@ export interface MemberView {
   task: string | null;
   knows: number[];
   traits: string[];
-  flags: ('wavering' | 'wanted' | 'imprisoned' | 'hidden' | 'away' | 'founder' | 'ill')[];
+  flags: ('wavering' | 'wanted' | 'imprisoned' | 'hidden' | 'founder' | 'ill')[];
   joined: number;
   /** Operations this member can start now (locked ones are left out). */
   canDo: string[];
@@ -330,7 +318,7 @@ export interface MemberView {
 
 export interface OperationDef {
   kind: string;
-  family: 'growth' | 'knowledge' | 'protection' | 'persuasion' | 'coercion' | 'violence' | 'beyond';
+  family: 'growth' | 'knowledge' | 'protection' | 'persuasion' | 'coercion' | 'violence';
   name: string;
   blurb: string;
   target: TargetKind;
@@ -402,7 +390,7 @@ export interface OrderView {
   phase: 'play' | 'ended';
   day: number;
   date: string;
-  act: { n: 1 | 2 | 3; title: string };
+  generation: { n: number; title: string };
   order: { name: string; meaning: string; founded: number; founder: number; posture: Posture; home: number };
   resources: Resources;
   creed: Creed;
@@ -419,7 +407,6 @@ export interface OrderView {
   /** Why the creed gives this Great Work, in one sentence. */
   workReason: string;
   lesserWorks: WorkView[];
-  beyond: { state: Beyond['state']; neighbour: string | null; member: number | null; text: string };
   notices: Notice[];
   conclave: Conclave | null;
   chapters: Chapter[];

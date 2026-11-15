@@ -76,7 +76,7 @@ export function suspicionWeek(k: Campaign): void {
   const byDistrict = new Map<number, Member[]>();
   for (const m of members(o)) {
     const p = c.people.get(m.pid);
-    if (!p || m.imprisoned >= 0 || m.away) continue;
+    if (!p || m.imprisoned >= 0) continue;
     const d = homeDistrict(c, p);
     const arr = byDistrict.get(d);
     if (arr) arr.push(m); else byDistrict.set(d, [m]);
@@ -144,7 +144,7 @@ function investigate(k: Campaign, inv: Investigation, quiet: boolean): void {
   let any = false;
   for (const m of members(o)) {
     const p = c.people.get(m.pid);
-    if (!p || m.imprisoned >= 0 || m.away) continue;
+    if (!p || m.imprisoned >= 0) continue;
     const d = homeDistrict(c, p);
     const here = d === inv.district;
     const safe = roomReady(k, d, 'safe-room') ? 0.6 : 1;
