@@ -39,8 +39,10 @@ until a later cleanup, and the page still opens it with `#old`.
 
 ## The clock
 
-`store.ts` runs the city on the main thread a few days at a time (about 3 ms a day): a
-day, a week, a month or a season a second (keys 1 to 4, space to pause). It stops by
+`store.ts` runs the city on the main thread a day at a time (about 3 ms a day) at one
+steady pace, with no fast-forward, as decided in the redesign doc: a week in about 20
+seconds (`WEEK_SECONDS`), so a year in about 17 minutes. Play and pause, or the space
+bar. It stops by
 itself when `stepCampaign` says the interrupt setting wants it to, and shows why. It
 autosaves once a game year, keeping one autosave.
 

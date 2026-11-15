@@ -9,7 +9,7 @@ import { AssignDialog, type AssignPreset } from './Assign';
 import { Meter, Modal, cap, pct } from './common';
 import { MapView, type MapFocus } from './MapView';
 import { BuildingPanel, ChroniclePanel, LeversPanel, LodgesPanel, MembersPanel, PersonDialog, WorksPanel } from './Panels';
-import { SPEED_NAMES, useGame, type HandGame } from './store';
+import { useGame, type HandGame } from './store';
 
 type Tab = 'city' | 'order' | 'lodges' | 'levers' | 'work' | 'chronicle';
 const TABS: [Tab, string][] = [['city', 'City'], ['order', 'Order'], ['lodges', 'Lodges'], ['levers', 'Levers'], ['work', 'Great Work'], ['chronicle', 'Chronicle']];
@@ -41,12 +41,11 @@ export function Play({ g, onQuit }: { g: HandGame; onQuit: () => void }) {
   // a conclave that sits opens its dialog
   useEffect(() => { if (v.conclave) setConclaveOpen(true); }, [v.conclave?.day]);
 
-  // the space bar pauses and resumes; 1 to 4 set the speed
+  // the space bar pauses and resumes
   useEffect(() => {
     const k = (e: KeyboardEvent) => {
       if ((e.target as HTMLElement)?.closest('input, textarea, select, [role=dialog]')) return;
       if (e.code === 'Space') { e.preventDefault(); g.toggle(); }
-      else if (/^Digit[1-4]$/.test(e.code)) g.setSpeed(Number(e.code.slice(5)));
     };
     window.addEventListener('keydown', k);
     return () => window.removeEventListener('keydown', k);
@@ -76,10 +75,9 @@ export function Play({ g, onQuit }: { g: HandGame; onQuit: () => void }) {
         <div className="clock">
           <span className="date">{v.date}</span>
           <div className="speeds" role="group" aria-label="Speed">
-            <button type="button" className={g.speed === 0 ? 'on' : ''} aria-pressed={g.speed === 0} onClick={() => g.setSpeed(0)} title="Pause (space)">❚❚</button>
-            {[1, 2, 3, 4].map((s) => <button type="button" key={s} className={g.speed === s ? 'on' : ''} aria-pressed={g.speed === s} title={`${SPEED_NAMES[s]} (${s})`} onClick={() => g.setSpeed(s)}>{'▶'.repeat(Math.min(3, s))}{s === 4 ? '+' : ''}</button>)}
+            <button type="button" className={g.speed === 0 ? 'on' : ''} aria-pressed={g.speed === 0} onClick={() => g.setSpeed(0)} title="Pause (space)">❚❚ Pause</button>
+            <button type="button" className={g.speed === 1 ? 'on' : ''} aria-pressed={g.speed === 1} onClick={() => g.setSpeed(1)} title="Play (space)">▶ Play</button>
           </div>
-          <span className="speedname">{SPEED_NAMES[g.speed]}</span>
         </div>
         <div className="menuwrap">
           <button type="button" onClick={() => setMenu(!menu)} aria-expanded={menu}>Menu</button>

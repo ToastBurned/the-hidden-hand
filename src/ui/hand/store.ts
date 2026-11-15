@@ -11,9 +11,14 @@ import { applyCommand, orderView, serializeCampaign, deserializeCampaign, stepCa
 import type { Campaign, CommandResult, OrderCommand, OrderView } from '../../city/order';
 import { deleteSave, getSave, listSaves, putSave, type SaveMeta } from '../saves';
 
-/** Days a second at each speed. Speed 0 is paused. */
-export const SPEEDS = [0, 1, 7, 28, 91];
-export const SPEED_NAMES = ['Paused', 'A day a second', 'A week a second', 'A month a second', 'A season a second'];
+/**
+ * One steady pace, no fast-forward (decided with Ed, see the redesign doc's "Time and
+ * pacing"): a week passes in about 20 seconds, so a year in about 17 minutes. Speed 0 is
+ * paused, speed 1 is running. The pace is a first guess, to be tuned in playtests.
+ */
+export const WEEK_SECONDS = 20;
+export const SPEEDS = [0, 7 / WEEK_SECONDS];
+export const SPEED_NAMES = ['Paused', 'Running'];
 const TICK = 100;
 /** Saves of the one-city game carry this note, so the 0.2.0 game can tell them apart. */
 export const CITY_SAVE = 'city';
@@ -24,7 +29,7 @@ export class HandGame {
   version = 0;
   speed = 0;
   /** The last speed that was not paused, for the space bar. */
-  lastSpeed = 2;
+  lastSpeed = 1;
   pauseReason: string | null = null;
   saving = false;
   savedAt: number | null = null;
