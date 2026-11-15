@@ -227,6 +227,8 @@ export function trialsWeek(k: Campaign): void {
     if (judge && judge.id in o.members) {
       // our own Magistrate finds no case to answer
       m.imprisoned = -1; m.wanted = false; m.hiddenUntil = c.day + 182;
+      // the case is thrown out: the inquiries must build it again from little
+      for (const inv of o.investigations) if (inv.trail[m.pid] !== undefined) inv.trail[m.pid] = Math.min(inv.trail[m.pid], 0.3);
       notice(k, 'purge', 2, 'Released', `${name(c, m.pid)} was released for want of evidence by the Magistrate, ${name(c, judge.id)}.`, [{ kind: 'member', id: m.pid }]);
       continue;
     }

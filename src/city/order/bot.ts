@@ -6,9 +6,9 @@
 import { createCity } from '../create';
 import { stepCampaign, applyCommand, founderOffers, foundOrder } from './campaign';
 import { suggestCreeds } from './creed';
-import { MOTIONS } from './levers';
+import { MOTIONS, purseNeed } from './levers';
 import { ROOMS } from './order';
-import { availableOps, previewOp, recruitSignals } from './ops';
+import { availableOps, opCost, previewOp, recruitSignals } from './ops';
 import type { Campaign, OrderCommand, RoomKind, Target, WorkKind } from './types';
 import { members, seatsOf, homeDistrict } from './util';
 import { eligibleFor } from '../systems/civic';
@@ -33,9 +33,13 @@ function cmd(k: Campaign, x: OrderCommand): boolean { return applyCommand(k, x).
 
 function tryOp(k: Campaign, agent: number, kind: string, target: Target, approaches: string[]): boolean {
   let best: { a: string; p: number } | null = null;
+  const base = opCost(k, { type: 'operation', kind, agent, target, approach: approaches[0] }).wealth;
   for (const a of approaches) {
+    // the dearer approaches only out of a purse that holds more than the Order needs
+    const extra = opCost(k, { type: 'operation', kind, agent, target, approach: a }).wealth - base;
+    if (extra > 0 && k.order.order.wealth - extra < purseNeed(k)) continue;
     const pv = previewOp(k, { type: 'operation', kind, agent, target, approach: a });
-    if ('error' in pv) return false;
+    if ('error' in pv) { if (pv.error === 'not enough coin') continue; return false; }
     if (!best || pv.chance > best.p) best = { a, p: pv.chance };
   }
   if (!best || best.p < 0.3) return false;

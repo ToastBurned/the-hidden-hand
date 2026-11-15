@@ -215,7 +215,7 @@ export function orderMonth(k: Campaign): void {
   const c = k.city;
   // a full purse asks little of the members: only the zealous still give much
   const need = purseNeed(k);
-  const full = o.order.wealth >= need * 1.5 ? 0.1 : o.order.wealth >= need ? 0.35 : 1;
+  const full = o.order.wealth >= need * 4 ? 0.1 : o.order.wealth >= need * 2 ? 0.35 : 1;
   for (const m of members(o)) {
     const p = c.people.get(m.pid);
     if (!p) {

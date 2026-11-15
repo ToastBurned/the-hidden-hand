@@ -132,7 +132,7 @@ hanging, banishment or release.
 | The hidden council | a member as Mayor, 4 member councillors, and a member treasurer, magistrate, captain or bishop | 8 years |
 | The city endures | population up a sixth, prosperity at least 1.02, hunger under 8% | 10 years |
 
-Held time counts in weeks. While the condition fails, it loses two weeks a week. The
+Held time counts in weeks. While the condition fails, it loses a week a week (`GRACE`), so a lost election or a bad season costs about as long as it lasts. The
 Order must also be at work: four members and one seat. Each work has three lesser works
 that reward influence, cohesion or zeal along the way.
 

@@ -241,8 +241,8 @@ export function makeLesserWorks(kind: WorkKind): WorkState[] {
   return LESSER[kind].map((d) => ({ id: `lesser-${d.id}`, kind, title: d.title, text: d.text, held: 0, need: d.weeks, progress: 0, done: false, doneAt: -1, blocker: null, reward: d.reward }));
 }
 
-/** Weeks held lost for each week the condition fails: a bad season is survivable, a lucky year between failures is not. */
-export const GRACE = 2;
+/** Weeks held lost for each week the condition fails: a lost election or a bad season costs about the time it lasted, so a careful Order can win it back; a lucky year between failures still is not enough. */
+export const GRACE = 1;
 
 /** Whether the Order is big enough to claim the work: four members and a seat. */
 export function atWork(k: Campaign): boolean {

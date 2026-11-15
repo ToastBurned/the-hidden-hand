@@ -180,7 +180,8 @@ export function leverForce(k: Campaign, lv: Pick<Lever, 'kind' | 'member' | 'tar
 
 /**
  * What the purse should hold: a year of the levers' coin, something for rooms and favours
- * and, once the Great Work is half held, the cost of the road beyond the walls. Above it the
+ * and, once the Great Work is half held, the cost of the road beyond the walls; the works
+ * bought with coin keep a schoolhouse or a granary's stock by too. Above twice that the
  * members tithe far less, so the purse follows the Order's needs instead of piling up.
  */
 export function purseNeed(k: Campaign): number {
@@ -188,7 +189,9 @@ export function purseNeed(k: Campaign): number {
   let coin = 0;
   for (const lv of Object.values(o.levers)) coin += (LEVER_BY_KIND[lv.kind]?.coin ?? 0) * Math.abs(lv.strength);
   const road = o.beyond.state === 'open' || (o.greatWork.need > 1 && o.greatWork.held >= o.greatWork.need * 0.5) ? 160 : 0;
-  return 80 + 10 * members(o).length + 13 * coin + road;
+  // the works that are bought with coin keep something by for them: a schoolhouse, a granary's stock
+  const work = o.greatWork.kind === 'knowledge' ? 240 : o.greatWork.kind === 'no-starving' ? 160 : 0;
+  return 80 + 10 * members(o).length + 13 * coin + road + work;
 }
 
 /** Monthly: pay upkeep, apply what coin buys, leave traces. Returns the pushes for City.mods. */
