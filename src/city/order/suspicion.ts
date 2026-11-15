@@ -152,7 +152,7 @@ function investigate(k: Campaign, inv: Investigation, quiet: boolean): void {
     const named = inv.found.some((f) => o.fallen.find((x) => x.id === f) || (o.members[f]?.knows.includes(m.pid))) ? 2.5 : 1;
     const localLv = here ? l.level : (o.local[d]?.level ?? 0) * 0.6;
     const talk = 1 + talkOf(k, m.pid) * 1.5;
-    const rate = 0.025 * skill * (0.25 + localLv) * (1 - m.discretion * 0.6) * safe * hidden * named * talk * (quiet ? 0.45 : o.order.posture === 'cautious' ? 0.75 : 1) * (here ? 1 : 0.4);
+    const rate = 0.032 * skill * (0.25 + localLv) * (1 - m.discretion * 0.6) * safe * hidden * named * talk * (quiet ? 0.45 : o.order.posture === 'cautious' ? 0.75 : 1) * (here ? 1 : 0.4);
     const before = inv.trail[m.pid] ?? 0;
     const after = before + rate * (0.6 + r.next() * 0.8);
     inv.trail[m.pid] = after;

@@ -152,7 +152,7 @@ export function greatCondition(k: Campaign, kind: WorkKind = k.order.greatWork.k
     case 'knowledge': {
       const sc = schoolDistricts(c);
       const lit = literacy(c);
-      const need = Math.min(0.85, Math.max(0.4, o.order.base.lit * 1.33));
+      const need = Math.min(0.85, Math.max(0.35, o.order.base.lit * 1.3));
       const ok = sc.have >= sc.want && lit >= need;
       return [ok, Math.min(1, sc.have / Math.max(1, sc.want)) * 0.5 + Math.min(1, lit / need) * 0.5, ok ? null : sc.have < sc.want ? `${sc.missing[0]} has no school (${sc.have} of ${sc.want} districts have one).` : `${Math.round(lit * 100)} in a hundred can read; the work needs ${Math.round(need * 100)}.`];
     }

@@ -67,7 +67,16 @@ export function botWeek(k: Campaign, mode: BotMode): void {
   if (mode === 'idle') return;
   const ms = members(o).filter((m) => m.imprisoned < 0 && !m.away && c.people.has(m.pid));
   const lodge = Object.values(o.lodges).find((l) => l.found < 0);
+  // the closing act: the most zealous free member takes the road
+  if (o.beyond.state === 'open' && o.order.wealth >= 150) {
+    const nb = c.region.neighbours[0];
+    const go = ms.filter((m) => m.zeal >= 0.55 && availableOps(k, m.pid).includes('go-beyond')).sort((a, b) => b.zeal - a.zeal)[0];
+    if (go && nb) tryOp(k, go.pid, 'go-beyond', { kind: 'neighbour', id: nb.id }, ['as a merchant', 'as a preacher', 'as a scholar']);
+  }
+  // while the road is open, the zealous save their influence for it
+  const saving = o.beyond.state === 'open' ? new Set(ms.filter((m) => m.zeal >= 0.55).map((m) => m.pid)) : new Set<number>();
   for (const m of ms) {
+    if (saving.has(m.pid)) continue;
     const can = availableOps(k, m.pid);
     if (!can.length) continue;
     const p = c.people.get(m.pid)!;
@@ -126,7 +135,7 @@ export function botWeek(k: Campaign, mode: BotMode): void {
     if (w.motion) target = { kind: 'motion', id: -1, key: w.motion };
     if (w.district === 'school') { const d = noSchool[used++]; if (!d) continue; target = { kind: 'district', id: d.id }; }
     if (w.district === 'poor') target = { kind: 'district', id: poor.id };
-    if (w.district === 'any') target = { kind: 'district', id: homeDistrict(c, c.people.get(ms[0].pid)!) };
+    if (w.district === 'any') { const here = ms.find((m) => c.people.has(m.pid)); if (!here) continue; target = { kind: 'district', id: homeDistrict(c, c.people.get(here.pid)!) }; }
     if (Object.values(o.levers).some((l) => l.kind === w.kind && l.target.id === target.id && l.target.key === target.key)) continue;
     const best = ms.filter((m) => m.influence >= 1.5 && !Object.values(o.levers).some((l) => l.member === m.pid)).sort((a, b) => b.influence - a.influence);
     for (const m of best) if (cmd(k, { type: 'lever', kind: w.kind, member: m.pid, target, strength: w.strength ?? 1 })) break;

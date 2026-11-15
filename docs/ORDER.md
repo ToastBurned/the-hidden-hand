@@ -112,21 +112,21 @@ hanging, banishment or release.
 | Work | Condition | Held for |
 |---|---|---|
 | No one starves | at most 3% hungry, a granary law, 6 weeks of stock | 10 years |
-| Knowledge | a school in every district within the walls; literacy at least a third above the founding (40% floor) | 12 years |
+| Knowledge | a school in every district within the walls; literacy at least 30% above the founding (35% floor) | 12 years |
 | A voice for the many | the council opened to the journeymen; 4 councillors neither rich nor of a great family | 10 years |
 | Peace in the streets | crime two thirds of the founding level; no blood in a year | 10 years |
 | Faith without fear | tolerance by law, no suppression, no heresy trial in a year | 12 years |
 | The hidden council | a member as Mayor, 4 member councillors, and a member treasurer, magistrate, captain or bishop | 8 years |
 | The city endures | population up a sixth, prosperity at least 1.02, hunger under 8% | 10 years |
 
-Held time counts in weeks. While the condition fails, it loses four weeks a week. The
+Held time counts in weeks. While the condition fails, it loses two weeks a week. The
 Order must also be at work: four members and one seat. Each work has three lesser works
 that reward influence, cohesion or zeal along the way.
 
 ## The closing act: beyond the walls
 
 Once the Great Work has been held long enough, `beyond` opens. A member with zeal
-sends themself on `go-beyond` to a neighbouring town (two years, 150 coin). They leave
+sends themself on `go-beyond` to a neighbouring town (two years, 150 coin, 1 influence). They leave
 the city's records. When they arrive the campaign ends in a win, and the creed is
 judged at that moment: **true** (no amendment, a small gap between word and deed, and
 the work still standing), **changed**, or **hollow**. Otherwise it ends destroyed,
