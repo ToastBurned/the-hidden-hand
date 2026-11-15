@@ -16,7 +16,7 @@ import { startRumour } from '../systems/social';
 import type { Person } from '../types';
 import { lodgeFound, removeMember, roomReady } from './order';
 import type { Campaign, Investigation, Local, Member } from './types';
-import { clamp, districtName, homeDistrict, keep, members, name, notice, orng, release, seatsOf } from './util';
+import { clamp, districtName, homeDistrict, keep, ledger, members, name, notice, orng, release, seatsOf } from './util';
 
 export function localOf(k: Campaign, district: number): Local {
   let l = k.order.local[district];
@@ -28,10 +28,14 @@ export function localOf(k: Campaign, district: number): Local {
  * Add a trace to a district's suspicion. With a member named, the trace may also start a
  * tale about them that the city's gossip will carry.
  */
-export function trace(k: Campaign, district: number, amount: number, who = -1): void {
+export function trace(k: Campaign, district: number, amount: number, who = -1, why = 'other traces'): void {
   if (amount <= 0) return;
   const l = localOf(k, district);
-  l.level = clamp(l.level + amount * (1 - l.level * 0.7));
+  const add = amount * (1 - l.level * 0.7);
+  l.level = clamp(l.level + add);
+  // the why-ledger: what raised suspicion here this month
+  const s = k.order.slice;
+  if (s) { const t = (s.traces[district] ??= {}); t[why] = (t[why] ?? 0) + add; }
   l.last = k.city.day;
   const p = who >= 0 ? k.city.people.get(who) : undefined;
   if (p && orng(k.order).chance(Math.min(0.9, amount * 8))) {
@@ -87,16 +91,18 @@ export function suspicionWeek(k: Campaign): void {
     const lodge = Object.values(o.lodges).find((x) => x.district === d && x.found < 0);
     const front = lodge?.rooms.find((x) => x.kind === 'front' && x.doneAt <= c.day)?.level ?? 0;
     const decay = 0.005 + front * 0.002 + (quiet ? 0.002 : cautious ? 0.001 : 0) + (byDistrict.has(d) ? 0 : 0.005);
-    l.level = clamp(l.level * (1 - decay));
+    const fade = l.level * decay;
+    l.level = clamp(l.level - fade);
+    if (o.slice && fade > 0) { const t = (o.slice.traces[d] ??= {}); t['time and quiet'] = (t['time and quiet'] ?? 0) - fade; }
     // in hard times people look for someone to blame
     const crisis = (c.bread > 1.45 ? 0.4 : 0) + (plague ? 0.4 : 0) + ((c.districts.find((x) => x.id === d)?.unrest ?? 0) > 0.5 ? 0.3 : 0);
-    if (crisis && byDistrict.has(d)) trace(k, d, crisis * 0.001 * Math.min(3, byDistrict.get(d)!.length));
+    if (crisis && byDistrict.has(d)) trace(k, d, crisis * 0.001 * Math.min(3, byDistrict.get(d)!.length), -1, 'hard times: people look for someone to blame');
   }
   // indiscreet members talk; a large circle in one district is hard to hide
   for (const [d, ms] of byDistrict) {
-    for (const m of ms) if (r.chance((1 - m.discretion) * 0.008)) trace(k, d, 0.012, m.pid);
+    for (const m of ms) if (r.chance((1 - m.discretion) * 0.008)) trace(k, d, 0.012, m.pid, `${c.people.get(m.pid)?.first ?? 'a member'} talked too freely`);
     const dist = c.districts.find((x) => x.id === d);
-    trace(k, d, (Math.pow(ms.length, 1.4) / Math.sqrt(Math.max(100, dist?.pop ?? 100))) * 0.0006);
+    trace(k, d, (Math.pow(ms.length, 1.4) / Math.sqrt(Math.max(100, dist?.pop ?? 100))) * 0.0006, -1, ms.length > 1 ? `${ms.length} members live close together` : 'a member lives here');
   }
   // inquiries open where suspicion runs high
   for (const [d] of byDistrict) {
@@ -206,9 +212,15 @@ export function arrest(k: Campaign, inv: Investigation, m: Member): void {
   });
   remember(p, c.day, M.persecuted, -0.9, inv.pid, ev);
   startRumour(c, p, R.society, true, ev);
-  trace(k, homeDistrict(c, p), 0.05);
+  trace(k, homeDistrict(c, p), 0.05, -1, `${p.first} was arrested`);
   o.order.cohesion = clamp(o.order.cohesion - 0.06);
+  ledger(k, { what: 'cohesion', delta: -0.06, parts: [{ label: `${name(c, m.pid)} was arrested`, value: -0.06 }] });
   notice(k, 'purge', 3, 'A member arrested', `${name(c, m.pid)} has been taken by ${name(c, inv.pid)}.${named.length ? ` Under questioning they named ${named.map((id) => name(c, id)).join(', ')}.` : ' They named no one.'}`, [{ kind: 'member', id: m.pid }, { kind: 'person', id: inv.pid }]);
+}
+
+/** A member out of the gaol starts with a cold trail; otherwise the inquiry would take them again at once. */
+export function coolTrail(k: Campaign, pid: number): void {
+  for (const inv of k.order.investigations) if (inv.trail[pid] !== undefined) inv.trail[pid] = Math.min(inv.trail[pid], 0.3);
 }
 
 /** Weekly: the trials of imprisoned members, before the city's Magistrate. */
@@ -225,6 +237,7 @@ export function trialsWeek(k: Campaign): void {
     if (judge && judge.id in o.members) {
       // our own Magistrate finds no case to answer
       m.imprisoned = -1; m.wanted = false; m.hiddenUntil = c.day + 182;
+      coolTrail(k, m.pid);
       notice(k, 'purge', 2, 'Released', `${name(c, m.pid)} was released for want of evidence by the Magistrate, ${name(c, judge.id)}.`, [{ kind: 'member', id: m.pid }]);
       continue;
     }
@@ -256,5 +269,5 @@ export function patternsYear(k: Campaign): void {
   const sharp = [...c.offices.values()].filter((x) => x.holder >= 0 && !(x.holder in o.members) && (x.kind === 'councillor' || x.kind === 'magistrate')).map((x) => c.people.get(x.holder)?.intel ?? 0);
   const eye = sharp.length ? Math.max(...sharp) : 0.5;
   const hall = [...c.buildings.values()].find((b) => b.kind === 13);
-  trace(k, hall?.district ?? c.districts[0].id, (n - 3) * 0.03 * eye);
+  trace(k, hall?.district ?? c.districts[0].id, (n - 3) * 0.03 * eye, -1, 'too many convenient seats on one council');
 }

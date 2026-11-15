@@ -8,3 +8,6 @@ export { opDefs, previewOp, recruitSignals, availableOps } from './ops';
 export { leverDefs, leverForce, MOTIONS } from './levers';
 export { ROOMS } from './order';
 export { CRAFTS } from './crafts';
+export { proposeOrders, SLICE_OPS, SLICE_ROOMS, LODGE_YIELD, sliceDistricts, type Proposal } from './slice';
+export { voteBoard, sponsors } from './scheme';
+export { nextSitting, nextElection } from './rival';

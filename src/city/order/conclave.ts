@@ -4,6 +4,7 @@
  * someone, the deeds and the creed drift apart, or too few elders lead too many members. There is no yearly
  * sitting, and posture is a standing setting on the Order screen, not a conclave item.
  */
+import { knownWavering } from './intel';
 import { CAL, DAYS_PER_WEEK, V_MILIT } from '../constants';
 import { weekOfYear } from '../core';
 import { eligibleFor } from '../systems/civic';
@@ -108,6 +109,8 @@ export function pendingItems(k: Campaign): { key: string; item: ConclaveItem }[]
   }
   // too few elders for the Order's size
   if (elders.length && !lost.length && !asked('promote', 2 * 364)) for (const it of promotionItems(k, 1)) out.push({ key: 'promote', item: it });
+  // in the slice the elders meet only for a succession or a traitor the Order knows of
+  if (o.slice) return out.filter((x) => x.item.kind === 'leader' || (x.item.kind === 'promotion' && x.key.startsWith('elder-lost-')) || (x.item.kind === 'expel' && knownWavering(k, Number(x.item.id.slice(6)))));
   return out;
 }
 

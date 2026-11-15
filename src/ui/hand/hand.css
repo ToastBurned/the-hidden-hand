@@ -324,3 +324,68 @@ html.framed .hand .membercards .facebtn { padding: 0 2px; }
 .hand .ownname, .hand .free .axis, .hand .menu label { display: flex; }
 .hand .free .axis { display: grid; }
 .hand input[type='range'] { width: 100%; }
+
+/* ---------------------------------------------------------------- the vertical slice */
+.hand .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.hand .speeds button { min-width: 0; }
+.hand .speeds .rushing { font: 13px var(--pixel); color: var(--lamp); align-self: center; padding: 0 6px; }
+.hand .clockmode { display: flex; gap: 2px; }
+.hand .clockmode button { font-size: 12px; padding: 2px 8px; }
+.hand .clock .ends { font: 12px var(--pixel); color: var(--parch-dim); }
+.hand .whybtn { display: inline-flex; align-items: center; gap: 6px; padding: 0 4px; background: none; border-color: transparent; font-size: 11px; color: var(--parch-dim); }
+.hand .whybtn:hover { color: var(--lamp); }
+.hand button.link { background: none; border: none; padding: 0; color: var(--lamp); text-decoration: underline dotted; }
+.hand ul.plain, .hand ul.chips, .hand ul.proposals, .hand ul.letters, .hand ul.ledger, .hand ul.whylist { list-style: none; padding: 0; margin: 6px 0; }
+.hand ul.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.hand ul.chips span { font: 13px var(--pixel); color: var(--parch-dim); border: 1px solid var(--rule); padding: 1px 7px; }
+.hand ul.plain li { margin: 3px 0; }
+
+/* why lists in the assignment preview */
+.hand ul.whylist { font: 13px var(--pixel); display: grid; gap: 1px; }
+.hand ul.whylist li { display: flex; justify-content: space-between; gap: 10px; border-bottom: 1px dotted var(--rule); }
+.hand ul.whylist .up, .hand ul.ledger .up { color: #9fd07a; }
+.hand ul.whylist .down, .hand ul.ledger .down { color: #e07a64; }
+
+/* the orders desk */
+.hand .desk .proposal { display: grid; grid-template-columns: minmax(180px, 1fr) 2fr auto; gap: 10px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--rule); }
+.hand .desk .proposal .what { display: flex; flex-direction: column; gap: 2px; font: 14px/1.4 var(--serif); }
+.hand .desk .proposal .what b { font: 600 15px var(--pixel); color: var(--lamp); }
+.hand .desk .proposal .acts { display: flex; gap: 4px; flex-wrap: wrap; }
+.hand .facebtn.plain { background: none; border-color: transparent; }
+@media (max-width: 720px) { .hand .desk .proposal { grid-template-columns: 1fr; } }
+
+/* the council */
+.hand ol.stages { display: flex; flex-wrap: wrap; gap: 6px; list-style: none; padding: 0; margin: 8px 0 12px; }
+.hand ol.stages li { font: 13px var(--pixel); color: var(--parch-dim); border: 1px solid var(--rule); padding: 2px 10px; }
+.hand ol.stages li.past { color: var(--moss); border-color: var(--moss); }
+.hand ol.stages li.on { color: var(--ink); background: var(--lamp); border-color: var(--lamp); }
+.hand .councilgrid { display: grid; grid-template-columns: minmax(0, 3fr) minmax(180px, 1fr); gap: 16px; }
+@media (max-width: 820px) { .hand .councilgrid { grid-template-columns: 1fr; } }
+.hand .council ul.faces li, .hand .table ul.faces li { margin: 4px 0; }
+.hand table.board, .hand table.sources { width: 100%; border-collapse: collapse; font: 13px var(--pixel); margin: 8px 0; }
+.hand table.board th, .hand table.sources th { text-align: left; color: var(--parch-dim); font-weight: normal; border-bottom: 1px solid var(--rule); padding: 3px 4px; }
+.hand table.board td, .hand table.sources td { border-bottom: 1px dotted var(--rule); padding: 3px 4px; vertical-align: top; }
+.hand table.board tr.for td:nth-child(2) { color: #9fd07a; }
+.hand table.board tr.against td:nth-child(2) { color: #e07a64; }
+.hand table.board tr.undecided td:nth-child(2) { color: var(--lamp); }
+.hand .known.guess { color: var(--parch-dim); font-style: italic; }
+.hand .known.sure { color: #9fd07a; }
+
+/* letters */
+.hand .lettersgrid { grid-template-columns: minmax(0, 2fr) minmax(200px, 1fr); }
+@media (max-width: 820px) { .hand .lettersgrid { grid-template-columns: 1fr; } }
+.hand ul.letters li { border-left: 3px solid var(--rule); padding: 4px 10px; margin: 8px 0; font: 14px/1.45 var(--serif); }
+.hand ul.letters li.right { border-left-color: var(--moss); }
+.hand ul.letters li.wrong { border-left-color: var(--wax); }
+.hand ul.letters li header { font: 13px var(--pixel); }
+.hand ul.letters li header b { color: var(--lamp); }
+.hand ul.letters li p { margin: 2px 0; font-style: italic; }
+
+/* the why-ledger */
+.hand ul.ledger > li { margin: 8px 0; font: 13px var(--pixel); }
+.hand ul.ledger > li ul { list-style: none; padding-left: 14px; margin: 2px 0; }
+
+/* the slice's closing questions */
+.hand .ending .questions { border-top: 1px solid var(--rule); margin-top: 18px; padding-top: 6px; }
+.hand .ending .questions li { margin: 4px 0; }
+.hand .panel { background: var(--ink-2); border: 1px solid var(--rule); padding: 12px 14px; }

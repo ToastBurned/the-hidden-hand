@@ -12,14 +12,23 @@ import type { Campaign, CommandResult, OrderCommand, OrderView } from '../../cit
 import { deleteSave, getSave, listSaves, putSave, type SaveMeta } from '../saves';
 
 /**
- * One steady pace, no fast-forward (decided with Ed, see the redesign doc's "Time and
- * pacing"): a week passes in about 20 seconds, so a year in about 17 minutes. Speed 0 is
- * paused, speed 1 is running. The pace is a first guess, to be tuned in playtests.
+ * Two clock models, both to be playtested (the game brief's "Time"):
+ * - the living clock: pause, 1x (a week in about 20 seconds, a year in about 17 minutes),
+ *   2x and 4x, plus a button that runs until something happens;
+ * - skip: no running clock; one button advances to the next thing worth deciding.
+ * Both stop on the same events (stepCampaign's interrupt setting) and on the seasonal report.
  */
 export const WEEK_SECONDS = 20;
-export const SPEEDS = [0, 7 / WEEK_SECONDS];
-export const SPEED_NAMES = ['Paused', 'Running'];
+export const SPEEDS = [0, 7 / WEEK_SECONDS, 14 / WEEK_SECONDS, 28 / WEEK_SECONDS];
+export const SPEED_NAMES = ['Paused', '1x', '2x', '4x'];
+export type ClockMode = 'living' | 'skip';
 const TICK = 100;
+/** The longest "run to the next thing" goes without anything happening: one season. */
+const RUN_LIMIT = 91;
+const MODE_KEY = 'hiddenhand.clock.v1';
+function savedMode(): ClockMode {
+  try { const v = localStorage.getItem(MODE_KEY); return v === 'skip' ? 'skip' : 'living'; } catch { return 'living'; }
+}
 /** Saves of the one-city game carry this note, so the save list can tell them from other files. */
 export const CITY_SAVE = 'city';
 
@@ -31,6 +40,10 @@ export class HandGame {
   /** The last speed that was not paused, for the space bar. */
   lastSpeed = 1;
   pauseReason: string | null = null;
+  mode: ClockMode = savedMode();
+  /** Running to the next thing worth deciding (both clocks). */
+  rushing = false;
+  private rushStop = false;
   saving = false;
   savedAt: number | null = null;
   saveId: string | null;
@@ -61,8 +74,47 @@ export class HandGame {
 
   refresh() { this.emit(); }
 
+  setMode(m: ClockMode) {
+    this.mode = m;
+    try { localStorage.setItem(MODE_KEY, m); } catch { /* private window: the choice lasts this session */ }
+    if (m === 'skip') this.setSpeed(0); else this.emit();
+  }
+
+  /**
+   * Run, without drawing every day, until something worth deciding happens (the same stops
+   * as the living clock) or a season has passed. Yields to the page between weeks.
+   */
+  async runToNext(): Promise<void> {
+    if (this.rushing || this.view.phase !== 'play') return;
+    if (this.timer) { clearInterval(this.timer); this.timer = null; }
+    this.speed = 0;
+    this.rushing = true;
+    this.rushStop = false;
+    this.pauseReason = null;
+    this.emit();
+    const start = this.k.city.day;
+    const before = this.k.order.notices[0]?.id ?? -1;
+    let stopped = false;
+    while (!this.rushStop && this.k.city.day - start < RUN_LIMIT && this.k.order.phase === 'play') {
+      const t0 = performance.now();
+      while (performance.now() - t0 < 40 && this.k.city.day - start < RUN_LIMIT) {
+        if (stepCampaign(this.k, 1)) { stopped = true; break; }
+      }
+      this.emit();
+      if (stopped) break;
+      await new Promise((r) => setTimeout(r, 0));
+    }
+    this.rushing = false;
+    this.pauseReason = stopped || this.k.order.phase !== 'play' ? this.reasonFor(before) : this.rushStop ? 'Stopped' : 'A season passed quietly';
+    const year = Math.floor(this.k.city.day / 364);
+    if (year > this.lastSaveYear) { this.lastSaveYear = year; void this.save(true); }
+    this.emit();
+  }
+
+  stopRun() { this.rushStop = true; }
+
   setSpeed(s: number) {
-    if (this.view.phase !== 'play') s = 0;
+    if (this.view.phase !== 'play' || this.mode === 'skip' || this.rushing) s = 0;
     this.speed = s;
     if (s > 0) { this.lastSpeed = s; this.pauseReason = null; }
     if (s > 0 && !this.timer) this.timer = setInterval(() => this.tick(), TICK);
@@ -70,7 +122,11 @@ export class HandGame {
     this.emit();
   }
 
-  toggle() { this.setSpeed(this.speed ? 0 : this.lastSpeed); }
+  toggle() {
+    if (this.rushing) { this.stopRun(); return; }
+    if (this.mode === 'skip') { void this.runToNext(); return; }
+    this.setSpeed(this.speed ? 0 : this.lastSpeed);
+  }
 
   private tick() {
     if (!this.speed) return;
@@ -137,7 +193,7 @@ export class HandGame {
     }
   }
 
-  dispose() { if (this.timer) clearInterval(this.timer); this.timer = null; this.listeners.clear(); }
+  dispose() { this.rushStop = true; if (this.timer) clearInterval(this.timer); this.timer = null; this.listeners.clear(); }
 }
 
 export async function citySaves(): Promise<SaveMeta[]> {

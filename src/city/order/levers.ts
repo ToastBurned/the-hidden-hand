@@ -211,7 +211,7 @@ export function leversMonth(k: Campaign, charge: boolean): [string, number][] {
     const p = c.people.get(lv.member)!;
     const posture = o.order.posture === 'bold' ? 1.4 : o.order.posture === 'cautious' ? 0.7 : 1;
     const against = f.contest.forces.filter((x) => x.pull < 0 && x.who !== 'Custom and habit').reduce((s, x) => s - x.pull, 0);
-    trace(k, homeDistrict(c, p), spec.trace * str * (1 + against) * (1 - m.discretion * 0.5) * posture, lv.member);
+    trace(k, homeDistrict(c, p), spec.trace * str * (1 + against) * (1 - m.discretion * 0.5) * posture, lv.member, `the lever "${spec.name}" pulled by ${p.first}`);
   }
   return out;
 }

@@ -3,7 +3,7 @@ import { Rng } from '../base/rng';
 import { DAYS_PER_YEAR, TRADES } from '../constants';
 import { ageOf, clamp, dateLabel, nameOf } from '../core';
 import type { City, Household, Office, Person } from '../types';
-import type { Campaign, Member, Notice, OrderState, Report } from './types';
+import type { Campaign, LedgerLine, Member, Notice, Operation, OrderState, Report, Target } from './types';
 
 export { clamp };
 
@@ -42,17 +42,32 @@ export function active(k: Campaign): { m: Member; p: Person }[] {
   return out;
 }
 
+/**
+ * In the vertical slice some news about the hunters and members' loyalty does not reach the
+ * player as a plain notice: it becomes a fact that named sources may report, late or wrong
+ * (see intel.ts, which sets this route).
+ */
+export const routes: {
+  notice?: (k: Campaign, kind: string, title: string, text: string, refs: Notice['refs']) => boolean;
+  /** After an operation resolves (slice.ts): may return a line to add to its outcome. */
+  op?: (k: Campaign, op: Operation, ok: boolean) => string | null;
+  /** A rule of the slice an operation breaks (slice.ts). */
+  opProblem?: (k: Campaign, kind: string, target: Target, agent: number) => string | null;
+} = {};
+
 export function notice(k: Campaign, kind: string, urgency: 1 | 2 | 3, title: string, text: string, refs: Notice['refs'] = []): void {
   const o = k.order;
+  if (o.slice && routes.notice && routes.notice(k, kind, title, text, refs)) return;
   o.notices.unshift({ id: nid(o), day: k.city.day, kind, urgency, title, text, refs, read: false });
   if (o.notices.length > 150) o.notices.length = 150;
 }
 
-export function report(k: Campaign, from: number, text: string): void {
+export function report(k: Campaign, from: number, text: string, claim?: number): void {
   const o = k.order;
+  if (o.slice && claim === undefined) return; // in the slice every report comes through intel.ts, with its source and its truth
   const p = k.city.people.get(from);
   const voice: Report['voice'] = !p ? 'plain' : p.neuro > 0.62 ? 'cautious' : (o.members[from]?.zeal ?? 0) > 0.8 ? 'zealous' : p.ambition > 0.65 ? 'ambitious' : 'plain';
-  o.reports.unshift({ id: nid(o), day: k.city.day, from, voice, text });
+  o.reports.unshift({ id: nid(o), day: k.city.day, from, voice, text, ...(claim !== undefined ? { claim } : {}) });
   if (o.reports.length > 60) o.reports.length = 60;
 }
 
@@ -149,4 +164,12 @@ export function traitsOf(p: Person): string[] {
   if (p.values[2] > 0.4) t.push('devout');
   if (p.values[2] < -0.4) t.push('sceptical');
   return t.slice(0, 4);
+}
+
+/** Add a line to the slice's why-ledger (no-op outside the slice). */
+export function ledger(k: Campaign, line: Omit<LedgerLine, 'day'>): void {
+  const s = k.order.slice;
+  if (!s || Math.abs(line.delta) < 1e-4) return;
+  s.ledger.unshift({ day: k.city.day, ...line });
+  if (s.ledger.length > 300) s.ledger.length = 300;
 }

@@ -35,7 +35,7 @@ function titleOf(p: Person, motive: string): string {
 }
 
 /** Three founders for a finished creed: people whose beliefs already lie close to it. */
-export function foundersFor(c: City, creed: Creed, reroll = 0): FoundingCandidate[] {
+export function foundersFor(c: City, creed: Creed, reroll = 0, only?: number[]): FoundingCandidate[] {
   const r = new Rng(c.config.seed + 7919 * (reroll + 1), 31);
   const cands: FoundingCandidate[] = [];
   for (const p of c.people.values()) {
@@ -43,6 +43,7 @@ export function foundersFor(c: City, creed: Creed, reroll = 0): FoundingCandidat
     if (a < 22 || a > 58) continue;
     const belief = 1 - creedDistance(creed, p.values);
     if (belief < 0.5) continue;
+    if (only && !only.includes(homeDistrict(c, p))) continue;
     let motive = 'conviction', ev = -1, strength = 0;
     for (const m of p.mem) {
       const mo = MOTIVES[m.k];

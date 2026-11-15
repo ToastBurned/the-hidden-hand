@@ -324,6 +324,16 @@ interface Motion {
   why: string;
 }
 
+/**
+ * How a councillor leans on opening the council to the journeymen, or closing it again,
+ * before any noise or pressure. Exported so the game layer can show a vote board.
+ */
+export function councilLean(c: City, key: 'openCouncil' | 'closeCouncil', p: Person): number {
+  const wealthy = c.households.get(p.hh)?.cls === CLASS_WEALTHY ? 1 : 0;
+  if (key === 'openCouncil') return -p.values[V_HIER] * 0.35 + (p.guildRank >= 1 && !wealthy ? 0.3 : 0) - wealthy * 0.2 - (familyOf(c, p)?.great ? 0.2 : 0) + p.values[V_INNOV] * 0.15;
+  return p.values[V_HIER] * 0.45 + wealthy * 0.3 - 0.1;
+}
+
 /** Yearly (two weeks after the election) and in a crisis: the council debates and votes. */
 export function councilBusiness(c: City, crisisOnly = false): void {
   const r = rngOf(c);
@@ -384,7 +394,7 @@ export function councilBusiness(c: City, crisisOnly = false): void {
   // dissent
   if (dis && !t.laws.tolerance && !t.laws.suppression) {
     const share = dis.adherents / Math.max(1, pop);
-    if (share > 0.12 || r.chance(share)) {
+    if (share > 0.12 || petitioned(c, 'suppress') || r.chance(share)) {
       motions.push({
         key: 'suppress', title: `forbidding the meetings of ${dis.name}`, imp: 4, why: `${Math.round(share * 100)} in a hundred citizens now followed ${dis.deity}.`,
         lean: (p) => (p.faith === est.id ? 0.1 : -1) + p.values[V_PIETY] * 0.35 + p.values[V_HIER] * 0.25 - p.values[V_INNOV] * 0.25 - p.agree * 0.3 - 0.2 + share,
@@ -405,14 +415,14 @@ export function councilBusiness(c: City, crisisOnly = false): void {
     motions.push({
       key: 'openCouncil', title: 'opening the council to the journeymen of the guilds', imp: 4,
       why: 'A petition from the guild halls asked that the men who do the city\'s work have a say in its council.',
-      lean: (p) => -p.values[V_HIER] * 0.35 + (p.guildRank >= 1 && !wealthy(p) ? 0.3 : 0) - wealthy(p) * 0.2 - (familyOf(c, p)?.great ? 0.2 : 0) + p.values[V_INNOV] * 0.15,
+      lean: (p) => councilLean(c, 'openCouncil', p),
       pass: () => { t.laws.openCouncil = c.day; return 'From the next election the journeymen of every guild may stand and vote.'; },
     });
   }
   if (t.laws.openCouncil && mod(c, 'petition:closeCouncil') > 0) {
     motions.push({
       key: 'closeCouncil', title: 'closing the council to journeymen again', imp: 3, why: 'The old families wanted their council back.',
-      lean: (p) => p.values[V_HIER] * 0.45 + wealthy(p) * 0.3 - 0.1,
+      lean: (p) => councilLean(c, 'closeCouncil', p),
       pass: () => { delete t.laws.openCouncil; return ''; },
     });
   }

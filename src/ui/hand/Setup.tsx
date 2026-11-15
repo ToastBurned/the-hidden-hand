@@ -1,12 +1,17 @@
 /**
- * A new game, creed first (playtest F4): the city, the creed by one of three ways with its
- * Great Work shown as it changes, then the founders whose lives led them to that creed,
- * the Order's name, and the First Oath.
+ * A new game, creed first (playtest F4): the city, the creed, then the founders whose lives
+ * led them to that creed, the Order's name, and the First Oath.
+ *
+ * The game opens with the vertical slice (docs/SLICE.md): five years in one city, the creed
+ * set by the five questions alone (with the council question narrowed to "many" or "us"),
+ * founders drawn from the slice's three districts, and the city lived in for three years first
+ * so that it has a history when the Order is founded.
  */
 import { useEffect, useMemo, useState } from 'react';
 import { VALUE_POLES } from '../../city/constants';
 import { calendarYear } from '../../city/core';
 import { createCity } from '../../city/create';
+import { runYears } from '../../city/sim';
 import {
   CREED_QUESTIONS, GREAT_WORKS, VOWS, creedFromAnswers, founderOffers, foundOrder, normaliseCreed, suggestCreeds, workPreview,
   type Campaign, type Creed, type FounderOffer,
@@ -21,6 +26,11 @@ type Step = 'city' | 'creed' | 'founder' | 'oath';
 type Way = 'suggested' | 'questions' | 'free';
 const STEPS: [Step, string][] = [['city', 'The city'], ['creed', 'The creed'], ['founder', 'The founder'], ['oath', 'The First Oath']];
 const FOUNDING_VOWS = VOWS.filter((v) => v.id !== 'ends');
+/** The opening is the vertical slice. */
+const SLICE = true;
+const WARM_YEARS = 3;
+/** The slice's council question offers only an open council or a hidden one. */
+const QUESTIONS = SLICE ? CREED_QUESTIONS.map((q) => (q.id === 'council' ? { ...q, answers: q.answers.filter((a) => a.id === 'many' || a.id === 'us') } : q)) : CREED_QUESTIONS;
 
 export function Setup({ onBegin, onBack }: { onBegin: (k: Campaign) => void; onBack: () => void }) {
   const [seed, setSeed] = useState(() => 1 + Math.floor(Math.random() * 9999));
@@ -29,10 +39,25 @@ export function Setup({ onBegin, onBack }: { onBegin: (k: Campaign) => void; onB
   const [creed, setCreed] = useState<Creed | null>(null);
   const [offer, setOffer] = useState<FounderOffer | null>(null);
 
+  const [loading, setLoading] = useState('Laying out the streets of a new city…');
   useEffect(() => {
     setCity(null);
-    const t = setTimeout(() => setCity(createCity({ seed })), 40);
-    return () => clearTimeout(t);
+    setLoading('Laying out the streets of a new city…');
+    let live = true;
+    let t = 0;
+    t = window.setTimeout(() => {
+      const c = createCity({ seed });
+      // the city lives a few years before the Order is founded, a year at a time so the page can breathe
+      let y = 0;
+      const year = () => {
+        if (!live) return;
+        if (!SLICE || y >= WARM_YEARS) { setCity(c); return; }
+        setLoading(`${c.name} lives its ${['first', 'second', 'third', 'fourth'][y] ?? 'next'} year before you arrive…`);
+        t = window.setTimeout(() => { runYears(c, 1); y++; year(); }, 30);
+      };
+      year();
+    }, 40);
+    return () => { live = false; clearTimeout(t); };
   }, [seed]);
 
   const at = STEPS.findIndex(([s]) => s === step);
@@ -48,7 +73,7 @@ export function Setup({ onBegin, onBack }: { onBegin: (k: Campaign) => void; onB
           ))}
         </ol>
       </header>
-      {!city ? <div className="loading">Laying out the streets of a new city…</div>
+      {!city ? <div className="loading">{loading}</div>
         : step === 'city' ? <CityStep city={city} onReroll={() => setSeed(1 + Math.floor(Math.random() * 9999))} onNext={() => setStep('creed')} />
           : step === 'creed' ? <CreedStep city={city} creed={creed} onCreed={setCreed} onNext={() => { setOffer(null); setStep('founder'); }} />
             : step === 'founder' && creed ? <FounderStep city={city} creed={creed} offer={offer} onOffer={setOffer} onNext={() => setStep('oath')} />
@@ -79,7 +104,7 @@ function CityStep({ city, onReroll, onNext }: { city: City; onReroll: () => void
         <p>A port of {city.people.size.toLocaleString()} souls in {inside.length} wards within the walls and {city.districts.length - inside.length} without, under {city.region.crown.title} of {city.region.crown.realm}. Its council of twelve sits in the town hall; its bishop in the cathedral; its guilds keep their own halls.</p>
         <h3>What troubles the city</h3>
         <ul className="troubles">{troubles.map((t) => <li key={t.id}>{t.why}</li>)}</ul>
-        <p className="muted">You will lead a secret society here for two or three generations. You choose what it believes first; the city then shows you who already believes it.</p>
+        <p className="muted">{SLICE ? 'You will lead a secret society here for its first five years: grow it in three quarters of the city, read your people\'s letters, and try to open the council to the guilds against the great families who hold it.' : 'You will lead a secret society here for two or three generations.'} You choose what it believes first; the city then shows you who already believes it.</p>
         <div className="actions">
           <button type="button" onClick={onReroll}>Another city</button>
           <button type="button" className="primary" onClick={onNext}>Set the creed</button>
@@ -92,7 +117,7 @@ function CityStep({ city, onReroll, onNext }: { city: City; onReroll: () => void
 // ---------------------------------------------------------------- 2. the creed
 
 function CreedStep({ city, creed, onCreed, onNext }: { city: City; creed: Creed | null; onCreed: (c: Creed) => void; onNext: () => void }) {
-  const [way, setWay] = useState<Way>(creed?.how ?? 'suggested');
+  const [way, setWay] = useState<Way>(SLICE ? 'questions' : creed?.how ?? 'suggested');
   const sug = useMemo(() => suggestCreeds(city), [city]);
   const [pick, setPick] = useState<string | null>(creed?.how === 'suggested' ? sug.find((s) => s.creed.oath === creed.oath)?.id ?? null : null);
   const [answers, setAnswers] = useState<Record<string, string>>({});
@@ -114,11 +139,12 @@ function CreedStep({ city, creed, onCreed, onNext }: { city: City; creed: Creed 
   return (
     <section className="step creedstep">
       <div className="creedways">
-        <div className="tabs" role="tablist" aria-label="How to set the creed">
+        {SLICE && <p className="lede">Five questions about {city.name} as it is. How the Order answers them is its creed.</p>}
+        {!SLICE && <div className="tabs" role="tablist" aria-label="How to set the creed">
           <button type="button" role="tab" aria-selected={way === 'suggested'} className={way === 'suggested' ? 'on' : ''} onClick={() => setWay('suggested')}>What the city needs</button>
           <button type="button" role="tab" aria-selected={way === 'questions'} className={way === 'questions' ? 'on' : ''} onClick={() => setWay('questions')}>Five questions</button>
           <button type="button" role="tab" aria-selected={way === 'free'} className={way === 'free' ? 'on' : ''} onClick={toFree}>Write it yourself</button>
-        </div>
+        </div>}
         {way === 'suggested' && (
           <div className="cards three">
             {sug.map((s) => (
@@ -132,7 +158,7 @@ function CreedStep({ city, creed, onCreed, onNext }: { city: City; creed: Creed 
         )}
         {way === 'questions' && (
           <ol className="questions">
-            {CREED_QUESTIONS.map((q) => (
+            {QUESTIONS.map((q) => (
               <li key={q.id}>
                 <p>{q.text}</p>
                 <div className="answers">
@@ -169,12 +195,17 @@ function CreedStep({ city, creed, onCreed, onNext }: { city: City; creed: Creed 
       <aside className="creedpanel">
         <h3>The oath</h3>
         <p className="oath">{creed && ready ? creed.oath : 'Choose a creed to hear its oath.'}</p>
-        <h3>The Great Work</h3>
+        {SLICE ? <>
+          <h3>The first aim</h3>
+          <p><b>Open the council</b></p>
+          <p>Whatever the creed, the Order's first five years turn on the council of twelve: win it for the guilds, against the great families who hold it, and keep it.</p>
+          <p className="muted">The Great Work the creed points to ({preview ? GREAT_WORKS[preview.kind].title : 'it follows from the whole creed'}) lies far beyond these first years.</p>
+        </> : <><h3>The Great Work</h3>
         {preview ? <>
           <p><b>{GREAT_WORKS[preview.kind].title}</b></p>
           <p>{GREAT_WORKS[preview.kind].text}</p>
           <p className="muted">{preview.reason}</p>
-        </> : <p className="muted">The Great Work follows from the whole creed, and changes as you change it.</p>}
+        </> : <p className="muted">The Great Work follows from the whole creed, and changes as you change it.</p>}</>}
         <button type="button" className="primary" disabled={!ready} onClick={onNext}>Find the founders</button>
       </aside>
     </section>
@@ -185,7 +216,7 @@ function CreedStep({ city, creed, onCreed, onNext }: { city: City; creed: Creed 
 
 function FounderStep({ city, creed, offer, onOffer, onNext }: { city: City; creed: Creed; offer: FounderOffer | null; onOffer: (o: FounderOffer) => void; onNext: () => void }) {
   const [reroll, setReroll] = useState(0);
-  const offers = useMemo(() => founderOffers(city, creed, reroll), [city, creed, reroll]);
+  const offers = useMemo(() => founderOffers(city, creed, reroll, SLICE), [city, creed, reroll]);
   return (
     <section className="step founderstep">
       <p className="lede">Three people in {city.name} have come by their own roads to what the creed says. Each already trusts one other.</p>
@@ -226,7 +257,7 @@ function OathStep({ city, creed, offer, onBegin }: { city: City; creed: Creed; o
     setBusy(true);
     setTimeout(() => {
       const name = own.trim() || nm.name;
-      onBegin(foundOrder(city, { creed, founder: offer.id, name, meaning: own.trim() ? '' : nm.meaning }));
+      onBegin(foundOrder(city, { creed, founder: offer.id, name, meaning: own.trim() ? '' : nm.meaning, slice: SLICE }));
     }, 30);
   };
   return (
@@ -248,7 +279,8 @@ function OathStep({ city, creed, offer, onBegin }: { city: City; creed: Creed; o
         </div>
         <h3>They swear</h3>
         <p className="oath">{creed.oath}</p>
-        <p>Their Great Work: <b>{GREAT_WORKS[work.kind].title}</b>. {GREAT_WORKS[work.kind].text}</p>
+        {SLICE ? <p>Their first aim: <b>open the council</b> of {city.name} to the guilds, within five years, and keep it open.</p>
+          : <p>Their Great Work: <b>{GREAT_WORKS[work.kind].title}</b>. {GREAT_WORKS[work.kind].text}</p>}
         <button type="button" className="primary big" disabled={busy} onClick={swear}>{busy ? 'They swear…' : 'Swear the First Oath'}</button>
       </div>
     </section>
