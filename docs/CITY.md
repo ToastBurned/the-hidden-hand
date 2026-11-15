@@ -129,13 +129,20 @@ hospital, chapel, market hall, coffee house, lodgings). Each councillor's vote f
 their values, class and interests, and their liking for the proposer. Laws in force
 are in `City.treasury.laws`.
 
+Some motions are only raised when the Order petitions for them (`petition:<key>` in
+`City.mods` above 0): a granary, alms, tolerance, a school, and two that exist only by
+petition, `openCouncil` (journeymen of the guilds may stand and vote; while it is law a
+third of the seats due each election go to men of the guild halls) and `closeCouncil`.
+`laws.openCouncil` holds the day it passed.
+
 ### Rumours
 
 `Rumour`: a tale about someone (`R.*`: debt, drink, affair, heresy, theft, charity,
-bravery, cruelty, piety, a cheat), true or false, with a `weight` that fades. Tales
+bravery, cruelty, piety, a cheat, and `R.society`: seen going to secret meetings), true or false, with a `weight` that fades. Tales
 pass between people who meet, shift the subject's `rep`, and shift what each hearer
-thinks of the subject. Enemies spread lies. This is the channel suspicion of the Order
-will travel along in phase 3.
+thinks of the subject. Enemies spread lies. Suspicion of the Order travels this way:
+the Order layer starts `R.society` tales when members are seen, and inquiries follow
+them (see docs/ORDER.md).
 
 ### Outside the walls
 
@@ -161,7 +168,8 @@ preacher, an old feud, the ruler) for the start screen.
   `p<id>:mayor`, `p<id>:<officeKind>` (appointments), `p<id>:charm`, `vote:<motion>`,
   `p<id>:vote:<motion>`, `p<id>:match<id>` (marriages), `watch:zeal`, `court:harsh`,
   `crime`, `bread:price`, `trade`, `trade:boost`, `harvest`, `prosperity`,
-  `migration`, `fertility`, `fire`, `plague`, `pox`, `building`.
+  `migration`, `fertility`, `fire`, `plague`, `pox`, `building`,
+  `petition:<motion>`.
 - `Person.keep`: never removed by emigration or the levy.
 - `stepDay(c, hook)`: a per-day callback.
 - `logEvent`, `startRumour`, `meet`, `crimeReported`, `appoint`, `burn`,

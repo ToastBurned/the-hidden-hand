@@ -112,14 +112,38 @@ export function electability(c: City, p: Person): number {
     + p.ambition * 0.4 + (p.offices.length ? 0.2 : 0) + mod(c, `p${p.id}:candidacy`);
 }
 
-function eligibleFreeman(c: City, p: Person): boolean {
+export function eligibleFreeman(c: City, p: Person): boolean {
   const age = ageOf(c, p);
   if (age < 25 || age > 80 || p.trade === T.servant || p.trade === T.beggar) return false;
   if (p.sex === 0 && !mod(c, `p${p.id}:candidacy`)) return false; // the charter admits only men, unless someone pushes hard
   if (!c.faiths.get(p.faith)?.established && !c.treasury.laws.tolerance) return false;
   const h = c.households.get(p.hh);
-  return !!h && (h.cls >= CLASS_MIDDLING || p.guildRank === 2);
+  // an opened council (a petition the council voted) admits journeymen of the guilds as well as masters
+  return !!h && (h.cls >= CLASS_MIDDLING || p.guildRank === 2 || (!!c.treasury.laws.openCouncil && p.guildRank >= 1));
 }
+
+/**
+ * Whether someone is in the running for an office when it next falls vacant or comes up
+ * for election: the same pools appointmentsMonth, the elections and the guilds draw on.
+ * The game layer uses it to tell the player who can stand for what.
+ */
+export function eligibleFor(c: City, o: Office, p: Person): boolean {
+  const age = ageOf(c, p);
+  switch (o.kind) {
+    case 'councillor': case 'mayor': return eligibleFreeman(c, p);
+    case 'treasurer': return eligibleFreeman(c, p) && (p.trade === T.merchant || p.trade === T.clerk || p.trade === T.notary);
+    case 'harbourmaster': return eligibleFreeman(c, p) && (p.trade === T.sailor || p.trade === T.merchant || p.trade === T.shipwright);
+    case 'magistrate': return eligibleFreeman(c, p) && p.edu > 0.45;
+    case 'captain': return p.sex === 1 && age > 25 && age < 60 && (p.trade === T.watchman || p.status > 0.45);
+    case 'bishop': return p.trade === T.priest && !!c.faiths.get(p.faith)?.established;
+    case 'elder': return p.faith === c.bodies.get(o.body)?.ref && age > 30;
+    case 'guildmaster': case 'warden': return p.guild === o.body && p.guildRank === 2;
+    default: return false;
+  }
+}
+
+/** Motions someone outside the council's usual business has put on its agenda (see mod keys `petition:<key>`). */
+const petitioned = (c: City, key: string) => mod(c, `petition:${key}`) > 0;
 
 /** Yearly, on election day: a third of the seats; then the councillors choose a mayor. */
 export function councilElection(c: City): void {
@@ -135,8 +159,20 @@ export function councilElection(c: City): void {
   const famSeats = new Map<number, number>();
   for (const id of sitting) { const f = c.people.get(id)?.family ?? -1; famSeats.set(f, (famSeats.get(f) ?? 0) + 1); }
   const winners: Person[] = [];
+  // an opened council keeps a third of the seats due for men of the guild halls
+  if (c.treasury.laws.openCouncil) {
+    const plain = (p: Person) => p.guildRank >= 1 && c.households.get(p.hh)?.cls !== CLASS_WEALTHY && !familyOf(c, p)?.great;
+    const want = Math.round(due.length / 3);
+    for (const { p } of scored) {
+      if (winners.length >= want) break;
+      if (!plain(p) || (famSeats.get(p.family) ?? 0) >= 3) continue;
+      winners.push(p);
+      famSeats.set(p.family, (famSeats.get(p.family) ?? 0) + 1);
+    }
+  }
   for (const { p } of scored) {
     if (winners.length >= due.length) break;
+    if (winners.includes(p)) continue;
     if ((famSeats.get(p.family) ?? 0) >= 3) continue;
     winners.push(p);
     famSeats.set(p.family, (famSeats.get(p.family) ?? 0) + 1);
@@ -314,7 +350,7 @@ export function councilBusiness(c: City, crisisOnly = false): void {
   if (c.bread < 1.1 && t.breadSubsidy > 0) {
     motions.push({ key: 'endSubsidy', title: 'ending the bread subsidy', imp: 2, why: 'Bread was cheap again.', lean: (p) => wealthy(p) * 0.4 + p.consc * 0.3 - 0.1, pass: () => { t.breadSubsidy = 0; delete t.laws.subsidy; delete t.laws.subsidyTried; return ''; } });
   }
-  if (!t.laws.granary && (c.bread > 1.2 || r.chance(0.15)) && t.money > pop * 0.4) {
+  if (!t.laws.granary && (c.bread > 1.2 || r.chance(0.15) || petitioned(c, 'granary')) && t.money > pop * 0.4) {
     motions.push({
       key: 'granary', title: 'keeping a city granary against dear years', imp: 3, why: 'Memories of the last dear year.',
       lean: (p) => p.consc * 0.5 + (p.values[V_INDIV] < 0 ? 0.2 : 0) - wealthy(p) * 0.15 + (p.values[V_INNOV] > 0 ? 0.05 : 0) - 0.1,
@@ -330,7 +366,7 @@ export function councilBusiness(c: City, crisisOnly = false): void {
       pass: () => { t.watchmen += 6; return `The watch will number ${t.watchmen}.`; },
     });
   }
-  if (hunger > 0.18) {
+  if (hunger > 0.18 || (petitioned(c, 'alms') && t.alms < pop * 0.012)) {
     motions.push({
       key: 'alms', title: 'doubling the alms for the poor', imp: 3, why: `${Math.round(hunger * 100)} in a hundred households were going short.`,
       lean: (p) => p.agree * 0.5 + (p.values[V_PIETY] > 0.3 ? 0.2 : 0) - wealthy(p) * 0.2 - 0.15,
@@ -357,11 +393,27 @@ export function councilBusiness(c: City, crisisOnly = false): void {
       });
     }
   }
-  if (t.laws.suppression && dis && r.chance(0.12)) {
+  if (dis && ((t.laws.suppression && r.chance(0.12)) || (petitioned(c, 'tolerance') && !t.laws.tolerance))) {
     motions.push({
       key: 'tolerance', title: `lifting the ban on ${dis.name}`, imp: 4, why: 'The ban had filled the gaol and emptied the harbour of good workmen.',
       lean: (p) => (p.faith === est.id ? -0.1 : 1) - p.values[V_PIETY] * 0.3 + p.values[V_INNOV] * 0.3 + p.agree * 0.2 - 0.15,
       pass: () => { delete t.laws.suppression; t.laws.tolerance = c.day; return ''; },
+    });
+  }
+  // the council opened to the guilds: journeymen may stand and vote
+  if (petitioned(c, 'openCouncil') && !t.laws.openCouncil) {
+    motions.push({
+      key: 'openCouncil', title: 'opening the council to the journeymen of the guilds', imp: 4,
+      why: 'A petition from the guild halls asked that the men who do the city\'s work have a say in its council.',
+      lean: (p) => -p.values[V_HIER] * 0.35 + (p.guildRank >= 1 && !wealthy(p) ? 0.3 : 0) - wealthy(p) * 0.2 - (familyOf(c, p)?.great ? 0.2 : 0) + p.values[V_INNOV] * 0.15,
+      pass: () => { t.laws.openCouncil = c.day; return 'From the next election the journeymen of every guild may stand and vote.'; },
+    });
+  }
+  if (t.laws.openCouncil && mod(c, 'petition:closeCouncil') > 0) {
+    motions.push({
+      key: 'closeCouncil', title: 'closing the council to journeymen again', imp: 3, why: 'The old families wanted their council back.',
+      lean: (p) => p.values[V_HIER] * 0.45 + wealthy(p) * 0.3 - 0.1,
+      pass: () => { delete t.laws.openCouncil; return ''; },
     });
   }
   // taxes
@@ -375,7 +427,7 @@ export function councilBusiness(c: City, crisisOnly = false): void {
     const options = projectOptions(c);
     if (options.length) {
       // the proposer is the councillor who cares most
-      const choice = options.map((o) => ({ o, s: members.reduce((a, m) => a + o.lean(m), 0) + r.normal(0, 0.5) })).sort((a, b) => b.s - a.s)[0].o;
+      const choice = options.map((o) => ({ o, s: members.reduce((a, m) => a + o.lean(m), 0) + r.normal(0, 0.5) + (o.kind === B.school && petitioned(c, 'school') ? 3 : 0) })).sort((a, b) => b.s - a.s)[0].o;
       motions.push({
         key: `build${choice.kind}`, title: `building ${choice.title}`, imp: 3, why: choice.why, lean: choice.lean,
         pass: () => { t.laws[`built:build${choice.kind}`] = c.day; t.project = { kind: choice.kind, name: choice.title, cost: choice.cost, paid: 0, district: choice.district, started: c.day, event: -1 }; return `It will cost about ${choice.cost} ducats.`; },
@@ -430,7 +482,7 @@ function projectOptions(c: City): ProjectOption[] {
   const market = c.districts[0];
   const lit = [...c.people.values()].filter((p) => ageOf(c, p) > 15 && p.edu > 0.4).length / Math.max(1, pop);
   const out: ProjectOption[] = [];
-  if (count(B.school) < Math.ceil(pop / 2500)) out.push({ kind: B.school, title: 'a free school', cost: 900, district: market.id, why: `Only ${Math.round(lit * 100)} in a hundred could read.`, lean: (p) => p.values[V_INNOV] * 0.5 + p.edu * 0.3 - 0.15 });
+  if (count(B.school) < Math.ceil(pop / 2500) || petitioned(c, 'school')) out.push({ kind: B.school, title: 'a free school', cost: 900, district: (petitioned(c, 'school') ? c.districts.find((d) => !d.buildings.some((id) => c.buildings.get(id)?.kind === B.school && c.buildings.get(id)?.gone === undefined)) : undefined)?.id ?? market.id, why: `Only ${Math.round(lit * 100)} in a hundred could read.`, lean: (p) => p.values[V_INNOV] * 0.5 + p.edu * 0.3 - 0.15 });
   if (count(B.almshouse) < Math.ceil(pop / 4000) + 1) out.push({ kind: B.almshouse, title: 'a new almshouse', cost: 700, district: poor.id, why: 'The old almshouse was full.', lean: (p) => p.agree * 0.4 + p.values[V_PIETY] * 0.2 - p.values[V_INDIV] * 0.2 - 0.2 });
   if (count(B.hospital) < Math.ceil(pop / 5000) + 1) out.push({ kind: B.hospital, title: 'a hospital for the sick poor', cost: 1100, district: poor.id, why: 'Fevers every summer filled the streets with the dying.', lean: (p) => p.agree * 0.3 + p.consc * 0.2 - 0.15 });
   if (count(B.chapel) < c.districts.length) out.push({ kind: B.chapel, title: 'a new chapel', cost: 800, district: c.districts[c.districts.length - 1].id, why: 'The suburb had no church of its own.', lean: (p) => p.values[V_PIETY] * 0.6 - 0.1 });
