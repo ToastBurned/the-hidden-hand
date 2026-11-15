@@ -17,6 +17,8 @@ import { B } from '../constants';
 
 export type BotMode = 'bot' | 'passive' | 'idle';
 
+const GREAT = ['treasurer', 'magistrate', 'captain', 'bishop'];
+
 export function newBotCampaign(seed: number, pick = 0, preYears = 0): Campaign {
   const c = createCity({ seed });
   if (preYears) for (let d = 0; d < preYears * 364; d++) void 0;
@@ -103,8 +105,13 @@ export function botWeek(k: Campaign, mode: BotMode): void {
       const mayor = [...c.offices.values()].find((x) => x.kind === 'mayor')!;
       if (mayor.holder !== m.pid && !o.boosts.some((b) => b.key === `p${m.pid}:mayor`) && tryOp(k, m.pid, 'win-seat', { kind: 'office', id: mayor.id }, ['through patronage', 'with coin'])) continue;
     }
+    // the hidden council also needs one of the great offices: the treasury, the court, the watch or the cathedral
+    if (o.greatWork.kind === 'power' && m.influence >= 2 && !seatsOf(c, m.pid).some((s) => GREAT.includes(s.kind)) && !members(o).some((x) => seatsOf(c, x.pid).some((s) => GREAT.includes(s.kind)))) {
+      const off = [...c.offices.values()].filter((x) => GREAT.includes(x.kind) && eligibleFor(c, x, p)).sort((a, b) => (a.holder < 0 ? -1 : 0) - (b.holder < 0 ? -1 : 0))[0];
+      if (off && !o.boosts.some((b) => b.key === `p${m.pid}:${off.kind}`) && tryOp(k, m.pid, 'win-seat', { kind: 'office', id: off.id }, ['through patronage', 'with coin', 'on merit'])) continue;
+    }
     // befriend the councillors who would vote against the Order's motions
-    if (WORK_LEVERS[o.greatWork.kind].some((w) => w.motion) && m.influence >= 1.5 && o.order.wealth >= 10 && can.includes('befriend')) {
+    if ((WORK_LEVERS[o.greatWork.kind].some((w) => w.motion) || (o.greatWork.kind === 'power' && seatsOf(c, m.pid).some((s) => s.kind === 'councillor'))) && m.influence >= 1.5 && o.order.wealth >= 10 && can.includes('befriend')) {
       const cs = [...c.offices.values()].filter((x) => x.kind === 'councillor' && x.holder >= 0 && !(x.holder in o.members) && !o.allies.some((a) => a.pid === x.holder && a.strength > 0.3)).map((x) => x.holder);
       const tgt = cs.sort((a, b) => (c.people.get(b)?.rels.some((r) => r.id === m.pid) ? 1 : 0) - (c.people.get(a)?.rels.some((r) => r.id === m.pid) ? 1 : 0))[0];
       if (tgt !== undefined && !Object.values(o.ops).some((x) => x.status === 'running' && x.target.id === tgt) && tryOp(k, m.pid, 'befriend', { kind: 'person', id: tgt }, ['with flattery', 'with gifts', 'through shared faith'])) continue;
@@ -141,10 +148,21 @@ export function botWeek(k: Campaign, mode: BotMode): void {
     for (const m of best) if (cmd(k, { type: 'lever', kind: w.kind, member: m.pid, target, strength: w.strength ?? 1 })) break;
   }
   // power and voice: back our own at elections
+  // the hidden council: keep the Order's mayor backed at every election, or the seat is lost
+  if (o.greatWork.kind === 'power') {
+    const mayor = [...c.offices.values()].find((x) => x.kind === 'mayor');
+    if (mayor && mayor.holder in o.members && !Object.values(o.levers).some((l) => l.kind === 'back-candidate' && l.target.id === mayor.holder)) {
+      const patron = ms.filter((x) => x.pid !== mayor.holder && seatsOf(c, x.pid).length && x.influence >= 1.5 && !Object.values(o.levers).some((l) => l.member === x.pid)).sort((a, b) => b.influence - a.influence)[0];
+      if (patron) cmd(k, { type: 'lever', kind: 'back-candidate', member: patron.pid, target: { kind: 'person', id: mayor.holder }, strength: 1 });
+    }
+  }
+  // (a patron needs influence to spare: the hidden council is won with the patrons' own ops, not their upkeep)
+  const backing = () => Object.values(o.levers).filter((l) => l.kind === 'back-candidate').length;
   if (o.greatWork.kind === 'power' || (o.greatWork.kind === 'voice' && c.treasury.laws.openCouncil)) for (const m of ms) {
-    if (Object.values(o.levers).length > ms.length / 2) break;
+    if (Object.values(o.levers).length > ms.length / 2 || backing() >= 2) break;
     if (seatsOf(c, m.pid).length) continue;
-    const patron = ms.find((x) => seatsOf(c, x.pid).length && x.influence >= 1.5 && !Object.values(o.levers).some((l) => l.member === x.pid));
+    if (Object.values(o.levers).some((l) => l.kind === 'back-candidate' && l.target.id === m.pid)) continue;
+    const patron = ms.find((x) => seatsOf(c, x.pid).length && x.influence >= (o.greatWork.kind === 'power' ? 4 : 1.5) && !Object.values(o.levers).some((l) => l.member === x.pid));
     if (!patron) break;
     cmd(k, { type: 'lever', kind: 'back-candidate', member: patron.pid, target: { kind: 'person', id: m.pid }, strength: 1 });
   }
@@ -160,19 +178,22 @@ export function advance(k: Campaign, days: number): void {
   }
 }
 
-export interface RunResult { seed: number; mode: BotMode; work: WorkKind; ending: string; verdict?: string; years: number; members: number; peak: number; held: number; need: number; doneYear: number; arrests: number; seats: number }
+export interface RunResult { seed: number; mode: BotMode; work: WorkKind; ending: string; verdict?: string; years: number; members: number; peak: number; held: number; need: number; doneYear: number; arrests: number; seats: number; inquiries: number; coin: number; peakCoin: number; cityCoinShare: number }
 
 export function runBot(seed: number, mode: BotMode, years: number, pick = 0, onYear?: (k: Campaign, y: number) => void): RunResult {
   const k = newBotCampaign(seed, pick);
-  let peak = 0, bestHeld = 0, maxSeats = 0;
+  let peak = 0, bestHeld = 0, maxSeats = 0, peakCoin = 0, peakShare = 0;
+  const inqs = new Set<number>();
   for (let w = 0; w < years * 52; w++) {
     botWeek(k, mode);
     advance(k, 7);
     peak = Math.max(peak, members(k.order).length);
+    peakCoin = Math.max(peakCoin, k.order.order.wealth);
+    for (const i of k.order.investigations) inqs.add(i.started * 10000 + i.pid);
     bestHeld = Math.max(bestHeld, k.order.greatWork.held);
-    if (w % 52 === 0) { let s = 0; for (const m of members(k.order)) s += seatsOf(k.city, m.pid).length; maxSeats = Math.max(maxSeats, s); onYear?.(k, w / 52); }
+    if (w % 52 === 0) { let hm = 0; for (const h of k.city.households.values()) hm += Math.max(0, h.money); peakShare = Math.max(peakShare, k.order.order.wealth / Math.max(1, hm + k.order.order.wealth)); let s = 0; for (const m of members(k.order)) s += seatsOf(k.city, m.pid).length; maxSeats = Math.max(maxSeats, s); onYear?.(k, w / 52); }
     if (k.order.phase !== 'play') break;
   }
   const o = k.order;
-  return { seed, mode, work: o.greatWork.kind, ending: o.ending?.kind ?? 'ongoing', verdict: o.ending?.verdict, years: Math.round((k.city.day - o.order.founded) / 364), members: members(o).length, peak, held: bestHeld, need: o.greatWork.need, doneYear: o.greatWork.done ? Math.round((o.greatWork.doneAt - o.order.founded) / 364) : -1, arrests: o.log.arrests, seats: maxSeats };
+  return { seed, mode, work: o.greatWork.kind, ending: o.ending?.kind ?? 'ongoing', verdict: o.ending?.verdict, years: Math.round((k.city.day - o.order.founded) / 364), members: members(o).length, peak, held: bestHeld, need: o.greatWork.need, doneYear: o.greatWork.done ? Math.round((o.greatWork.doneAt - o.order.founded) / 364) : -1, arrests: o.log.arrests, seats: maxSeats, inquiries: inqs.size, coin: Math.round(o.order.wealth), peakCoin: Math.round(peakCoin), cityCoinShare: Math.round(peakShare * 100) / 100 };
 }

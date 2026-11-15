@@ -14,6 +14,7 @@ import type { Building, Person } from '../types';
 import { TILE_DOOR, TILE_FLOOR, TILE_HATCH, TILE_STAIRS, TILE_WALL, interiorOf, roomName, type Floor, type Interior, type RoomKind as TileRoomKind } from '../interior';
 import { creedDistance, updateGap } from './creed';
 import { NATIVE_CRAFT, mastery, practise } from './crafts';
+import { purseNeed } from './levers';
 import { trace } from './suspicion';
 import type { Campaign, Cell, Lodge, LodgeRoom, Member, RoomKind } from './types';
 import { DAYS_PER_MONTH, clamp, buildingName, districtName, homeDistrict, keep, members, name, nid, notice, orng as orngOf, report, seatsOf, seatWeight, spend as spendCoin, takeCoin, release } from './util';
@@ -212,6 +213,9 @@ export function lodgeFound(k: Campaign, l: Lodge, by: number): void {
 export function orderMonth(k: Campaign): void {
   const o = k.order;
   const c = k.city;
+  // a full purse asks little of the members: only the zealous still give much
+  const need = purseNeed(k);
+  const full = o.order.wealth >= need * 1.5 ? 0.1 : o.order.wealth >= need ? 0.35 : 1;
   for (const m of members(o)) {
     const p = c.people.get(m.pid);
     if (!p) {
@@ -230,7 +234,7 @@ export function orderMonth(k: Campaign): void {
     m.influence = Math.min(30, m.influence * 0.96 + earn);
     // tithe: a share of the household's earnings, more if zealous
     const h = c.households.get(p.hh);
-    if (h && h.money > 4) takeCoin(k, h, Math.min(h.money * 0.05, 1.5, Math.max(0, h.income) * 4 * 0.04 * (0.5 + m.zeal)));
+    if (h && h.money > 4) takeCoin(k, h, Math.min(h.money * 0.05, 1.5, Math.max(0, h.income) * 4 * 0.04 * (0.5 + m.zeal)) * (full < 1 ? full * (0.5 + m.zeal) : 1));
   }
   // fronts earn from their customers
   for (const l of Object.values(o.lodges)) {
@@ -241,7 +245,7 @@ export function orderMonth(k: Campaign): void {
     const d = c.districts.find((x) => x.id === l.district);
     if (!b || !d) continue;
     let took = 0;
-    for (const bid of d.buildings.slice(0, 30)) { const bb = c.buildings.get(bid); for (const hid of bb?.homes ?? []) { const hh = c.households.get(hid); if (hh && hh.money > 20 && took < 12) took += takeCoin(k, hh, Math.min(hh.money * 0.004, 1.5)); } }
+    for (const bid of d.buildings.slice(0, 30)) { const bb = c.buildings.get(bid); for (const hid of bb?.homes ?? []) { const hh = c.households.get(hid); if (hh && hh.money > 20 && took < 12 * full) took += takeCoin(k, hh, Math.min(hh.money * 0.004, 1.5)); } }
   }
   for (const l of Object.values(o.lodges)) for (const r of l.rooms) if (r.doneAt > c.day - DAYS_PER_MONTH && r.doneAt <= c.day) notice(k, 'info', 1, 'A room is finished', `The ${ROOMS[r.kind].name.toLowerCase()} of ${l.name} is ready.`);
   // cohesion follows zeal, minus the gap between word and deed and the strain of fast growth

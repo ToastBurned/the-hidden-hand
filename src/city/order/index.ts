@@ -4,7 +4,7 @@ export { suggestCreeds, creedFromAnswers, normaliseCreed, CREED_QUESTIONS, VOWS,
 export { GREAT_WORKS, greatWorkFor, workReason, workScores, greatCondition } from './works';
 export { founderOffers, foundOrder, stepCampaign, applyCommand, serializeCampaign, deserializeCampaign, chronicleOf } from './campaign';
 export { orderView, workPreview } from './view';
-export { opDefs, previewOp, recruitSignals, availableOps } from './ops';
-export { leverDefs, leverForce, MOTIONS } from './levers';
+export { opDefs, opCost, previewOp, recruitSignals, availableOps } from './ops';
+export { leverDefs, leverForce, purseNeed, MOTIONS } from './levers';
 export { ROOMS } from './order';
 export { CRAFTS } from './crafts';

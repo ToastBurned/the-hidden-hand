@@ -53,7 +53,11 @@ zeal, wavering, betrayal, teaching.
 Members earn **influence** from their seats, standing (initiate, adept, elder), status,
 guild rank and good name; it decays 4% a month. Influence pays for operations and levers.
 **Coin** is never created: tithes come out of members' households and every spend goes
-back into the households of a district (`takeCoin`, `spend`). Initiates cannot recruit
+back into the households of a district (`takeCoin`, `spend`). Tithes follow need: `purseNeed(k)` is a
+year of the levers' coin, something for rooms and favours and, once the Great Work is half
+held, the 160 ducats of the road beyond the walls. With the purse above that the members
+give about a third as much, and above half as much again a tenth (more from the zealous);
+fronts earn less in the same way. Initiates cannot recruit
 in their first year, and a large Order is harder to grow.
 
 A **lodge** is dug beneath a building a member can get into (their home, their work, a
@@ -74,6 +78,10 @@ district on failure (more) and success (less).
 - `recruitSignals(k, pid)` gives the signals a player needs to pick a recruit (F6): how
   near their beliefs are, how well the agent knows them, a wound the creed speaks to,
   and rank.
+- Some approaches are paid in coin on top of the assignment's cost: recruiting with coin
+  (20), standing for office with coin (30; twice that for a great office, three times for
+  the mayoralty), befriending with gifts (10) and a favour with coin (6). `opCost` gives the
+  total and `previewOp` shows it.
 - No operation targets anyone under 16.
 
 ## Crafts
@@ -93,6 +101,10 @@ forecast. Member councillors vote as agreed; befriended or blackmailed councillo
 as a favour. Swaying the council on a motion the city would never raise by itself puts
 it on the agenda by petition.
 
+The Order puts up **one candidate for the mayoralty**: the member pushed hardest for it (by
+a standing for office or a backed candidacy). Its other councillors stand aside for them
+(`p<id>:mayor` at -0.4) instead of splitting the council's votes between members.
+
 ## Suspicion and purges
 
 Suspicion is kept per district (`order.local`). It rises from failed and successful
@@ -100,10 +112,11 @@ operations, lever traces, indiscreet members, large circles and hard times, and 
 fades slowly. Being seen starts an `R.society` rumour about the member, which spreads
 by gossip like any other tale and makes them easier to find.
 
-Above 0.4 an **inquiry** may open, led by a magistrate, captain, bishop, mayor or
+Above 0.33 (`INQUIRY_AT`) an **inquiry** may open, led by a magistrate, captain, bishop, mayor or
 councillor not of the Order. The investigator builds a trail on each member; at 0.6 the
 member is wanted, at 1 arrested. Under questioning the arrested may name those they
-know, and the lodge may be found. A safe room, hiding, going quiet and a cautious
+know (their trail jumps to 0.62, so the named are wanted but not yet taken), and the
+lodge may be found. A safe room, hiding, going quiet and a cautious
 posture slow the trail. Trials follow: a member magistrate frees the accused, otherwise
 hanging, banishment or release.
 

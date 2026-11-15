@@ -65,6 +65,8 @@ function investigatorScore(p: Person): number {
 }
 
 const HUNTERS = ['magistrate', 'captain', 'bishop', 'mayor', 'councillor'];
+/** The district suspicion at which an official may open an inquiry. */
+export const INQUIRY_AT = 0.33;
 
 /** Weekly: suspicion fades or grows, inquiries open and follow their trails. */
 export function suspicionWeek(k: Campaign): void {
@@ -101,9 +103,9 @@ export function suspicionWeek(k: Campaign): void {
   // inquiries open where suspicion runs high
   for (const [d] of byDistrict) {
     const l = localOf(k, d);
-    if (l.level < 0.4) continue;
+    if (l.level < INQUIRY_AT) continue;
     if (o.investigations.some((i) => !i.closed && i.district === d)) continue;
-    if (!r.chance((l.level - 0.38) * 0.05)) continue;
+    if (!r.chance((l.level - INQUIRY_AT + 0.02) * 0.06)) continue;
     let best: Person | undefined, bs = -1;
     for (const off of c.offices.values()) {
       if (!HUNTERS.includes(off.kind) || off.holder < 0 || off.holder in o.members) continue;
@@ -149,10 +151,10 @@ function investigate(k: Campaign, inv: Investigation, quiet: boolean): void {
     const here = d === inv.district;
     const safe = roomReady(k, d, 'safe-room') ? 0.6 : 1;
     const hidden = m.hiddenUntil > c.day ? 0.25 : 1;
-    const named = inv.found.some((f) => o.fallen.find((x) => x.id === f) || (o.members[f]?.knows.includes(m.pid))) ? 2.5 : 1;
+    const named = inv.found.some((f) => o.fallen.find((x) => x.id === f) || (o.members[f]?.knows.includes(m.pid))) ? 1.8 : 1;
     const localLv = here ? l.level : (o.local[d]?.level ?? 0) * 0.6;
     const talk = 1 + talkOf(k, m.pid) * 1.5;
-    const rate = 0.032 * skill * (0.25 + localLv) * (1 - m.discretion * 0.6) * safe * hidden * named * talk * (quiet ? 0.45 : o.order.posture === 'cautious' ? 0.75 : 1) * (here ? 1 : 0.4);
+    const rate = 0.04 * skill * (0.25 + localLv) * (1 - m.discretion * 0.6) * safe * hidden * named * talk * (quiet ? 0.45 : o.order.posture === 'cautious' ? 0.75 : 1) * (here ? 1 : 0.4);
     const before = inv.trail[m.pid] ?? 0;
     const after = before + rate * (0.6 + r.next() * 0.8);
     inv.trail[m.pid] = after;
@@ -193,7 +195,7 @@ export function arrest(k: Campaign, inv: Investigation, m: Member): void {
     const x = o.members[id];
     if (!x || x.imprisoned >= 0) continue;
     const talk = (1 - m.discretion * 0.8) * (1 - m.zeal * 0.6) * (m.wavering ? 1.4 : 1) * 0.6;
-    if (r.chance(talk)) { inv.trail[id] = Math.max(inv.trail[id] ?? 0, 0.85); named.push(id); }
+    if (r.chance(talk)) { inv.trail[id] = Math.max(inv.trail[id] ?? 0, 0.62); named.push(id); }
   }
   const cell = o.cells[m.cell];
   const lodge = cell && cell.lodge >= 0 ? o.lodges[cell.lodge] : undefined;

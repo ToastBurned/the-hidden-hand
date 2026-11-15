@@ -112,9 +112,27 @@ export function opProblem(k: Campaign, cmd: Cmd): string | null {
     if (!c.region.neighbours.some((n) => n.id === cmd.target.id)) return 'no such town';
     if (m.zeal < 0.55) return `${ap.first} is not willing to leave the city for good`;
   }
-  if (spec.cost.wealth > o.order.wealth + 1e-6) return 'not enough coin';
-  if (spec.cost.influence > m.influence + 1e-6) return `${ap.first} lacks the influence`;
+  const cost = opCost(k, cmd);
+  if (cost.wealth > o.order.wealth + 1e-6) return 'not enough coin';
+  if (cost.influence > m.influence + 1e-6) return `${ap.first} lacks the influence`;
   return null;
+}
+
+/**
+ * Coin an approach adds on top of the assignment's own cost. Buying votes, buying an oath and
+ * giving gifts are paid for in ducats; the dearer the seat, the dearer the votes.
+ */
+const APPROACH_COIN: Record<string, number> = { 'recruit:with coin': 20, 'win-seat:with coin': 30, 'befriend:with gifts': 10, 'favour:with coin': 6 };
+
+/** What an assignment costs with the chosen approach. */
+export function opCost(k: Campaign, cmd: Cmd): { influence: number; wealth: number } {
+  const spec = OP_BY_KIND[cmd.kind];
+  let extra = APPROACH_COIN[`${cmd.kind}:${cmd.approach}`] ?? 0;
+  if (extra && cmd.kind === 'win-seat') {
+    const off = k.city.offices.get(cmd.target.id);
+    extra *= off?.kind === 'mayor' ? 3 : off && ['treasurer', 'magistrate', 'captain', 'bishop', 'harbourmaster'].includes(off.kind) ? 2 : 1;
+  }
+  return { influence: spec.cost.influence, wealth: spec.cost.wealth + extra };
 }
 
 /** The elders' estimate: odds, trace and advice. */
@@ -205,7 +223,7 @@ export function previewOp(k: Campaign, cmd: Cmd): OperationPreview | { error: st
   const spec = OP_BY_KIND[cmd.kind];
   const { odds, risk, advice } = opOdds(k, cmd);
   const ap = k.city.people.get(cmd.agent)!;
-  return { odds: odds > 0.62 ? 'likely' : odds > 0.35 ? 'uncertain' : 'long shot', chance: odds, risk, days: daysFor(k, spec, ap, spec.target === 'person' ? k.city.people.get(cmd.target.id) : undefined), cost: spec.cost, advice };
+  return { odds: odds > 0.62 ? 'likely' : odds > 0.35 ? 'uncertain' : 'long shot', chance: odds, risk, days: daysFor(k, spec, ap, spec.target === 'person' ? k.city.people.get(cmd.target.id) : undefined), cost: opCost(k, cmd), advice };
 }
 
 export function targetName(k: Campaign, t: Target): string {
@@ -231,9 +249,10 @@ export function startOp(k: Campaign, cmd: Cmd): string | null {
   const ap = c.people.get(cmd.agent)!;
   const t = spec.target === 'person' ? c.people.get(cmd.target.id) : undefined;
   const { odds, risk } = opOdds(k, cmd);
-  m.influence -= spec.cost.influence;
+  const cost = opCost(k, cmd);
+  m.influence -= cost.influence;
   // the coin goes somewhere real: to the people bribed, paid or hired
-  if (spec.cost.wealth) spend(k, spec.cost.wealth, t ? homeDistrict(c, t) : homeDistrict(c, ap), cmd.agent);
+  if (cost.wealth) spend(k, cost.wealth, t ? homeDistrict(c, t) : homeDistrict(c, ap), cmd.agent);
   if (t) keep(t);
   const id = nid(o);
   const days = daysFor(k, spec, ap, t);

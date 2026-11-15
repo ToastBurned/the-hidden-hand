@@ -178,6 +178,19 @@ export function leverForce(k: Campaign, lv: Pick<Lever, 'kind' | 'member' | 'tar
   return { share, contest, keys };
 }
 
+/**
+ * What the purse should hold: a year of the levers' coin, something for rooms and favours
+ * and, once the Great Work is half held, the cost of the road beyond the walls. Above it the
+ * members tithe far less, so the purse follows the Order's needs instead of piling up.
+ */
+export function purseNeed(k: Campaign): number {
+  const o = k.order;
+  let coin = 0;
+  for (const lv of Object.values(o.levers)) coin += (LEVER_BY_KIND[lv.kind]?.coin ?? 0) * Math.abs(lv.strength);
+  const road = o.beyond.state === 'open' || (o.greatWork.need > 1 && o.greatWork.held >= o.greatWork.need * 0.5) ? 160 : 0;
+  return 80 + 10 * members(o).length + 13 * coin + road;
+}
+
 /** Monthly: pay upkeep, apply what coin buys, leave traces. Returns the pushes for City.mods. */
 export function leversMonth(k: Campaign, charge: boolean): [string, number][] {
   const o = k.order;
@@ -329,6 +342,14 @@ export function applyMods(k: Campaign, pushes: [string, number][]): void {
   const sums: Record<string, number> = {};
   for (const [key, v] of pushes) sums[key] = key.startsWith('petition:') ? 1 : (sums[key] ?? 0) + v;
   for (const b of o.boosts) sums[b.key] = (sums[b.key] ?? 0) + b.amount;
+  // one candidate for the mayoralty: the Order's other councillors stand aside for them
+  // instead of splitting the council's votes between members
+  const mayorKey = (id: number) => `p${id}:mayor`;
+  const backed = Object.keys(o.members).map(Number).filter((id) => (sums[mayorKey(id)] ?? 0) > 0).sort((a, b) => sums[mayorKey(b)] - sums[mayorKey(a)] || a - b)[0];
+  if (backed !== undefined) for (const id of Object.keys(o.members).map(Number)) {
+    if (id === backed || !seatsOf(c, id).some((s) => s.kind === 'councillor' || s.kind === 'mayor')) continue;
+    sums[mayorKey(id)] = -0.4;
+  }
   const next: Record<string, number> = {};
   for (const [key, v] of Object.entries(sums)) {
     if (key.startsWith('petition:')) { next[key] = 1; continue; }

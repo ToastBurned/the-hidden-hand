@@ -3,8 +3,9 @@ import { createCity } from '../src/city/create';
 import { runYears } from '../src/city/sim';
 import {
   suggestCreeds, creedFromAnswers, normaliseCreed, CREED_QUESTIONS, greatWorkFor, founderOffers, foundOrder,
-  applyCommand, serializeCampaign, deserializeCampaign, orderView, availableOps, previewOp, opDefs,
+  applyCommand, serializeCampaign, deserializeCampaign, orderView, availableOps, previewOp, opDefs, opCost, purseNeed,
 } from '../src/city/order';
+import { orderMonth } from '../src/city/order/order';
 import { advance, botWeek, newBotCampaign } from '../src/city/order/bot';
 import { pendingItems, conclaveWeek } from '../src/city/order/conclave';
 import { members, spend, takeCoin } from '../src/city/order/util';
@@ -83,6 +84,32 @@ describe('coin', () => {
     const b2 = totalCoin(k);
     botWeek(k, 'bot');
     expect(totalCoin(k)).toBeCloseTo(b2, 6);
+  });
+});
+
+describe('what coin is for', () => {
+  it('charges for the approaches that spend coin, dearer for the mayoralty', () => {
+    const k = newBotCampaign(2);
+    const f = k.order.order.founder;
+    const mayor = [...k.city.offices.values()].find((x) => x.kind === 'mayor')!;
+    const councillor = [...k.city.offices.values()].find((x) => x.kind === 'councillor')!;
+    const cost = (office: number, approach: string) => opCost(k, { type: 'operation', kind: 'win-seat', agent: f, target: { kind: 'office', id: office }, approach }).wealth;
+    expect(cost(councillor.id, 'on merit')).toBe(0);
+    expect(cost(councillor.id, 'with coin')).toBe(30);
+    expect(cost(mayor.id, 'with coin')).toBe(90);
+  });
+
+  it('asks less of the members once the purse holds what the Order needs', () => {
+    const a = newBotCampaign(4);
+    for (let w = 0; w < 40; w++) { botWeek(a, 'bot'); advance(a, 7); }
+    const b = deserializeCampaign(serializeCampaign(a));
+    a.order.order.wealth = 0;
+    b.order.order.wealth = purseNeed(b) * 3;
+    const wa = a.order.order.wealth, wb = b.order.order.wealth;
+    orderMonth(a); orderMonth(b);
+    const tithed = a.order.order.wealth - wa;
+    expect(tithed).toBeGreaterThan(0);
+    expect(b.order.order.wealth - wb).toBeLessThan(tithed * 0.3);
   });
 });
 
