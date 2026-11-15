@@ -9,12 +9,14 @@ import { BUILDING_NAMES, TRADES } from '../../city/constants';
 import { createCity } from '../../city/create';
 import { calendarYear } from '../../city/core';
 import { interiorOf } from '../../city/interior';
-import type { Building, City } from '../../city/types';
+import type { Building, City, Person } from '../../city/types';
 import { renderCity } from './city';
 import { lodgeDemo, type LodgeDemo } from './lodge';
 import { Px } from './px';
 import { renderFloor, type Figure } from './rooms';
-import { STYLES, type Season, type StyleId, type TimeOfDay } from './styles';
+import { STYLES, type Season, type Style, type StyleId, type TimeOfDay } from './styles';
+import { buttonImage, insetImage, panelImage, parchmentImage } from './frame';
+import { renderPortrait } from './portrait';
 
 const SEASONS = ['Spring', 'Summer', 'Autumn', 'Winter'];
 const TIMES: TimeOfDay[] = ['day', 'dusk', 'night'];
@@ -48,6 +50,28 @@ function PxView({ px, scale, label }: { px: Px; scale: number; label?: string })
   return <canvas ref={ref} className="px" aria-label={label} style={{ width: px.w * scale, height: px.h * scale }} />;
 }
 
+/** Draw the pixel frame images once and hand them to the stylesheet as border images. */
+function useFrame(st: Style) {
+  useEffect(() => {
+    const url = (p: Px) => toCanvas(p).toDataURL();
+    const root = document.documentElement.style;
+    root.setProperty('--pf-panel', `url(${url(panelImage(st))})`);
+    root.setProperty('--pf-inset', `url(${url(insetImage(st))})`);
+    root.setProperty('--pf-btn', `url(${url(buttonImage(st, false))})`);
+    root.setProperty('--pf-btn-on', `url(${url(buttonImage(st, true))})`);
+    root.setProperty('--pf-paper', `url(${url(parchmentImage(st))})`);
+    document.documentElement.classList.add('framed');
+  }, [st]);
+}
+
+const ageOf = (c: City, p: Person) => Math.floor((c.day - p.born) / 364);
+const clsOf = (c: City, p: Person) => c.households.get(p.hh)?.cls ?? 0;
+
+function Portrait({ city, p, st, scale = 2, robe }: { city: City; p: Person; st: Style; scale?: number; robe?: boolean }) {
+  const px = useMemo(() => renderPortrait({ looks: p.looks, sex: p.sex, age: ageOf(city, p), trade: p.trade, cls: clsOf(city, p), id: p.id, robe }, st), [city, p, st, robe]);
+  return <span className="portrait"><PxView px={px} scale={scale} label={personName(city, p.id)} /></span>;
+}
+
 const nameOf = (c: City, b: Building) => b.name || BUILDING_NAMES[b.kind];
 const personName = (c: City, id: number) => {
   const p = c.people.get(id);
@@ -57,10 +81,12 @@ const personName = (c: City, id: number) => {
 export function ArtLab() {
   const [seed, setSeed] = useState(1);
   const [seedText, setSeedText] = useState('1');
-  const [styleId, setStyleId] = useState<StyleId>('ledgerFront');
+  // the style Ed chose on 15 November: Ledger + fronts at 10 px
+  const styleId: StyleId = 'ledgerFront';
   const [season, setSeason] = useState<Season>(1);
   const [time, setTime] = useState<TimeOfDay>('day');
-  const [tab, setTab] = useState<'city' | 'lodge'>('city');
+  const [tab, setTab] = useState<'city' | 'lodge' | 'people'>('city');
+  useFrame(STYLES[styleId]);
   const [city, setCity] = useState<City | null>(null);
   const [busy, setBusy] = useState('Laying out the streets');
   const st = STYLES[styleId];
@@ -83,18 +109,11 @@ export function ArtLab() {
         <nav className="tabs" aria-label="View">
           <button type="button" id="tab-city" className={tab === 'city' ? 'on' : ''} onClick={() => setTab('city')}>City</button>
           <button type="button" id="tab-lodge" className={tab === 'lodge' ? 'on' : ''} onClick={() => setTab('lodge')}>Lodge</button>
+          <button type="button" id="tab-people" className={tab === 'people' ? 'on' : ''} onClick={() => setTab('people')}>People</button>
         </nav>
       </header>
 
-      <section className="controls" aria-label="Style">
-        <div className="group styles">
-          <span className="lbl">Style</span>
-          {(Object.keys(STYLES) as StyleId[]).map((id) => (
-            <button type="button" key={id} id={`style-${id}`} className={styleId === id ? 'on' : ''} onClick={() => setStyleId(id)}>
-              {STYLES[id].name} <small>{STYLES[id].cell}px</small>{id.startsWith('ledgerFront') ? <small className="new"> new</small> : null}
-            </button>
-          ))}
-        </div>
+      <section className="controls" aria-label="Season, light and city">
         <div className="group">
           <span className="lbl">Season</span>
           {SEASONS.map((s, i) => <button type="button" key={s} id={`season-${i}`} className={season === i ? 'on' : ''} onClick={() => setSeason(i as Season)}>{s}</button>)}
@@ -110,12 +129,14 @@ export function ArtLab() {
           <button type="button" onClick={() => { const n = 1 + Math.floor(Math.random() * 9999); setSeedText(String(n)); setSeed(n); }}>New city</button>
         </form>
       </section>
-      <p className="blurb">{st.blurb}</p>
+      <p className="blurb">Ledger + fronts at 10 px a cell: Ledger&apos;s dense, earthy palette with every house showing its street wall. Portraits are 40 by 40.</p>
 
       {!city || !demo ? <div className="loading">{busy}…</div>
         : tab === 'city'
           ? <CityView city={city} demo={demo} styleId={styleId} season={season} time={time} onLodge={() => setTab('lodge')} />
-          : <LodgeView city={city} demo={demo} styleId={styleId} season={season} time={time} />}
+          : tab === 'lodge'
+            ? <LodgeView city={city} demo={demo} styleId={styleId} season={season} time={time} />
+            : <PeopleView city={city} demo={demo} styleId={styleId} />}
     </div>
   );
 }
@@ -283,7 +304,11 @@ function BuildingPanel({ city, b, styleId, isLodge, onLodge }: { city: City; b: 
     <div className="panel">
       <h2>{nameOf(city, b)}</h2>
       <p className="meta">{BUILDING_NAMES[b.kind]} · {district?.name ?? 'outside the walls'} · {b.floors} floor{b.floors > 1 ? 's' : ''} · {b.w * 5} by {b.h * 5} m</p>
-      {residents.length > 0 && <p className="meta">Home to {residents.map((p) => `${p!.first} ${city.families.get(p!.family)?.name ?? ''}`).join(', ')}{b.homes.length ? '' : ''}.</p>}
+      {residents.length > 0 && (
+        <ul className="faces">
+          {residents.map((p) => <li key={p!.id}><Portrait city={city} p={p!} st={st} scale={1} /><span>{p!.first} {city.families.get(p!.family)?.name ?? ''}<small>{TRADES[p!.trade]?.name}, {ageOf(city, p!)}</small></span></li>)}
+        </ul>
+      )}
       <div className="floors-tabs">
         {it.floors.map((f, k) => <button type="button" key={f.level} className={k === fi ? 'on' : ''} onClick={() => setFi(k)}>{FLOOR_NAMES[f.level] ?? `Floor ${f.level}`}</button>)}
       </div>
@@ -370,10 +395,43 @@ function LodgeView({ city, demo, styleId, season, time }: { city: City; demo: Lo
       </div>
       <div className="members">
         <h3>The members</h3>
-        <ul>{members.map((p) => <li key={p.id}>{personName(city, p.id)}<small>{TRADES[p.trade]?.name ?? ''}</small></li>)}</ul>
+        <ul className="faces wide">{members.map((p, k) => <li key={p.id}><Portrait city={city} p={p} st={st} scale={2} robe={k % 3 !== 2} /><span>{personName(city, p.id)}<small>{TRADES[p.trade]?.name ?? ''}, {ageOf(city, p)}{k % 3 !== 2 ? ', robed' : ''}</small></span></li>)}</ul>
       </div>
     </div>
   );
 }
 
 
+
+// ---------------------------------------------------------------- people
+
+function PeopleView({ city, demo, styleId }: { city: City; demo: LodgeDemo; styleId: StyleId }) {
+  const st = STYLES[styleId];
+  const offices = [...city.offices.values()].filter((o) => o.holder >= 0 && city.people.get(o.holder)).slice(0, 16);
+  const heads = [...city.families.values()].filter((f) => f.great && f.head >= 0 && city.people.get(f.head));
+  const [big, setBig] = useState<Person | null>(null);
+  const shown = big ?? city.people.get(offices[0]?.holder ?? -1) ?? null;
+  const Card = ({ p, title }: { p: Person; title: string }) => (
+    <li><button type="button" className={`facebtn${shown?.id === p.id ? ' on' : ''}`} onClick={() => setBig(p)}><Portrait city={city} p={p} st={st} scale={2} /><span>{personName(city, p.id)}<small>{title}</small></span></button></li>
+  );
+  return (
+    <div className="peopleview">
+      <div className="sitter">
+        {shown && <>
+          <Portrait city={city} p={shown} st={st} scale={5} />
+          <h2>{personName(city, shown.id)}</h2>
+          <p className="meta">{TRADES[shown.trade]?.name}, aged {ageOf(city, shown)}. {['Poor', 'Middling', 'Wealthy'][clsOf(city, shown)]} household.</p>
+          <p className="meta">Every face is built from the person&apos;s inherited looks (skin, hair, eyes, face, nose, build, beard, marks), greyed and lined by age, and dressed by trade and class: ruffs and French hoods for the wealthy, coifs and bonnets for the middling, kerchiefs and aprons for working people.</p>
+        </>}
+      </div>
+      <div className="galleries">
+        <h3>The city&apos;s offices</h3>
+        <ul className="faces grid">{offices.map((o) => <Card key={o.id} p={city.people.get(o.holder)!} title={o.title} />)}</ul>
+        <h3>Heads of the great families</h3>
+        <ul className="faces grid">{heads.map((f) => <Card key={f.id} p={city.people.get(f.head)!} title={`${f.name} ${f.epithet}`} />)}</ul>
+        <h3>The lodge&apos;s circle</h3>
+        <ul className="faces grid">{demo.members.slice(0, 12).map((p) => <Card key={p.id} p={p} title={TRADES[p.trade]?.name ?? ''} />)}</ul>
+      </div>
+    </div>
+  );
+}

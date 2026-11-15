@@ -10,6 +10,7 @@ import { STYLES, type StyleId, type Season, type TimeOfDay } from '../src/ui/pix
 import { Px } from '../src/ui/pixel/px';
 import { lodgeDemo } from '../src/ui/pixel/lodge';
 import { renderFloor } from '../src/ui/pixel/rooms';
+import { PORTRAIT, renderPortrait } from '../src/ui/pixel/portrait';
 
 export function png(px: Px, scale = 1, crop?: { x: number; y: number; w: number; h: number }): Buffer {
   const cx = crop?.x ?? 0, cy = crop?.y ?? 0, cw = crop?.w ?? px.w, ch = crop?.h ?? px.h;
@@ -30,7 +31,7 @@ export function png(px: Px, scale = 1, crop?: { x: number; y: number; w: number;
   return Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), chunk('IHDR', ihdr), chunk('IDAT', deflateSync(raw)), chunk('IEND', Buffer.alloc(0))]);
 }
 
-if (process.argv[1]?.endsWith('artshots.ts') && !process.env.LODGE) {
+if (process.argv[1]?.endsWith('artshots.ts') && !process.env.LODGE && !process.env.PORTRAITS) {
   const seed = Number(process.argv[2] ?? 1);
   const out = process.argv[3] ?? 'shots';
   mkdirSync(out, { recursive: true });
@@ -76,4 +77,29 @@ if (process.argv[1]?.endsWith('artshots.ts') && process.env.LODGE) {
     const sheet = lodgeSheet(c, STYLES[id], { candle: !!process.env.CANDLE, visitor: !!process.env.VISITOR });
     writeFileSync(`${out}/lodge-${id}${process.env.CANDLE ? '-candle' : ''}${process.env.VISITOR ? '-visitor' : ''}.png`, png(sheet, 2));
   }
+}
+
+/** A sheet of portraits of real people from the city, mixed by class, sex and age. */
+export function portraitSheet(c: ReturnType<typeof createCity>, st: (typeof STYLES)[StyleId], n = Number(process.env.N ?? 24), scale = Number(process.env.SCALE ?? 3)): Px {
+  const people = [...c.people.values()].filter((p) => c.day - p.born > 16 * 364);
+  const pick: typeof people = [];
+  const want = (f: (p: (typeof people)[number]) => boolean, k: number) => { for (const p of people) if (pick.length < n && !pick.includes(p) && f(p) && k-- > 0) pick.push(p); };
+  const cls = (p: (typeof people)[number]) => c.households.get(p.hh)?.cls ?? 0;
+  want((p) => cls(p) === 2 && p.sex === 1, 4); want((p) => cls(p) === 2 && p.sex === 0, 3); want((p) => p.trade === 19, 1);
+  want((p) => cls(p) === 1 && p.sex === 1, 4); want((p) => cls(p) === 1 && p.sex === 0, 4);
+  want((p) => cls(p) === 0 && p.sex === 1, 4); want((p) => cls(p) === 0 && p.sex === 0, 4);
+  const cols = 8, gap = 4, N = PORTRAIT * scale;
+  const out = new Px(gap + cols * (N + gap), gap + Math.ceil(pick.length / cols) * (N + gap), st.ink);
+  pick.forEach((p, k) => {
+    const pp = renderPortrait({ looks: p.looks, sex: p.sex, age: Math.floor((c.day - p.born) / 364), trade: p.trade, cls: cls(p), id: p.id, robe: k === pick.length - 1 }, st);
+    const big = new Px(N, N);
+    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) big.data[y * N + x] = pp.data[Math.floor(y / scale) * PORTRAIT + Math.floor(x / scale)];
+    out.draw(big, gap + (k % cols) * (N + gap), gap + Math.floor(k / cols) * (N + gap));
+  });
+  return out;
+}
+
+if (process.argv[1]?.endsWith('artshots.ts') && process.env.PORTRAITS) {
+  const c = createCity({ seed: Number(process.argv[2] ?? 1) });
+  writeFileSync(`${process.argv[3] ?? 'shots'}/portraits.png`, png(portraitSheet(c, STYLES.ledgerFront), 1));
 }
