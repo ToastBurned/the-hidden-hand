@@ -14,7 +14,7 @@ import { affinity } from '../core';
 import type { Person } from '../types';
 import { roomReady } from './order';
 import type { Campaign, Claim, Fact, Notice } from './types';
-import { clamp, districtName, homeDistrict, members, name, nid, notice, orng, report, routes, seatsOf } from './util';
+import { clamp, date, districtName, homeDistrict, members, name, nid, notice, orng, report, routes, seatsOf } from './util';
 
 const MAX_SOURCES = 3;
 
@@ -138,9 +138,10 @@ export function intelWeek(k: Campaign): void {
       if (cl.checked === 'right') rec.right++; else rec.wrong++;
     }
     const right = said.filter((cl) => cl.checked === 'right').map((cl) => (cl.from >= 0 ? name(c, cl.from) : 'the lodge talk'));
-    const wrong = said.filter((cl) => cl.checked === 'wrong').map((cl) => (cl.from >= 0 ? name(c, cl.from) : 'the lodge talk'));
+    const wrong = said.filter((cl) => cl.checked === 'wrong').map((cl) => `${cl.from >= 0 ? name(c, cl.from) : 'the lodge talk'} (who wrote: "${cl.text.replace(/\.$/, '')}")`);
     if (!said.length && !f.urgent) continue;
-    const verdict = said.length ? ` ${right.length ? `${right.join(' and ')} had it right.` : ''}${wrong.length ? ` ${wrong.join(' and ')} had it wrong.` : ''}` : ' None of our people saw it coming.';
+    const when = date(k, f.day);
+    const verdict = said.length ? ` (This happened ${when}.) ${right.length ? `${right.join(' and ')} had it right.` : ''}${wrong.length ? ` ${wrong.join(' and ')} had it wrong.` : ''}` : ' None of our people saw it coming.';
     pushNotice(k, 'truth', 1, 'The truth comes out', `${f.revealText}${verdict}`, []);
   }
   // drop facts long past

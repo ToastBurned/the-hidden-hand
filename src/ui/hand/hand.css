@@ -127,7 +127,7 @@ html.framed .hand .tip span { color: #3a2e22; }
 
 /* play */
 .hand .play { display: flex; flex-direction: column; min-height: 100vh; padding: 8px 12px 12px; gap: 6px; }
-.hand .topbar { display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center; justify-content: space-between; }
+.hand .topbar { flex: none; display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center; justify-content: space-between; }
 .hand .topbar .title h1 { font-size: 22px; margin: 0; }
 .hand .topbar .title small { color: var(--parch-dim); font: 13px var(--pixel); }
 .hand .res { display: flex; gap: 14px; margin: 0; flex-wrap: wrap; }
@@ -148,7 +148,7 @@ html.framed .hand .menu { border: 8px solid transparent; border-image: var(--pf-
 .hand .pausebar b { color: #f0a090; }
 .hand .toast { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); z-index: 60; font: 14px var(--pixel); background: var(--ink-2); border: 1px solid var(--lamp-dim); padding: 6px 14px; }
 .hand .toast.warn { border-color: var(--wax); }
-.hand .tabs.main { display: flex; gap: 4px; flex-wrap: wrap; align-items: center; }
+.hand .tabs.main { flex: none; display: flex; gap: 4px; flex-wrap: wrap; align-items: center; }
 .hand .tabs.main button { font-size: 15px; padding: 4px 14px; }
 .hand .tabs.main .assignbtn { margin-left: auto; }
 .hand small.new { color: var(--wax); font-weight: 600; }

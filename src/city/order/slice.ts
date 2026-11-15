@@ -297,6 +297,9 @@ export function proposeOrders(k: Campaign): Proposal[] {
   const out: Proposal[] = [];
   const busy = new Set(Object.values(o.ops).filter((x) => x.status === 'running').map((x) => x.agent));
   const taken = new Set<number>();
+  // districts where a lodge is being founded, or already proposed: one at a time
+  const founding = new Set(Object.values(o.ops).filter((x) => x.status === 'running' && x.kind === 'found-lodge').map((x) => c.buildings.get(x.target.id)?.district ?? -1));
+  let lodgeProposed = Object.values(o.ops).some((x) => x.status === 'running' && x.kind === 'found-lodge');
   const lodges = Object.values(o.lodges).filter((l) => l.found < 0);
   const sc = s?.scheme;
   // the elders' caution: not too many new faces at once, and nothing loud where we are watched
@@ -312,7 +315,7 @@ export function proposeOrders(k: Campaign): Proposal[] {
     // a lodge, if there is none (or a second, from the second year)
     const home = c.households.get(p.hh)?.home ?? -1;
     const hd = homeDistrict(c, p);
-    if (lodges.length < (c.day - o.order.founded >= DAYS_PER_YEAR ? MAX_LODGES : 1) && o.order.wealth >= 40 && sliceKind(k, hd) && !lodges.some((l) => l.district === hd) && home >= 0)
+    if (!lodgeProposed && !founding.has(hd) && lodges.length < (c.day - o.order.founded >= DAYS_PER_YEAR ? MAX_LODGES : 1) && o.order.wealth >= 40 && sliceKind(k, hd) && !lodges.some((l) => l.district === hd) && home >= 0)
       tries.push({ kind: 'found-lodge', target: { kind: 'building', id: home }, approach: 'in the cellar', why: `A lodge in ${districtName(c, hd)}: ${LODGE_YIELD[sliceKind(k, hd)!].gives.split(';')[0].toLowerCase()}.`, w: lodges.length ? 5 : 12 });
     // the scheme: befriend a councillor if there is no sponsor yet
     if (sc && sc.stage === 'sponsor' && !sponsors(k).length && m.influence >= 1) {
@@ -357,7 +360,7 @@ export function proposeOrders(k: Campaign): Proposal[] {
       const w = t.w * (0.4 + pv.chance);
       if (w > bw) { bw = w; best = { agent: m.pid, cmd, title: `${def.name}${t.target.kind === 'person' ? `: ${name(c, t.target.id)}` : t.target.kind === 'district' ? `: ${districtName(c, t.target.id)}` : ''}`, why: t.why, chance: pv.chance }; }
     }
-    if (best) { out.push(best); if (best.cmd.target.kind === 'person') taken.add(best.cmd.target.id); if (best.cmd.kind === 'recruit') recruits++; }
+    if (best) { out.push(best); if (best.cmd.target.kind === 'person') taken.add(best.cmd.target.id); if (best.cmd.kind === 'recruit') recruits++; if (best.cmd.kind === 'found-lodge') lodgeProposed = true; }
   }
   return out;
 }

@@ -72,16 +72,24 @@ const dayOf = (save) => JSON.parse(save.city).day;
   await page.evaluate(() => window.hiddenHandDesktop.prefs.set('hiddenhand.smoke', 'kept'));
   assert(await until(() => prefsOnDisk()['hiddenhand.smoke'] === 'kept', 'preference in preferences.json'), 'a preference is written to preferences.json');
 
-  // A new game, creed first: the city, a creed the city needs, a founder, the First Oath.
+  // A new game, creed first: the city, the five questions, a founder, the First Oath.
   await page.getByRole('button', { name: 'New game' }).click();
   await page.getByRole('button', { name: 'Set the creed' }).click({ timeout: 300000 });
   log('city made');
-  await page.locator('.creedstep .cards .card').first().click();
+  const questions = page.locator('ol.questions > li');
+  for (let i = 0; i < await questions.count(); i++) await questions.nth(i).locator('.answers button').first().click();
   await page.getByRole('button', { name: 'Find the founders' }).click();
   await page.locator('.card.founder').first().click();
   await page.getByRole('button', { name: 'Name the Order' }).click();
   await page.getByRole('button', { name: 'Swear the First Oath' }).click();
   await page.getByRole('button', { name: 'Menu' }).waitFor();
+  // The game opens with the vertical slice, with both clocks.
+  assert(await page.locator('nav.tabs.main').getByRole('button', { name: 'Council', exact: true }).isVisible(), 'the game opens with the slice views');
+  await page.getByRole('button', { name: 'Skip', exact: true }).first().click();
+  await page.getByRole('button', { name: /Next ▸/ }).first().click();
+  await page.waitForFunction(() => !document.querySelector('.rushing'), null, { timeout: 120000 });
+  assert(await page.getByRole('button', { name: 'Living', exact: true }).isEnabled(), 'skip mode jumps to the next stop and hands back the clock');
+  await page.getByRole('button', { name: 'Living', exact: true }).click();
   const [auto] = await until(() => saves().length === 1 && saves(), 'the opening autosave');
   assert(readSave(auto).kind === 'hidden-hand-city', `the game autosaves when it begins: ${auto}`);
   await page.waitForTimeout(1500);
