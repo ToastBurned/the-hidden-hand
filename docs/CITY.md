@@ -2,9 +2,9 @@
 
 Phase 2 of the one-city rebuild: a procedurally generated Renaissance port city of
 4,000 to 8,000 people, every one of them simulated, that lives for 90 years on its own.
-It sits beside the old world engine (`src/engine`), which still runs the 0.2.0 game on
-`main`; nothing in `src/engine` was changed. The city engine reuses the world engine's
-random number generator, its five value axes and its Siler mortality model.
+It began beside the old world engine of the 0.2.0 game, and kept that engine's random
+number generator and noise (now in `src/city/base`), its five value axes and its Siler
+mortality model when the old game was removed.
 
 ```
 npx tsx tools/city.ts [seed] [years] [minImportance]   # run headless, print the chronicle

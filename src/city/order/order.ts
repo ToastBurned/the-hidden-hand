@@ -60,7 +60,7 @@ export function admit(k: Campaign, p: Person, by: number, founder = false): Memb
   const m: Member = {
     pid: p.id, joined: c.day, zeal: clamp(0.85 - dist * 0.8 + (founder ? 0.15 : 0) + p.ambition * 0.05), discretion: discretionOf(p),
     standing: founder ? 'elder' : 'initiate', cell: cell.id, knows: [], influence: 0, crafts: {}, task: null,
-    wavering: false, wanted: false, imprisoned: -1, founder, dark: 0, hiddenUntil: -1, elderSince: founder ? c.day : -1, away: null,
+    wavering: false, wanted: false, imprisoned: -1, founder, dark: 0, hiddenUntil: -1, elderSince: founder ? c.day : -1,
   };
   const cr = NATIVE_CRAFT[p.trade] ?? 'tradecraft';
   m.crafts[cr] = clamp(0.1 + p.intel * 0.25 + p.skill * 0.15 + p.edu * 0.05);
@@ -215,13 +215,12 @@ export function orderMonth(k: Campaign): void {
   for (const m of members(o)) {
     const p = c.people.get(m.pid);
     if (!p) {
-      if (m.away) continue; // beyond the walls: no longer in the city's records, still ours
       const d = c.dead.get(m.pid);
       const how = !d ? 'vanished' : d.left ? 'left the city' : d.cause === 4 ? 'died of the plague' : d.cause === 12 ? 'died of a fever' : d.cause === 6 ? 'was killed' : d.cause === 10 ? 'was hanged' : d.cause === 3 ? 'died of want' : d.cause === 11 ? 'was lost at sea' : 'died';
       removeMember(k, m, how);
       continue;
     }
-    if (m.imprisoned >= 0 || m.away) continue;
+    if (m.imprisoned >= 0) continue;
     // influence: a seat, standing in the Order, rank in the city and the guilds, and a good name
     const seats = seatsOf(c, p.id);
     const seat = seats.reduce((a, s) => Math.max(a, seatWeight(s)), 0);
@@ -268,7 +267,7 @@ export function orderYear(k: Campaign): void {
   const shrine = (district: number) => roomReady(k, district, 'shrine');
   for (const m of members(o)) {
     const p = c.people.get(m.pid);
-    if (!p || m.imprisoned >= 0 || m.away) continue;
+    if (!p || m.imprisoned >= 0) continue;
     const dist = creedDistance(o.creed, p.values);
     const idealist = (p.agree + p.open) / 2;
     const cell = o.cells[m.cell];
@@ -298,7 +297,7 @@ export function orderYear(k: Campaign): void {
   }
   // teaching: in each cell members learn from the best among them, faster with a school or scriptorium
   for (const cell of Object.values(o.cells)) {
-    const ms = cellMembers(k, cell.id).filter((m) => m.imprisoned < 0 && !m.away);
+    const ms = cellMembers(k, cell.id).filter((m) => m.imprisoned < 0);
     if (ms.length < 2) continue;
     const school = roomReady(k, cell.district, 'school');
     const scr = roomReady(k, cell.district, 'scriptorium');

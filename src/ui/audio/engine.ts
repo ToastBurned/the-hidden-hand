@@ -15,7 +15,7 @@
  * with the window hidden, the context is suspended so the sound costs no CPU at all.
  */
 import type { Cue, Season } from './cues';
-import type { AudioSettings } from '../game/settings';
+import type { AudioSettings } from './settings';
 import { bell, makeImpulse, makeNoise, midi, noise, playCue, pluck, thud, tone, type Out } from './synth';
 
 export type Scene = 'title' | 'setup' | 'play' | 'ending';

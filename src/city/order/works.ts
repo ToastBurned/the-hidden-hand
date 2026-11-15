@@ -268,7 +268,7 @@ export function worksWeek(k: Campaign): boolean {
     if (!ok && wasOk && wasHeld > 26) notice(k, 'work', 3, 'The Great Work falters', `${gw.title}: ${blocker ?? 'the condition no longer holds'}`);
     if (gw.held >= gw.need) { gw.done = true; gw.doneAt = k.city.day; gw.progress = 1; completed = true; }
   } else {
-    // once done, the work must still stand when the Order goes beyond the walls; the view shows whether it does
+    // once done the campaign ends; this only keeps the view honest about whether the work still stands
     gw.blocker = ok ? null : blocker;
   }
   const defs = LESSER[gw.kind];

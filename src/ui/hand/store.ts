@@ -20,7 +20,7 @@ export const WEEK_SECONDS = 20;
 export const SPEEDS = [0, 7 / WEEK_SECONDS];
 export const SPEED_NAMES = ['Paused', 'Running'];
 const TICK = 100;
-/** Saves of the one-city game carry this note, so the 0.2.0 game can tell them apart. */
+/** Saves of the one-city game carry this note, so the save list can tell them from other files. */
 export const CITY_SAVE = 'city';
 
 export class HandGame {

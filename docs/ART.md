@@ -11,8 +11,7 @@ npx tsx tools/artshots.ts 1 shots            # PNGs of the city in each style, n
 LODGE=1 npx tsx tools/artshots.ts 1 shots    # PNG sheets of the lodge's four stages
 ```
 
-The prototype page lives outside the game (`art.html`, `src/art/main.tsx`), so the 0.2.0
-game is untouched.
+The prototype page lives outside the game (`art.html`, `src/art/main.tsx`).
 
 ## Files
 

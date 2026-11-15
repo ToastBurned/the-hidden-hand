@@ -1,6 +1,5 @@
 /**
- * The Hidden Hand on the one-city engine: the title, a new game (creed first), play, and
- * the ending. Runs beside the 0.2.0 game until the rebuild replaces it.
+ * The Hidden Hand: the title, a new game (creed first), play, and the ending.
  */
 import { useEffect, useState } from 'react';
 import { deserializeCampaign, type Campaign } from '../../city/order';
@@ -14,7 +13,7 @@ import './hand.css';
 
 type Screen = { kind: 'title' } | { kind: 'setup' } | { kind: 'play'; g: HandGame };
 
-export function HandApp({ onLeave }: { onLeave?: () => void }) {
+export function HandApp() {
   useFrame(ST);
   const [screen, setScreen] = useState<Screen>({ kind: 'title' });
   useEffect(() => () => { if (screen.kind === 'play') screen.g.dispose(); }, [screen]);
@@ -29,14 +28,14 @@ export function HandApp({ onLeave }: { onLeave?: () => void }) {
   };
   return (
     <div className="hand">
-      {screen.kind === 'title' && <Title onNew={() => setScreen({ kind: 'setup' })} onLoad={(g) => setScreen({ kind: 'play', g })} onLeave={onLeave} />}
+      {screen.kind === 'title' && <Title onNew={() => setScreen({ kind: 'setup' })} onLoad={(g) => setScreen({ kind: 'play', g })} />}
       {screen.kind === 'setup' && <Setup onBegin={begin} onBack={() => setScreen({ kind: 'title' })} />}
       {screen.kind === 'play' && <Play key={screen.g.k.order.seed + ':' + screen.g.k.order.order.founded} g={screen.g} onQuit={() => setScreen({ kind: 'title' })} />}
     </div>
   );
 }
 
-function Title({ onNew, onLoad, onLeave }: { onNew: () => void; onLoad: (g: HandGame) => void; onLeave?: () => void }) {
+function Title({ onNew, onLoad }: { onNew: () => void; onLoad: (g: HandGame) => void }) {
   const [saves, setSaves] = useState<SaveMeta[] | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -63,7 +62,6 @@ function Title({ onNew, onLoad, onLeave }: { onNew: () => void; onLoad: (g: Hand
           </section>
         )}
         {err && <p className="problem">{err}</p>}
-        {onLeave && <p><button type="button" className="small" onClick={onLeave}>Back to the 0.2 game</button></p>}
         <p className="muted small">An early build: everything plays, the balance is still being tuned.</p>
       </div>
     </div>

@@ -1,7 +1,7 @@
 /**
  * Deterministic, serialisable pseudo-random number generator (sfc32).
- * Every stochastic decision in the engine draws from a world-owned Rng so that
- * a world is fully reproducible from (config, seed, interventions).
+ * Every stochastic decision in the city draws from a seeded Rng so that
+ * a city and its campaign are fully reproducible from their seed.
  */
 export class Rng {
   a: number;

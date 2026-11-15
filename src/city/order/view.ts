@@ -9,7 +9,9 @@ import type { Campaign, Clarity, OrderView, WorkState } from './types';
 import { greatWorkFor, workReason } from './works';
 import { age, districtName, homeDistrict, members, name, seatsOf, tradeName, traitsOf } from './util';
 
-const ACT = ['', 'The circle', 'The Order', 'The Great Work'];
+const NTH = ['', 'first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh', 'eighth', 'ninth', 'tenth'];
+/** The generation's name for the top bar: the founders, then the second generation and so on. */
+export const generationTitle = (n: number) => (n <= 1 ? 'The founders' : `The ${NTH[n] ?? `${n}th`} generation`);
 
 function work(w: WorkState) {
   return { id: w.id, kind: w.kind, title: w.title, text: w.text, progress: w.progress, held: w.need > 1 ? { weeks: w.held, need: w.need } : undefined, done: w.done, blocker: w.blocker };
@@ -24,10 +26,9 @@ export function orderView(k: Campaign): OrderView {
   for (const m of members(o)) { const p = c.people.get(m.pid); if (p) memberDistricts.add(homeDistrict(c, p)); }
   const veil: Record<number, Clarity> = {};
   for (const d of c.districts) veil[d.id] = (o.local[d.id]?.seenUntil ?? -1) > c.day ? 'known' : memberDistricts.has(d.id) ? 'rumour' : 'unknown';
-  const nb = c.region.neighbours.find((x) => x.id === o.beyond.neighbour);
   return {
     phase: o.phase, day: c.day, date: dateLabel(c),
-    act: { n: o.act.n, title: ACT[o.act.n] },
+    generation: { n: o.generation.n, title: generationTitle(o.generation.n) },
     order: { name: o.order.name, meaning: o.order.meaning, founded: o.order.founded, founder: o.order.founder, posture: o.order.posture, home: o.order.home },
     resources: { influence: res.influence, wealth: res.wealth, secrecy: sec, cohesion: res.cohesion, delta: { influence: res.influence - o.lastRes.influence, wealth: res.wealth - o.lastRes.wealth, secrecy: sec - o.lastRes.secrecy, cohesion: res.cohesion - o.lastRes.cohesion } },
     creed: o.creed,
@@ -41,7 +42,6 @@ export function orderView(k: Campaign): OrderView {
       if (m.wanted) flags.push('wanted');
       if (m.imprisoned >= 0) flags.push('imprisoned');
       if (m.hiddenUntil > c.day) flags.push('hidden');
-      if (m.away) flags.push('away');
       if (m.founder) flags.push('founder');
       if (p?.sick) flags.push('ill');
       return [{
@@ -70,10 +70,6 @@ export function orderView(k: Campaign): OrderView {
     greatWork: work(o.greatWork),
     workReason: workReason(o.creed),
     lesserWorks: o.lesserWorks.map(work),
-    beyond: {
-      state: o.beyond.state, neighbour: nb?.name ?? null, member: o.beyond.member >= 0 ? o.beyond.member : null,
-      text: o.beyond.state === 'locked' ? 'Once the Great Work is done and held, a member may carry the creed beyond the walls.' : o.beyond.state === 'open' ? 'The Great Work is held. Send a member beyond the walls to found a lodge in another town.' : o.beyond.state === 'under way' ? `${name(c, o.beyond.member)} is on the road to ${nb?.name ?? 'another town'}.` : `A lodge stands in ${nb?.name ?? 'another town'}.`,
-    },
     notices: o.notices.slice(0, 60),
     conclave: o.conclave,
     chapters: o.chapters,

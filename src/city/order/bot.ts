@@ -57,7 +57,7 @@ export function botWeek(k: Campaign, mode: BotMode): void {
   if (o.phase !== 'play') return;
   if (o.conclave) {
     for (const it of [...o.conclave.items]) {
-      const pref = it.kind === 'promotion' ? 'yes' : it.kind === 'expel' ? 'expel' : it.kind === 'hunted' ? 'hide' : it.kind === 'amendment' ? 'refuse' : it.kind === 'beyond' && mode === 'idle' ? 'wait' : it.options[0].id;
+      const pref = it.kind === 'promotion' ? 'yes' : it.kind === 'expel' ? 'expel' : it.kind === 'hunted' ? 'hide' : it.kind === 'amendment' ? 'refuse' : it.options[0].id;
       if (applyCommand(k, { type: 'conclave-decide', item: it.id, option: pref }).ok) continue;
       const alt = it.kind === 'hunted' ? 'quiet' : it.options[it.options.length - 1].id;
       if (!applyCommand(k, { type: 'conclave-decide', item: it.id, option: alt }).ok) applyCommand(k, { type: 'conclave-decide', item: it.id, option: it.options[it.options.length - 1].id });
@@ -65,18 +65,9 @@ export function botWeek(k: Campaign, mode: BotMode): void {
     cmd(k, { type: 'conclave-close' });
   }
   if (mode === 'idle') return;
-  const ms = members(o).filter((m) => m.imprisoned < 0 && !m.away && c.people.has(m.pid));
+  const ms = members(o).filter((m) => m.imprisoned < 0 && c.people.has(m.pid));
   const lodge = Object.values(o.lodges).find((l) => l.found < 0);
-  // the closing act: the most zealous free member takes the road
-  if (o.beyond.state === 'open' && o.order.wealth >= 150) {
-    const nb = c.region.neighbours[0];
-    const go = ms.filter((m) => m.zeal >= 0.55 && availableOps(k, m.pid).includes('go-beyond')).sort((a, b) => b.zeal - a.zeal)[0];
-    if (go && nb) tryOp(k, go.pid, 'go-beyond', { kind: 'neighbour', id: nb.id }, ['as a merchant', 'as a preacher', 'as a scholar']);
-  }
-  // while the road is open, the zealous save their influence for it
-  const saving = o.beyond.state === 'open' ? new Set(ms.filter((m) => m.zeal >= 0.55).map((m) => m.pid)) : new Set<number>();
   for (const m of ms) {
-    if (saving.has(m.pid)) continue;
     const can = availableOps(k, m.pid);
     if (!can.length) continue;
     const p = c.people.get(m.pid)!;

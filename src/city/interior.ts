@@ -7,7 +7,7 @@
  * nothing to save. A building whose interior has been changed (a lodge fitting out its
  * rooms) keeps it in Building.interior, which is saved.
  */
-import { Rng } from '../engine/core/rng';
+import { Rng } from './base/rng';
 import { B } from './constants';
 import type { Building, City } from './types';
 

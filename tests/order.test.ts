@@ -8,7 +8,7 @@ import {
 import { advance, botWeek, newBotCampaign } from '../src/city/order/bot';
 import { pendingItems, conclaveWeek } from '../src/city/order/conclave';
 import { members, spend, takeCoin } from '../src/city/order/util';
-import { ageOf } from '../src/city/core';
+import { ageOf, removePerson } from '../src/city/core';
 import type { Campaign } from '../src/city/order';
 
 function totalCoin(k: Campaign): number {
@@ -60,7 +60,6 @@ describe('operations', () => {
     const can = availableOps(k, f);
     expect(can).toContain('recruit');
     expect(can).not.toContain('poison'); // needs a craft no one has
-    expect(can).not.toContain('go-beyond'); // only once the Great Work is held
     const child = [...k.city.people.values()].find((p) => ageOf(k.city, p) < 14)!;
     const pv = previewOp(k, { type: 'operation', kind: 'favour', agent: f, target: { kind: 'person', id: child.id }, approach: opDefs().find((d) => d.kind === 'favour')!.approaches[0] });
     expect('error' in pv).toBe(true);
@@ -117,26 +116,49 @@ describe('conclaves', () => {
   });
 });
 
-describe('the closing act', () => {
-  it('ends in a win when a member founds a lodge beyond the walls', () => {
+describe('generations and old saves', () => {
+  it('has no acts and no road beyond the walls', () => {
+    const k = newBotCampaign(8);
+    expect(opDefs().some((d) => d.kind === 'go-beyond')).toBe(false);
+    expect(k.order.generation).toEqual({ n: 1, since: k.order.order.founded, leaders: [k.order.order.founder] });
+    expect(k.order.chapters.map((ch) => ch.generation)).toEqual([1]);
+    expect('act' in k.order || 'beyond' in k.order).toBe(false);
+  });
+
+  it('a new generation begins when the founder is gone, and is written in the Chronicle', () => {
     const k = newBotCampaign(8);
     for (let w = 0; w < 30; w++) { botWeek(k, 'bot'); advance(k, 7); }
-    const o = k.order;
-    o.greatWork.done = true; o.greatWork.doneAt = k.city.day; o.beyond.state = 'open';
-    o.order.wealth = Math.max(o.order.wealth, 200);
-    const m = members(o).find((x) => x.imprisoned < 0 && k.city.people.has(x.pid))!;
-    m.zeal = 0.9; m.influence = 10;
-    for (const op of Object.values(o.ops)) if (op.agent === m.pid && op.status === 'running') applyCommand(k, { type: 'abandon-op', id: op.id });
-    m.task = null;
-    const nb = k.city.region.neighbours[0];
-    const res = applyCommand(k, { type: 'operation', kind: 'go-beyond', agent: m.pid, target: { kind: 'neighbour', id: nb.id }, approach: opDefs().find((d) => d.kind === 'go-beyond')!.approaches[0] });
-    expect(res).toEqual({ ok: true });
-    expect(k.city.people.has(m.pid)).toBe(false); // gone on the road
-    const op = Object.values(o.ops).find((x) => x.kind === 'go-beyond')!;
-    op.odds = 1;
-    advance(k, 800);
-    expect(o.ending?.kind).toBe('won');
-    expect(['true', 'changed', 'hollow']).toContain(o.ending?.verdict);
+    const before = k.order.chapters.length;
+    removePerson(k.city, k.city.people.get(k.order.order.founder)!, 0);
+    advance(k, 14);
+    if (k.order.phase !== 'play') return; // the Order did not survive its founder
+    expect(k.order.generation.n).toBe(2);
+    expect(k.order.chapters.length).toBe(before + 1);
+    expect(k.order.chapters[before].title).toBe('The second generation');
+    expect(k.order.notices.some((n) => /^Act /.test(n.title))).toBe(false);
+  });
+
+  it('loads a save from before acts and the road beyond the walls were dropped', () => {
+    const k = newBotCampaign(8);
+    for (let w = 0; w < 10; w++) { botWeek(k, 'bot'); advance(k, 7); }
+    const raw = JSON.parse(serializeCampaign(k));
+    const o = raw.order;
+    o.act = { n: 2, since: 100, leaders: [o.order.founder] };
+    delete o.generation;
+    o.beyond = { state: 'locked', op: -1, neighbour: -1, member: -1, failed: 0 };
+    o.chapters = o.chapters.map((ch: { generation: number }) => { const { generation, ...rest } = ch; return { act: generation, ...rest }; });
+    const pid = Number(Object.keys(o.members).find((id) => Number(id) !== o.order.founder));
+    for (const m of Object.values(o.members) as { pid: number; away?: unknown }[]) m.away = m.pid === pid ? { neighbour: 0, since: 100 } : null;
+    o.ops[9999] = { id: 9999, kind: 'go-beyond', agent: pid, target: { kind: 'neighbour', id: 0 }, approach: 'as a merchant', started: 100, due: 828, odds: 0.9, risk: 0, status: 'running', resolved: -1 };
+    const back = deserializeCampaign(JSON.stringify(raw));
+    expect(back.order.generation).toEqual({ n: 2, since: 100, leaders: [o.order.founder] });
+    expect('act' in back.order || 'beyond' in back.order).toBe(false);
+    expect(back.order.chapters.every((ch) => ch.generation >= 1 && !('act' in ch))).toBe(true);
+    expect(back.order.ops[9999]).toBeUndefined();
+    expect(back.order.members[pid]).toBeUndefined();
+    expect(back.order.fallen[0]).toMatchObject({ id: pid, how: 'left the city' });
+    expect(Object.values(back.order.members).every((m) => !('away' in m))).toBe(true);
+    advance(back, 28);
   });
 });
 

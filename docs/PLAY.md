@@ -3,8 +3,7 @@
 The interface for the Order on the city engine (docs/ORDER.md), drawn in the chosen
 pixel style, Ledger + fronts at 10 px a cell (docs/ART.md). It is what the app opens to
 (Ed decided on 15 Nov 2026 that the game has fully pivoted to one city). The 0.2.0
-whole-world game in `src/ui/game` and `src/engine` is no longer offered; its code stays
-until a later cleanup, and the page still opens it with `#old`.
+whole-world game was removed the same day; it lives on in the git history.
 
 - in the app: `npm run dev`, `npm run build` (app/HiddenHand.html, the desktop app);
 - on its own: `npm run play` (develop) or `npm run build:play` (one file,
@@ -12,8 +11,8 @@ until a later cleanup, and the page still opens it with `#old`.
 
 ## Screens
 
-- **Title**: new game, or carry on from a save. City saves carry the note `city`, so the
-  0.2.0 load dialog never lists them (and the other way round).
+- **Title**: new game, or carry on from a save. City saves carry the note `city`; the title
+  lists only those.
 - **New game, creed first** (`Setup.tsx`): the city and its troubles; the creed by one of
   three ways (what the city needs, five questions, or the free editor), with the oath and
   the Great Work shown as the creed changes; three founders for that creed, each with a
@@ -29,12 +28,13 @@ until a later cleanup, and the page still opens it with `#old`.
   - *Levers*: standing pulls, each shown as its contest against named opponents, with
     strength and release; a dialog to pull a new one with the contest forecast first.
   - *Great Work*: the work, how long it has held, what stands in the way, lesser works,
-    the creed and its gap, and the road beyond the walls.
-  - *Chronicle*: chapters, every notice, finished assignments.
+    the creed and its gap.
+  - *Chronicle*: a chapter for the founding and each generation, every notice, finished
+    assignments.
 - **Assignments** (`Assign.tsx`): who, what (only what the Order can do now), at whom,
   and how, with the elders' odds, risk, days and cost before anything is spent. Recruiting
   lists people with their belief, trust, wounds and rank.
-- **Conclave**, **chapter pages** at act breaks, and the **ending** with the verdict on
+- **Conclave**, and the **ending** with the verdict on
   the creed.
 
 ## The clock

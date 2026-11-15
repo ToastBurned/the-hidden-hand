@@ -40,7 +40,6 @@ export const OPS: OpSpec[] = [
   { kind: 'sabotage', family: 'violence', name: 'Set a fire', blurb: 'Burn a building. Fire spreads as it will.', target: 'building', approaches: ['by night', 'as an accident'], cost: { influence: 1, wealth: 10 }, days: 14, needs: [], craft: 'tradecraft', base: 0.3, trace: 0.08, dark: 2 },
   { kind: 'poison', family: 'violence', name: 'Poison', blurb: 'A death the physicians will call a fever.', target: 'person', approaches: ['in their wine', 'through their physician'], cost: { influence: 3, wealth: 16 }, days: 14, needs: ['poisons'], craft: 'poisons', base: -0.2, trace: 0.06, dark: 3 },
   { kind: 'assassinate', family: 'violence', name: 'Assassinate', blurb: 'Kill them. Who takes their place is not yours to choose.', target: 'person', approaches: ['by a hired blade', 'by one of our own'], cost: { influence: 4, wealth: 24 }, days: 14, needs: ['tradecraft'], craft: 'tradecraft', base: -0.4, trace: 0.15, dark: 3 },
-  { kind: 'go-beyond', family: 'beyond', name: 'Carry the creed beyond the walls', blurb: 'A member leaves the city for good, with coin, to found a lodge in another town. It takes about two years. When it succeeds the campaign ends, and the creed is judged.', target: 'neighbour', approaches: ['as a merchant', 'as a preacher', 'as a scholar'], cost: { influence: 1, wealth: 150 }, days: 728, needs: [], craft: 'tradecraft', base: 0.9, trace: 0, dark: 0 },
 ];
 export const OP_BY_KIND: Record<string, OpSpec> = Object.fromEntries(OPS.map((o) => [o.kind, o]));
 
@@ -50,7 +49,7 @@ const SELF = new Set(['hide', 'rescue']);
 
 function agentSkill(k: Campaign, spec: OpSpec, m: Member, p: Person): number {
   const craft = m.crafts[spec.craft] ?? 0;
-  const social = spec.family === 'persuasion' || ['recruit', 'favour', 'win-seat', 'discredit', 'spread-rumour', 'go-beyond'].includes(spec.kind);
+  const social = spec.family === 'persuasion' || ['recruit', 'favour', 'win-seat', 'discredit', 'spread-rumour'].includes(spec.kind);
   return p.intel * 0.3 + craft * 0.35 + (social ? p.extra * 0.2 + p.agree * 0.1 : p.consc * 0.2 + (1 - p.neuro) * 0.1) + p.status * 0.1 + mastery(k.order, spec.craft) * 0.05;
 }
 
@@ -58,7 +57,7 @@ function agentSkill(k: Campaign, spec: OpSpec, m: Member, p: Person): number {
 function daysFor(k: Campaign, spec: OpSpec, ap: Person, t?: Person): number {
   let d = spec.days;
   if (t && homeDistrict(k.city, t) !== homeDistrict(k.city, ap) && !anyRoom(k, 'courier-post')) d = Math.round(d * 1.3);
-  if (k.order.order.posture === 'bold' && spec.family !== 'beyond') d = Math.round(d * 0.85);
+  if (k.order.order.posture === 'bold') d = Math.round(d * 0.85);
   return d;
 }
 
@@ -71,7 +70,6 @@ export function opProblem(k: Campaign, cmd: Cmd): string | null {
   const ap = c.people.get(cmd.agent);
   if (!m || !ap) return 'the agent is not a member';
   if (m.imprisoned >= 0) return 'the agent is in the gaol';
-  if (m.away) return 'the agent has left the city';
   if (m.hiddenUntil > c.day) return 'the agent is lying low';
   if (Object.values(o.ops).some((x) => x.status === 'running' && x.agent === cmd.agent)) return 'the agent is already on an assignment';
   if (!unlocked(o, spec.kind)) return `locked: needs ${unlockerOf(spec.kind)?.name ?? 'a craft'}`;
@@ -107,11 +105,6 @@ export function opProblem(k: Campaign, cmd: Cmd): string | null {
     }
   }
   if (spec.target === 'district' && !c.districts.some((d) => d.id === cmd.target.id)) return 'no such district';
-  if (spec.target === 'neighbour') {
-    if (o.beyond.state !== 'open') return o.beyond.state === 'locked' ? 'the Great Work must first be done and held' : 'a member is already on the road';
-    if (!c.region.neighbours.some((n) => n.id === cmd.target.id)) return 'no such town';
-    if (m.zeal < 0.55) return `${ap.first} is not willing to leave the city for good`;
-  }
   if (spec.cost.wealth > o.order.wealth + 1e-6) return 'not enough coin';
   if (spec.cost.influence > m.influence + 1e-6) return `${ap.first} lacks the influence`;
   return null;
@@ -170,7 +163,6 @@ export function opOdds(k: Campaign, cmd: Cmd): { odds: number; risk: number; adv
     x += (d.unrest - 0.25) * 4 + (cmd.approach === 'over bread' ? (c.bread - 1) * 3 : 0);
     advice = d.unrest > 0.35 ? 'The district is already angry.' : 'The district is content; it will not rise easily.';
   }
-  if (spec.kind === 'go-beyond') advice = `${ap.first} would leave ${c.name} for good.`;
   const posture = o.order.posture === 'bold' ? 0.3 : o.order.posture === 'cautious' ? -0.2 : 0;
   const odds = clamp(sigmoid(x + posture), 0.03, 0.97);
   const risk = clamp(spec.trace * (1 + (1 - m.discretion)) * (1 - (m.crafts[spec.craft] ?? 0) * 0.4) * (o.order.posture === 'bold' ? 1.3 : o.order.posture === 'cautious' ? 0.8 : 1) * 6);
@@ -215,7 +207,6 @@ export function targetName(k: Campaign, t: Target): string {
     case 'district': return districtName(c, t.id);
     case 'building': return c.buildings.get(t.id)?.name ?? 'a building';
     case 'office': return c.offices.get(t.id)?.title ?? 'an office';
-    case 'neighbour': return c.region.neighbours.find((n) => n.id === t.id)?.name ?? 'a town';
     case 'motion': return t.key ?? 'a motion';
     default: return '';
   }
@@ -241,38 +232,25 @@ export function startOp(k: Campaign, cmd: Cmd): string | null {
   o.ops[id] = op;
   m.task = `${spec.name}: ${targetName(k, cmd.target)}`;
   o.log.ops++;
-  if (spec.kind === 'go-beyond') {
-    // they leave now; the city records them as gone, the Order keeps them
-    const nb = c.region.neighbours.find((n) => n.id === cmd.target.id)!;
-    m.away = { neighbour: nb.id, since: c.day };
-    o.beyond = { ...o.beyond, state: 'under way', op: id, neighbour: nb.id, member: m.pid };
-    for (const lv of Object.values(o.levers)) if (lv.member === m.pid) delete o.levers[lv.id];
-    logEvent(c, { kind: 'departure', imp: 2, text: `${name(c, m.pid)} left ${c.name} for ${nb.name}, ${cmd.approach}.`, people: [m.pid] });
-    delete ap.keep;
-    removePerson(c, ap, 0);
-    notice(k, 'beyond', 3, 'Beyond the walls', `${name(c, m.pid)} has taken the road to ${nb.name} to found a lodge there.`, [{ kind: 'member', id: m.pid }]);
-  }
   return null;
 }
 
 /** Daily: resolve the operations that fall due today. */
-export function opsDay(k: Campaign): boolean {
+export function opsDay(k: Campaign): void {
   const o = k.order;
   const c = k.city;
-  let ended = false;
   for (const op of Object.values(o.ops)) {
     if (op.status !== 'running') continue;
     const m = o.members[op.agent];
-    if (!m || (!c.people.has(op.agent) && !m.away)) { op.status = 'abandoned'; op.resolved = c.day; continue; }
+    if (!m || !c.people.has(op.agent)) { op.status = 'abandoned'; op.resolved = c.day; continue; }
     if (op.target.kind === 'person' && !c.people.has(op.target.id) && op.kind !== 'assassinate' && op.kind !== 'poison') { op.status = 'abandoned'; op.outcome = 'The target is gone.'; op.resolved = c.day; m.task = null; continue; }
     if (c.day < op.due) continue;
-    if (resolve(k, op, m)) ended = true;
+    resolve(k, op, m);
     m.task = null;
     if (op.target.kind === 'person') release(k, op.target.id);
   }
   // old resolved operations are forgotten after two years
   for (const op of Object.values(o.ops)) if (op.status !== 'running' && c.day - op.resolved > 728) delete o.ops[op.id];
-  return ended;
 }
 
 function districtOf(k: Campaign, op: Operation, ap: Person | undefined): number {
@@ -283,8 +261,7 @@ function districtOf(k: Campaign, op: Operation, ap: Person | undefined): number 
   return ap ? homeDistrict(c, ap) : c.districts[0].id;
 }
 
-/** Returns true when the operation ends the campaign (the creed carried beyond the walls). */
-function resolve(k: Campaign, op: Operation, m: Member): boolean {
+function resolve(k: Campaign, op: Operation, m: Member): void {
   const o = k.order;
   const c = k.city;
   const r = orng(o);
@@ -297,16 +274,6 @@ function resolve(k: Campaign, op: Operation, m: Member): boolean {
   o.practice.families[spec.family] = (o.practice.families[spec.family] ?? 0) + 1;
   practise(o, m, spec.craft, ok ? 0.08 : 0.04);
   if (spec.dark) { o.practice.dark += spec.dark; m.dark += spec.dark; }
-  if (spec.kind === 'go-beyond') {
-    if (ok) { op.status = 'succeeded'; op.outcome = `${name(c, op.agent)} has founded a lodge in ${targetName(k, op.target)}.`; o.beyond.state = 'done'; return true; }
-    op.status = 'failed';
-    op.outcome = `No word has come from ${name(c, op.agent)} in ${targetName(k, op.target)} for a long time. They are given up for lost.`;
-    o.beyond = { ...o.beyond, state: 'open', failed: o.beyond.failed + 1, member: -1, op: -1 };
-    delete o.members[m.pid];
-    o.fallen.unshift({ id: m.pid, name: name(c, m.pid), died: c.day, how: 'lost on the road beyond the walls' });
-    notice(k, 'beyond', 3, 'Lost beyond the walls', op.outcome);
-    return false;
-  }
   if (!ok) {
     op.status = 'failed';
     trace(k, d, op.risk * 0.45, op.agent);
@@ -327,14 +294,13 @@ function resolve(k: Campaign, op: Operation, m: Member): boolean {
         op.outcome += ' They refused loudly, and they will talk.';
       }
     }
-    return false;
+    return;
   }
   op.status = 'succeeded';
   o.log.opsOk++;
   trace(k, d, op.risk * 0.12, op.agent);
   op.outcome = apply(k, op, m, ap!, t);
   notice(k, op.kind === 'recruit' ? 'recruit' : 'operation', 2, `${spec.name} succeeded`, op.outcome, [{ kind: 'operation', id: op.id }, { kind: 'member', id: m.pid }]);
-  return false;
 }
 
 function failText(k: Campaign, op: Operation, t: Person | undefined): string {
@@ -474,9 +440,9 @@ export function opDefs(): OperationDef[] {
 export function availableOps(k: Campaign, pid: number): string[] {
   const o = k.order;
   const m = o.members[pid];
-  if (!m || m.imprisoned >= 0 || m.away || m.hiddenUntil > k.city.day) return [];
+  if (!m || m.imprisoned >= 0 || m.hiddenUntil > k.city.day) return [];
   if (Object.values(o.ops).some((x) => x.status === 'running' && x.agent === pid)) return [];
-  return OPS.filter((s) => unlocked(o, s.kind) && s.needs.every((n) => mastery(o, n) >= 0.25) && (s.kind !== 'go-beyond' || o.beyond.state === 'open')).map((s) => s.kind);
+  return OPS.filter((s) => unlocked(o, s.kind) && s.needs.every((n) => mastery(o, n) >= 0.25)).map((s) => s.kind);
 }
 
 /**

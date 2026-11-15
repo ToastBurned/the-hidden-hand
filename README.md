@@ -5,9 +5,8 @@ over a few generations. Every one of the city's 4,000 to 8,000 people is simulat
 scripted: what happens comes from their needs, trades, families, faiths and grudges, and from what your Order does.
 
 > **Status: playable, in development.** The one-city game is built end to end, from founding to the ending, and the
-> app opens straight into it. Balance is still being tuned (some campaigns run very long without an ending), and
-> breaks between acts are not finished yet. The earlier whole-world version (0.2.0) is no longer offered; its code is
-> still in the repository, reachable by adding `#old` to the page address, until a later cleanup.
+> app opens straight into it. Balance is still being tuned (some campaigns run very long without an ending). The
+> earlier whole-world version (0.2.0) has been removed; it lives on in the git history.
 
 ![The city game](docs/screenshots/city-game.png)
 
@@ -26,9 +25,9 @@ start they give. You name the Order and swear the First Oath.
 
 **Winning.** Each Great Work is a real condition on the city, held for a number of years: no one starves, a school
 in every district, a voice for the many on the council, peace in the streets, faith without fear, the hidden
-council, or the city endures. Lesser works along the way reward the Order. Once the work has held, a member goes
-**beyond the walls** to a neighbouring town to carry the Order on, and the campaign ends with a verdict on the
-creed: kept **true**, **changed**, or **hollow**. You lose if the Order is destroyed, withers, or is left leaderless.
+council, or the city endures. Lesser works along the way reward the Order. Once the work has held, the campaign
+ends in a win with a verdict on the creed: kept **true**, **changed**, or **hollow**. There are no acts: generations
+pass as people die, and each one writes a chapter of the Order's Chronicle. You lose if the Order is destroyed, withers, or is left leaderless.
 
 **What you work with:**
 
@@ -93,14 +92,9 @@ npm test                                             :: automated tests
 In the browser console, `hiddenHand` is the running game (`hiddenHand.advance(364)` runs a year straight through)
 and `hiddenHandOpen(text)` opens a campaign saved as text.
 
-The tools for the old whole-world simulation (`npm run sim`, `npm run experiment`, `npm run validate`,
-`tools/campaigns.ts`) still run, but that simulation is no longer the game.
-
 ## Documentation
 
 - [docs/PLAY.md](docs/PLAY.md): the game's screens, the clock and playtest hooks.
 - [docs/CITY.md](docs/CITY.md): the city generator and the people simulation, and the 90-year gate.
 - [docs/ORDER.md](docs/ORDER.md): the Order's rules: founding, operations, levers, suspicion, Great Works, conclaves.
 - [docs/ART.md](docs/ART.md): the pixel renderer and the chosen style.
-- Older, for the whole-world version: [docs/DESIGN.md](docs/DESIGN.md), [docs/GAME.md](docs/GAME.md),
-  [docs/VALIDATION.md](docs/VALIDATION.md), [docs/EXPERIMENTS.md](docs/EXPERIMENTS.md).

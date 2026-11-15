@@ -1,5 +1,5 @@
 /** Small helpers shared by the Order layer. */
-import { Rng } from '../../engine/core/rng';
+import { Rng } from '../base/rng';
 import { DAYS_PER_YEAR, TRADES } from '../constants';
 import { ageOf, clamp, dateLabel, nameOf } from '../core';
 import type { City, Household, Office, Person } from '../types';
@@ -36,7 +36,7 @@ export function active(k: Campaign): { m: Member; p: Person }[] {
   const out: { m: Member; p: Person }[] = [];
   for (const m of members(k.order)) {
     const p = k.city.people.get(m.pid);
-    if (!p || m.imprisoned >= 0 || m.away) continue;
+    if (!p || m.imprisoned >= 0) continue;
     out.push({ m, p });
   }
   return out;

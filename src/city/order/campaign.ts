@@ -1,5 +1,5 @@
 /**
- * The campaign on the one-city engine: founding, the daily clock, act breaks, endings,
+ * The campaign on the one-city engine: founding, the daily clock, generations, endings,
  * commands, and saving.
  *
  *   const c = createCity({ seed });                       // 1. the city
@@ -11,7 +11,7 @@
  *   applyCommand(k, { type: 'operation', ... });          // the only way the player acts
  *   orderView(k);                                         // everything the screens draw
  */
-import { Rng } from '../../engine/core/rng';
+import { Rng } from '../base/rng';
 import { DAYS_PER_WEEK, DAYS_PER_YEAR } from '../constants';
 import { calendarYear, logEvent, nameOf } from '../core';
 import { deserializeCity, serializeCity } from '../serialize';
@@ -58,8 +58,7 @@ export function foundOrder(c: City, opt: FoundOptions): Campaign {
     creed, practice: { families: {}, dark: 0, good: 0 },
     members: {}, fallen: [], cells: {}, lodges: {}, levers: {}, ops: {}, local: {}, investigations: [], knowers: [],
     greatWork: makeGreatWork(work), lesserWorks: makeLesserWorks(work),
-    beyond: { state: 'locked', op: -1, neighbour: -1, member: -1, failed: 0 },
-    act: { n: 1, since: c.day, leaders: [founder.id] }, chapters: [],
+    generation: { n: 1, since: c.day, leaders: [founder.id] }, chapters: [],
     notices: [], reports: [], conclave: null, asked: {}, lastConclave: c.day, interrupts: 'important', ending: null, leaderless: 0,
     lastRes: { influence: 0, wealth: 0, secrecy: 1, cohesion: 0.8 },
     log: { recruits: 0, refusals: 0, arrests: 0, seats: 0, ops: 0, opsOk: 0, levers: 0, conclaves: 0, schools: 0 },
@@ -74,7 +73,7 @@ export function foundOrder(c: City, opt: FoundOptions): Campaign {
   f.influence = 2; comp.influence = 1;
   localOf(k, o.order.home);
   logEvent(c, { kind: 'founding', imp: 1, text: `${name(c, f.pid)} and ${name(c, comp.pid)} met in secret in ${c.districts.find((d) => d.id === o.order.home)?.name ?? c.name}.`, people: [f.pid, comp.pid] });
-  o.chapters.push({ act: 1, day: c.day, title: 'The circle', paragraphs: [`${o.order.name} was founded in ${calendarYear(c)} by ${name(c, f.pid)} and ${name(c, comp.pid)}.`, creed.oath, `Its Great Work: ${o.greatWork.title}. ${o.greatWork.text}`] });
+  o.chapters.push({ generation: 1, day: c.day, title: 'The founding', paragraphs: [`${o.order.name} was founded in ${calendarYear(c)} by ${name(c, f.pid)} and ${name(c, comp.pid)}.`, creed.oath, `Its Great Work: ${o.greatWork.title}. ${o.greatWork.text}`] });
   notice(k, 'info', 3, 'The First Oath', `${o.order.name} is founded. Your first task: find a third. A favour done for a neighbour earns the influence a recruit costs.`, [{ kind: 'member', id: f.pid }]);
   applyMods(k, leversMonth(k, false));
   return k;
@@ -107,14 +106,12 @@ function orderDay(k: Campaign): void {
   const o = k.order;
   const c = k.city;
   if (o.phase !== 'play') return;
-  if (opsDay(k)) { end(k, 'won'); return; }
+  opsDay(k);
   if (c.day % DAYS_PER_WEEK !== 0) return;
   trialsWeek(k);
   suspicionWeek(k);
-  if (worksWeek(k) && o.beyond.state === 'locked') {
-    o.beyond.state = 'open';
-    notice(k, 'work', 3, 'The Great Work is done', `${o.greatWork.title} has held. Now the creed may be carried beyond the walls: a member must leave for another town and found a lodge there.`);
-  }
+  // the Great Work done and held: the campaign ends, and the creed is judged
+  if (worksWeek(k)) { end(k, 'won'); return; }
   const week = Math.floor(c.day / DAYS_PER_WEEK);
   if (week % 4 === 0) { orderMonth(k); applyMods(k, leversMonth(k, true)); }
   if (c.day % DAYS_PER_YEAR === 0 && c.day > o.order.founded) {
@@ -123,44 +120,49 @@ function orderDay(k: Campaign): void {
     const res = resources(k);
     o.lastRes = { influence: res.influence, wealth: res.wealth, secrecy: secrecy(k), cohesion: res.cohesion };
   }
-  actWeek(k);
+  generationWeek(k);
   conclaveWeek(k);
   checkEnding(k);
 }
 
-// ---------------------------------------------------------------- acts
+// ---------------------------------------------------------------- generations
 
-const ACT_TITLES = ['', 'The circle', 'The Order', 'The Great Work'] as const;
-
-function actWeek(k: Campaign): void {
+/**
+ * Generations come from the simulation, not from a script: the second begins when the
+ * founder is gone, and each after that when the last of the previous one's leaders is gone
+ * (at least five years on). Each one writes a page of the Chronicle and calls the elders.
+ */
+function generationWeek(k: Campaign): void {
   const o = k.order;
   const c = k.city;
-  if (o.act.n === 1 && !(o.order.founder in o.members && c.people.has(o.order.founder))) {
-    const leaders = members(o).filter((m) => m.standing === 'elder').map((m) => m.pid);
-    startAct(k, 2, leaders);
-  } else if (o.act.n === 2 && c.day - o.act.since > 5 * DAYS_PER_YEAR && !o.act.leaders.some((id) => id in o.members && c.people.has(id))) {
-    startAct(k, 3, members(o).filter((m) => m.standing === 'elder').map((m) => m.pid));
-  }
+  const g = o.generation;
+  const gone = g.n === 1
+    ? !(o.order.founder in o.members && c.people.has(o.order.founder))
+    : c.day - g.since > 5 * DAYS_PER_YEAR && !g.leaders.some((id) => id in o.members && c.people.has(id));
+  if (gone) nextGeneration(k, members(o).filter((m) => m.standing === 'elder').map((m) => m.pid));
 }
 
-function startAct(k: Campaign, n: 2 | 3, leaders: number[]): void {
+const ORDINAL = ['', 'first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh', 'eighth', 'ninth', 'tenth'];
+
+function nextGeneration(k: Campaign, leaders: number[]): void {
   const o = k.order;
   const c = k.city;
-  const then = c.years.find((y) => y.year === calendarYear(c, o.act.since));
-  o.act = { n, since: c.day, leaders };
+  const then = c.years.find((y) => y.year === calendarYear(c, o.generation.since));
+  const n = o.generation.n + 1;
+  const nth = ORDINAL[n] ?? `${n}th`;
+  o.generation = { n, since: c.day, leaders };
   const mayor = [...c.offices.values()].find((x) => x.kind === 'mayor');
   const laws = Object.keys(c.treasury.laws).filter((x) => ['granary', 'tolerance', 'suppression', 'openCouncil', 'quarantine', 'subsidy'].includes(x));
   const lawText: Record<string, string> = { granary: 'keeps a granary by law', tolerance: 'tolerates the dissenters', suppression: 'forbids the dissenters to meet', openCouncil: 'admits the journeymen to its council', quarantine: 'has closed its harbour', subsidy: 'pays towards the bread of the poor' };
   const [holds, , blocker] = greatCondition(k);
   const paragraphs = [
-    n === 2 ? `${nameOf(c, o.order.founder)}, who swore the First Oath, is gone. ${o.order.name} is no longer a circle of friends but an Order of ${members(o).length}.` : `The last of those who led the Order after its founder are gone. A third generation holds ${o.order.name}.`,
+    n === 2 ? `${nameOf(c, o.order.founder)}, who swore the First Oath, is gone. ${o.order.name} is no longer a circle of friends but an Order of ${members(o).length}.` : `The last of those who led the Order before are gone. A ${nth} generation holds ${o.order.name}.`,
     `${c.name} numbers ${c.people.size} souls${then ? `, against ${then.pop} then` : ''}. ${mayor && mayor.holder >= 0 ? `${nameOf(c, mayor.holder)} is Mayor. ` : ''}${laws.length ? `The city ${laws.map((x) => lawText[x]).join(', and ')}.` : 'The council has changed little.'}`,
     leaders.length ? `It is led now by ${leaders.map((id) => nameOf(c, id)).join(', ')}.` : 'No elder is left to lead it; the conclave must choose.',
-    o.greatWork.done ? 'The Great Work is done. The elders say it is time to carry the creed beyond the walls.' : holds ? `${o.greatWork.title} stands; the elders say it must be held.` : `The elders say: ${blocker ?? 'the work goes on'}`,
+    holds ? `${o.greatWork.title} stands; the elders say it must be held.` : `The elders say: ${blocker ?? 'the work goes on'}`,
   ];
-  const ch: Chapter = { act: n, day: c.day, title: ACT_TITLES[n], paragraphs };
+  const ch: Chapter = { generation: n, day: c.day, title: `The ${nth} generation`, paragraphs };
   o.chapters.push(ch);
-  notice(k, 'act', 3, `Act ${n === 2 ? 'II' : 'III'}: ${ch.title}`, paragraphs[0]);
   conclaveWeek(k, true);
 }
 
@@ -173,7 +175,7 @@ function checkEnding(k: Campaign): void {
   const ms = members(o);
   const freeMs = ms.filter((m) => m.imprisoned < 0);
   if (!ms.length || !freeMs.length) { end(k, o.log.arrests > 0 && (ms.length > 0 || o.fallen.slice(0, 4).some((f) => /hanged|banished|broken|informer/.test(f.how))) ? 'destroyed' : 'withered'); return; }
-  const elders = freeMs.filter((m) => m.standing === 'elder' && !m.away);
+  const elders = freeMs.filter((m) => m.standing === 'elder');
   o.leaderless = elders.length ? 0 : o.leaderless + 1;
   if (o.leaderless > 26 && !pendingItems(k).some((x) => x.item.kind === 'leader')) end(k, 'leaderless');
 }
@@ -190,12 +192,10 @@ function end(k: Campaign, kind: Ending['kind']): void {
     const score = Math.round(100 * clamp(0.4 * (1 - gap) + (o.creed.amended ? 0 : 0.2) + (holds ? 0.25 : 0.08) + 0.15 * o.order.cohesion));
     e.score = score;
     e.verdict = !o.creed.amended && gap < 0.2 && holds ? 'true' : gap > 0.45 || (o.creed.amended && gap > 0.25) || !holds && gap > 0.3 ? 'hollow' : 'changed';
-    const nb = c.region.neighbours.find((x) => x.id === o.beyond.neighbour)?.name ?? 'another town';
-    e.title = e.verdict === 'true' ? `${o.order.name} carries its creed beyond the walls` : e.verdict === 'changed' ? `${o.order.name} goes beyond the walls, changed` : `${o.order.name} goes beyond the walls, hollow`;
-    e.chronicle.push(`In ${calendarYear(c)} a lodge of ${o.order.name} opened in ${nb}.`);
-    e.chronicle.push(e.verdict === 'true' ? `It went as it had sworn to be: ${o.creed.vows.filter((v) => v !== 'ends').map((v) => vowText(v).replace(/\.$/, '').toLowerCase()).join('; ')}.`
-      : e.verdict === 'changed' ? `It went, but not quite the Order its founder made${o.creed.amended ? ': its creed had been amended to say whatever must be done would be done' : ''}${!holds ? ', and the work it left behind was failing' : ''}.`
-        : `It expanded, but it was not the Order it set out to be. Its deeds had long since parted from its words.`);
+    e.title = e.verdict === 'true' ? `${o.order.name} achieves its Great Work` : e.verdict === 'changed' ? `${o.order.name} achieves its Great Work, changed` : `${o.order.name} achieves its Great Work, hollow`;
+    e.chronicle.push(e.verdict === 'true' ? `It did so as it had sworn to be: ${o.creed.vows.filter((v) => v !== 'ends').map((v) => vowText(v).replace(/\.$/, '').toLowerCase()).join('; ')}.`
+      : e.verdict === 'changed' ? `It did so, but it was not quite the Order its founder made${o.creed.amended ? ': its creed had been amended to say whatever must be done would be done' : ''}.`
+        : `It won, but it was not the Order it set out to be. Its deeds had long since parted from its words.`);
   } else {
     e.title = { destroyed: `${o.order.name} is destroyed`, withered: `${o.order.name} has withered away`, leaderless: `${o.order.name} has no one to lead it`, abandoned: `${o.order.name} renounced its creed`, won: '' }[kind];
     e.chronicle.push({ destroyed: `In ${calendarYear(c)} its last free member was taken, and ${o.order.name} was no more.`, withered: 'No purge ended it. Its members grew old, died or left, and no one took their places.', leaderless: 'Its elders died one by one, and no one was raised in their place. The members drifted apart.', abandoned: 'At a conclave its elders gave up what they had sworn, and the Order dissolved into the city.', won: '' }[kind]);
@@ -236,7 +236,6 @@ export function applyCommand(k: Campaign, cmd: OrderCommand): CommandResult {
     case 'abandon-op': {
       const op = o.ops[cmd.id];
       if (!op || op.status !== 'running') return { ok: false, error: 'no such assignment' };
-      if (op.kind === 'go-beyond') return { ok: false, error: 'they are already on the road' };
       op.status = 'abandoned'; op.resolved = c.day; op.outcome = 'Called off.';
       const m = o.members[op.agent]; if (m) m.task = null;
       return { ok: true };
@@ -272,7 +271,28 @@ export function deserializeCampaign(s: string): Campaign {
   if (o.kind !== 'hidden-hand-city' || o.v !== 1) throw new Error('not a city campaign save');
   const order = o.order as OrderState;
   dropOrderRng(order);
-  return { city: deserializeCity(o.city), order };
+  const city = deserializeCity(o.city);
+  migrate(order, city);
+  return { city, order };
 }
 
 export { date, LEVER_BY_KIND };
+
+/**
+ * Saves from before the three acts and the road beyond the walls were dropped (15 Nov 2026):
+ * the act becomes the generation, chapters lose their act number, and a member who had
+ * already left on the road beyond the walls is counted among the fallen.
+ */
+function migrate(o: OrderState, c: City): void {
+  const old = o as OrderState & { act?: { n: number; since: number; leaders: number[] }; beyond?: unknown };
+  if (!o.generation) o.generation = old.act ? { n: old.act.n, since: old.act.since, leaders: old.act.leaders } : { n: 1, since: o.order.founded, leaders: [o.order.founder] };
+  delete old.act;
+  delete old.beyond;
+  for (const ch of o.chapters as (Chapter & { act?: number })[]) { if (ch.generation === undefined) ch.generation = ch.act ?? 1; delete ch.act; }
+  for (const op of Object.values(o.ops)) if (op.kind === 'go-beyond') delete o.ops[op.id];
+  for (const m of Object.values(o.members) as (OrderState['members'][number] & { away?: unknown })[]) {
+    if (!m.away) { delete m.away; continue; }
+    delete o.members[m.pid];
+    o.fallen.unshift({ id: m.pid, name: name(c, m.pid), died: c.day, how: 'left the city' });
+  }
+}

@@ -2,23 +2,22 @@
 
 The same game as `app\HiddenHand.html`, packaged as an installed Windows program with:
 
-- **Real save files.** Campaigns saved from the pause menu are `.hiddenhand.json` files in
+- **Real save files.** Games saved from the game's menu (and the yearly autosave) are `.hiddenhand.json` files in
   `Documents\The Hidden Hand\Saves` (change it with *File → Change Saves Folder…*). They are ordinary files:
-  back them up or copy them to another computer. *Continue* on the start screen opens the newest campaign;
-  *Saved campaigns* lists them all to load, export or delete (deleting moves the file to the Recycle Bin), and
-  imports a campaign from a file.
+  back them up or copy them to another computer, and a save copied into the folder appears on the title screen
+  under *Carry on*.
 - **No background slow-down.** A browser throttles a tab that is minimised or hidden; the desktop app
   keeps the world running at full speed, and gives the simulation the largest memory limit the engine allows.
 - A Start-menu and desktop shortcut, its own window, and no dependence on which browser you have.
 
 **Coming from The Noosphere?** The app was renamed, so it installs as a new program next to the old one
 (uninstall *The Noosphere* whenever you like). On first start, if `Documents\Noosphere\Saves` exists and the new
-saves folder does not, your old worlds are copied across; the old folder is left as it was. Old `.noosphere.json`
-files are still recognised, but they are simulated worlds, not campaigns, and cannot be played as a campaign.
+saves folder does not, your old worlds are copied across; the old folder is left as it was. Saves from the
+whole-world game (0.2.0 and The Noosphere) stay on disk, but the one-city game cannot open them, so the title does
+not list them.
 
-**Preferences on disk.** Your settings (what pauses the game, text size, motion, hints, history length, tutorial
-progress and the Chronicles of Orders you have led) are kept in `%APPDATA%\The Hidden Hand\preferences.json`, so they
-survive updates and reinstalls. Settings from earlier versions are carried over the first time 0.2.0 starts.
+**Preferences on disk.** Settings the page keeps (such as sound volumes) are kept in
+`%APPDATA%\The Hidden Hand\preferences.json`, so they survive updates and reinstalls.
 
 The browser version (`app\HiddenHand.html`, `HiddenHand.bat`) still works exactly as before and keeps using
 browser storage. The two do not share saves.
@@ -42,7 +41,7 @@ This builds the web app, then writes both files to `desktop\release\`. Other com
 ```bat
 npm start          :: run the desktop app from source, no packaging
 npm run dist:dir   :: package to release\win-unpacked\ without making an installer (faster)
-npm test           :: end-to-end check: settings, found a campaign, save, restart, load, delete
+npm test           :: end-to-end check: preferences, a new game, save, restart, load from the title
 ```
 
 The installer is not code-signed, so Windows SmartScreen shows "Windows protected your PC" the first time:

@@ -1,8 +1,7 @@
 /**
- * Life and death in the city: mortality (the world engine's Siler model), births,
+ * Life and death in the city: mortality (a Siler model), births,
  * marriage, new households, orphans and widows, and people coming and going.
  */
-import { sileHazard } from '../../engine/systems/demography';
 import {
   B, CLASS_MIDDLING, CLASS_POOR, CLASS_WEALTHY, D, DAYS_PER_YEAR, M, NV, T, TRADES, WEEKS_PER_YEAR, V_PIETY,
 } from '../constants';
@@ -13,6 +12,14 @@ import {
 import type { Building, City, Family, Household, Person } from '../types';
 import { joinGuild } from './economy';
 import { givenName, surname } from '../names';
+
+/** Annual hazard of death at a given age before individual modifiers (Siler: infant, background, senescence). */
+export function sileHazard(age: number, infantMult: number, adultMult: number, mort: number): number {
+  const infant = 0.24 * infantMult * Math.exp(-1.1 * age);
+  const background = 0.0065 * adultMult;
+  const senescence = 0.00022 * Math.exp(0.083 * age) * adultMult;
+  return (infant + background + senescence) * mort;
+}
 
 const FERT = [0, 0, 0, 0.42, 0.95, 1.0, 0.92, 0.75, 0.42, 0.1]; // by five-year age group
 

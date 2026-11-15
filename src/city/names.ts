@@ -4,7 +4,7 @@
  * Iberian, Anglo-Norman). Given names come from period-flavoured lists; family and
  * place names are built from roots and endings so every city's are its own.
  */
-import type { Rng } from '../engine/core/rng';
+import type { Rng } from './base/rng';
 
 interface Tongue {
   men: string[];

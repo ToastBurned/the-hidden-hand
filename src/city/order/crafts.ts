@@ -28,7 +28,7 @@ export const NATIVE_CRAFT: Partial<Record<number, string>> = {
 
 export function mastery(o: OrderState, id: string): number {
   let best = 0;
-  for (const m of Object.values(o.members)) if (m.imprisoned < 0 && !m.away) best = Math.max(best, m.crafts[id] ?? 0);
+  for (const m of Object.values(o.members)) if (m.imprisoned < 0) best = Math.max(best, m.crafts[id] ?? 0);
   return best;
 }
 

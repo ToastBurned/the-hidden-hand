@@ -135,7 +135,7 @@ export function MapView({ c, view, version, selected, onSelect, focus }: { c: Ci
     };
     // member homes
     const homes = new Map<number, number>();
-    for (const m of view.members) if (m.home >= 0 && !m.flags.includes('away')) homes.set(m.home, (homes.get(m.home) ?? 0) + 1);
+    for (const m of view.members) if (m.home >= 0) homes.set(m.home, (homes.get(m.home) ?? 0) + 1);
     for (const [hid, n] of homes) { const b = c.buildings.get(hid); if (b) pin(b, '#e8b85c', n); }
     for (const inv of view.investigators) { const p = c.people.get(inv.id); const h = p ? c.households.get(p.hh) : undefined; const b = h ? c.buildings.get(h.home) : undefined; if (b) ring(b, '#d0503c', `${inv.name}, ${inv.title}`, true); }
     for (const l of view.lodges) { const b = c.buildings.get(l.building); if (b) ring(b, '#e8b85c', l.name); }
