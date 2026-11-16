@@ -4,7 +4,7 @@
  */
 import { Rng } from './base/rng';
 import { givenName } from './names';
-import { DAYS_PER_YEAR, DAYS_PER_WEEK, WEEKS_PER_SEASON, SEASON_NAMES, NV, M, D, isDwelling, DWELLING_PER_FLOOR, STACKED, TRADES } from './constants';
+import { DAYS_PER_YEAR, DAYS_PER_WEEK, WEEKS_PER_SEASON, WEEKS_PER_YEAR, PLAY_DAYS_PER_SEASON, PLAY_DAYS_PER_YEAR, SEASON_NAMES, NV, M, D, isDwelling, DWELLING_PER_FLOOR, STACKED, TRADES } from './constants';
 import type { Building, City, CityEvent, DeadPerson, Family, Household, Looks, Person } from './types';
 
 // ------------------------------------------------------------------ random numbers
@@ -29,13 +29,39 @@ export const mod = (c: City, key: string) => c.mods[key] ?? 0;
 // ------------------------------------------------------------------ dates
 
 export const yearIndex = (day: number) => Math.floor(day / DAYS_PER_YEAR);
+/** Days into the play calendar, or -1 before the arrival. */
+export const playDay = (c: Pick<City, 'play'>, day: number) => (c.play && day >= c.play.since ? day - c.play.since : -1);
+/** The season (0 spring .. 3 winter) on a day, on whichever calendar the town keeps then. */
+export function seasonAt(c: Pick<City, 'play'>, day: number): number {
+  const pd = playDay(c, day);
+  return pd >= 0 ? Math.floor((pd % PLAY_DAYS_PER_YEAR) / PLAY_DAYS_PER_SEASON) : seasonOf(day);
+}
+/**
+ * The calendar weeks of the 52-week year (CAL) that fall in the week starting on this day. Before
+ * the arrival it is just that week; on the play calendar a 7-day week covers about 3.25 of them,
+ * so every feast and sitting still comes once a year.
+ */
+export function calendarWeeks(c: Pick<City, 'play'>, day: number): number[] {
+  const pd = playDay(c, day);
+  if (pd < 0) return [weekOfYear(day)];
+  const pw = Math.floor((pd % PLAY_DAYS_PER_YEAR) / DAYS_PER_WEEK), n = PLAY_DAYS_PER_YEAR / DAYS_PER_WEEK;
+  const out: number[] = [];
+  for (let w = Math.floor((pw * WEEKS_PER_YEAR) / n); w < Math.floor(((pw + 1) * WEEKS_PER_YEAR) / n); w++) out.push(w);
+  return out;
+}
 export const weekOfYear = (day: number) => Math.floor((((day % DAYS_PER_YEAR) + DAYS_PER_YEAR) % DAYS_PER_YEAR) / DAYS_PER_WEEK);
 export const seasonOf = (day: number) => Math.floor(weekOfYear(day) / WEEKS_PER_SEASON);
-export const calendarYear = (c: City, day = c.day) => c.config.startYear + yearIndex(day);
-export const ageOf = (c: City, p: { born: number }) => (c.day - p.born) / DAYS_PER_YEAR;
+export function calendarYear(c: City, day = c.day): number {
+  const pd = playDay(c, day);
+  return pd >= 0 ? c.config.startYear + yearIndex(c.play!.since) + Math.floor(pd / PLAY_DAYS_PER_YEAR) : c.config.startYear + yearIndex(day);
+}
+/** Age in years. Ages stop at the founder's arrival: nobody grows older during play. */
+export const ageOf = (c: City, p: { born: number }) => ((c.play ? Math.min(c.day, c.play.since) : c.day) - p.born) / DAYS_PER_YEAR;
 export const ageAt = (born: number, day: number) => (day - born) / DAYS_PER_YEAR;
 
 export function dateLabel(c: City, day = c.day): string {
+  const pd = playDay(c, day);
+  if (pd >= 0) return `${SEASON_NAMES[seasonAt(c, day)]}, day ${(pd % PLAY_DAYS_PER_SEASON) + 1}, ${calendarYear(c, day)}`;
   const w = weekOfYear(day);
   return `${SEASON_NAMES[Math.floor(w / WEEKS_PER_SEASON)]}, week ${(w % WEEKS_PER_SEASON) + 1}, ${calendarYear(c, day)}`;
 }

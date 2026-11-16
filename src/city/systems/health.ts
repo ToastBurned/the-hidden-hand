@@ -4,7 +4,7 @@
  * and neighbours, and is worst in crowded, hungry tenements.
  */
 import { B, CLASS_POOR, D, M, DAYS_PER_YEAR } from '../constants';
-import { ageOf, clamp, fullName, logEvent, mod, remember, removePerson, rngOf, seasonOf } from '../core';
+import { ageOf, clamp, fullName, logEvent, mod, remember, removePerson, rngOf, seasonAt } from '../core';
 import type { City, Disease, Person } from '../types';
 import { obituary } from './life';
 import { socialIndex } from './social';
@@ -38,7 +38,7 @@ export function healthWeek(c: City): void {
   const sick: Person[] = [];
   for (const p of c.people.values()) if (p.sick) sick.push(p);
   const quarantine = c.treasury.laws.quarantine ? 0.6 : 1;
-  const season = seasonOf(c.day);
+  const season = seasonAt(c, c.day);
   for (const p of sick) {
     const d = c.diseases.get(p.sick);
     if (!d) { p.sick = 0; continue; }
@@ -136,7 +136,7 @@ export function outbreak(c: City, d: Disease, where: number, n: number, why: str
 /** Each week: the summer fever returns with the heat; the pox comes back to a city full of children without it. */
 export function seasonsWeek(c: City): void {
   const r = rngOf(c);
-  const season = seasonOf(c.day);
+  const season = seasonAt(c, c.day);
   const active = [...c.diseases.values()].filter((d) => d.active);
   if (season === 1 && !active.some((d) => d.kind === 'fever') && r.chance(0.12)) {
     const poor = c.districts.slice().sort((a, b) => b.sickness + (a.kind === 'poor' ? 1 : 0) - a.sickness - (b.kind === 'poor' ? 1 : 0))[0];

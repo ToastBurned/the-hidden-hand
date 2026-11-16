@@ -14,7 +14,8 @@
     "build:art": "vite build --config vite.art.config.ts && node tools/artpage.mjs",
     "artshots": "tsx tools/artshots.ts",
     "play": "vite --config vite.play.config.ts --open /play.html",
-    "build:play": "vite build --config vite.play.config.ts && node tools/artpage.mjs dist-play dist-play/play.html play-page.html"
+    "build:play": "vite build --config vite.play.config.ts && node tools/artpage.mjs dist-play dist-play/play.html play-page.html",
+    "test:walk": "node tests/e2e/walk.e2e.cjs"
   },
   "devDependencies": {
     "@types/node": "22.10.2",

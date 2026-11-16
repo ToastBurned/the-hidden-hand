@@ -10,6 +10,13 @@ export const DAYS_PER_WEEK = 7;
 export const WEEKS_PER_SEASON = 13;
 export const WEEKS_PER_YEAR = 52;
 export const DAYS_PER_YEAR = DAYS_PER_WEEK * WEEKS_PER_YEAR; // 364
+/**
+ * The play calendar (the first-season spec): from the founder's arrival the town runs on four
+ * seasons of 28 days, 112 days a year. Weekly systems stay weekly, "monthly" ones run once a
+ * season, yearly ones once in 112 days. The pre-history before the arrival keeps the 364-day year.
+ */
+export const PLAY_DAYS_PER_SEASON = 28;
+export const PLAY_DAYS_PER_YEAR = 112;
 /** "Monthly" systems run every four weeks, thirteen times a year. */
 export const WEEKS_PER_MONTH = 4;
 export const SEASON_NAMES = ['Spring', 'Summer', 'Autumn', 'Winter'] as const;

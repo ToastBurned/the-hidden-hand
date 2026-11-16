@@ -491,6 +491,8 @@ export interface CityConfig {
   population: number;
   /** Calendar year of the first day. */
   startYear: number;
+  /** Suburb layout: ribbons along every road (default) or one compact suburb at a gate (the first season). */
+  suburb?: 'ring' | 'gate';
 }
 
 export interface City {
@@ -535,6 +537,8 @@ export interface City {
   mods: Record<string, number>;
   /** Recent causal context: event ids keyed by topic, so later events can cite them. */
   ctx: Record<string, number>;
+  /** Set when the founder arrives: from this engine day the town runs on the play calendar (docs/WALK.md). Nobody ages or is born after it. */
+  play?: { since: number };
 }
 
 export interface YearAcc {

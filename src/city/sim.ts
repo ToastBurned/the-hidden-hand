@@ -4,8 +4,8 @@
  * day of the year, and the calendar's fixed days (elections, guild day, feasts) on
  * their weeks.
  */
-import { CAL, CLASS_WEALTHY, DAYS_PER_WEEK, DAYS_PER_YEAR, WEEKS_PER_MONTH, T } from './constants';
-import { ageOf, calendarYear, logEvent, pruneEvents, rngOf, syncRng, weekOfYear } from './core';
+import { CAL, CLASS_WEALTHY, DAYS_PER_WEEK, DAYS_PER_YEAR, PLAY_DAYS_PER_SEASON, PLAY_DAYS_PER_YEAR, WEEKS_PER_MONTH, T } from './constants';
+import { ageOf, calendarWeeks, calendarYear, logEvent, pruneEvents, rngOf, syncRng, weekOfYear } from './core';
 import { emptyAcc } from './create';
 import type { City, CityYear } from './types';
 import { classMonth, economyWeek, jobsMonth } from './systems/economy';
@@ -21,6 +21,7 @@ export type DayHook = (c: City) => void;
 
 /** Advance the city by one day. */
 export function stepDay(c: City, hook?: DayHook): void {
+  if (c.play && c.day >= c.play.since) { stepPlayDay(c, hook); return; }
   const d = c.day;
   if (d % DAYS_PER_YEAR === 0) yearStart(c);
   if (d % DAYS_PER_WEEK === 0) {
@@ -33,6 +34,20 @@ export function stepDay(c: City, hook?: DayHook): void {
   hook?.(c);
   c.day++;
   if (c.day % DAYS_PER_YEAR === 0) yearEnd(c);
+}
+
+/** A day on the play calendar: 7-day weeks, a "month" each 28-day season, a year each 112 days. */
+function stepPlayDay(c: City, hook?: DayHook): void {
+  const pd = c.day - c.play!.since;
+  if (pd % PLAY_DAYS_PER_YEAR === 0) yearStart(c);
+  if (pd % DAYS_PER_WEEK === 0) {
+    weekStart(c);
+    if (pd % PLAY_DAYS_PER_SEASON === 0) monthStart(c);
+    for (const w of calendarWeeks(c, c.day)) { civicCalendar(c, w); festival(c, w); }
+  }
+  hook?.(c);
+  c.day++;
+  if ((c.day - c.play!.since) % PLAY_DAYS_PER_YEAR === 0) yearEnd(c);
 }
 
 export function stepDays(c: City, n: number, hook?: DayHook): void {

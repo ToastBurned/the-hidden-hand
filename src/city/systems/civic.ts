@@ -7,7 +7,7 @@ import {
   B, CAL, CLASS_MIDDLING, CLASS_POOR, CLASS_WEALTHY, D, DAYS_PER_YEAR, M, R, T, V_HIER, V_INDIV, V_INNOV, V_MILIT, V_PIETY,
 } from '../constants';
 import {
-  affinity, ageOf, appoint, clamp, fullName, logEvent, mod, nameOf, remember, removePerson, rngOf, vacateOffice, weekOfYear, familyOf,
+  affinity, ageOf, appoint, calendarYear, clamp, fullName, logEvent, mod, nameOf, remember, removePerson, rngOf, vacateOffice, weekOfYear, familyOf,
 } from '../core';
 import type { Body, City, Office, Person } from '../types';
 import { startRumour } from './social';
@@ -552,10 +552,9 @@ function list(names: string[]): string {
   return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
 }
 
-export function civicCalendar(c: City): void {
-  const w = weekOfYear(c.day);
+export function civicCalendar(c: City, w = weekOfYear(c.day)): void {
   if (w === CAL.councilElection) councilElection(c);
   if (w === CAL.councilElection + 2) councilBusiness(c);
-  if (w === CAL.guildDay && Math.floor(c.day / DAYS_PER_YEAR) % 2 === 0) guildElections(c);
+  if (w === CAL.guildDay && calendarYear(c) % 2 === c.config.startYear % 2) guildElections(c);
   void obituary; void vacateOffice; void CLASS_MIDDLING;
 }
