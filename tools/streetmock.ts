@@ -117,6 +117,9 @@ function scene(night: boolean): { px: Px; lights: Light[] } {
       for (let k = 0; k < 6; k++) px.disc(ax + 6 + k * 7, ay + 17, 2.5, [r('weld', 3, 1)[0], m.leaf[3], r('madder', 3, 1)[0]][k % 3]);
     }
   }
+  // ------------------------------------------------ the inherited house, run down
+  if (process.env.RUIN !== '0') ruin(px, 21 * T, 6 * T, 4 * T, streetTop, quay);
+
   // ------------------------------------------------ props
   const lantern = (x: number) => {
     px.rect(x, streetTop + 6, 3, 2 * T + 4, m.iron[1]); px.vline(x, streetTop + 6, 2 * T + 4, m.iron[2]);
@@ -145,6 +148,71 @@ function scene(night: boolean): { px: Px; lights: Light[] } {
   person(23 * T, streetTop + 12, r('order', 0), null, skin2, r('tar', 0), true);
   person(37 * T, streetTop + 26, r('wood', 2), r('straw', 2), skin3, r('neutral', 4));
   return { px, lights };
+}
+
+/**
+ * Run a house front down: holes in the roof with the rafters showing, slipped tiles,
+ * plaster fallen off the lath, cracks, boarded windows and door, ivy and moss, and
+ * rubble and weeds in the street in front of it.
+ */
+function ruin(px: Px, X: number, Wd: number, eave: number, wallBot: number, quay: number) {
+  const dark = m.tar[0], rafter = m.timber;
+  // roof holes: dark gaps with rafters running down the slope
+  for (const [hx, hy, hw, hh] of [[X + 14, 10, 30, 22], [X + 58, 26, 22, 18]]) {
+    for (let y = hy; y < hy + hh; y++) for (let x = hx; x < hx + hw; x++) {
+      const e = Math.min(x - hx, hx + hw - 1 - x, y - hy, hy + hh - 1 - y) + h2(x, y, 31) * 3;
+      if (e < 1.2) continue; // ragged edge stays tiled
+      px.set(x, y, (x - hx) % 8 < 2 ? rafter[(x - hx) % 8 === 0 ? 1 : 2] : y % 9 === 0 ? rafter[1] : dark);
+    }
+  }
+  // slipped and missing tiles: odd courses darker or lighter
+  for (let k = 0; k < 40; k++) {
+    const x = X + Math.floor(h2(k, 1, 33) * (Wd - 8)), y = 2 + Math.floor(h2(k, 2, 33) * (eave - 8));
+    px.rect(x, y, 7, 3, h2(k, 3, 33) < 0.5 ? m.tile[0] : m.tile[4]);
+  }
+  // moss on the roof, thick at the eave
+  for (let y = 0; y < eave; y++) for (let x = X; x < X + Wd; x++)
+    if (h2(x >> 1, y >> 1, 34) < 0.08 + (y / eave) * 0.22 && px.get(x, y) !== dark) px.set(x, y, m.leaf[h2(x, y, 35) < 0.5 ? 2 : 3]);
+  // fallen plaster: patches of bare lath and brick, with cracks
+  for (const [px0, py0, pw, ph] of [[X + 4, eave + 26, 22, 14], [X + 60, eave + 50, 26, 20], [X + 30, eave + 4, 16, 10]]) {
+    for (let y = py0; y < py0 + ph; y++) for (let x = px0; x < px0 + pw; x++) {
+      const e = Math.min(x - px0, px0 + pw - 1 - x, y - py0, py0 + ph - 1 - y) + h2(x, y, 36) * 4;
+      if (e < 2) continue;
+      px.set(x, y, (y % 4 === 3 || (x + ((y >> 2) & 1) * 4) % 8 === 0) ? m.brick[0] : m.brick[2]);
+    }
+  }
+  const crack = (x: number, y: number, n: number, sd: number) => {
+    for (let i = 0; i < n; i++) { px.set(x, y, m.tar[1]); px.set(x + 1, y, m.limewash[0]); y++; if (h2(i, sd, 37) < 0.45) x += h2(i, sd, 38) < 0.5 ? -1 : 1; }
+  };
+  crack(X + 50, eave + 6, 30, 1); crack(X + 20, eave + 70, 20, 2); crack(X + 84, eave + 30, 26, 3);
+  // board up every window and the door: planks nailed across
+  for (let y = eave + 8; y < wallBot - 4; y++) for (let x = X + 4; x < X + Wd - 4; x++) {
+    const c = px.get(x, y);
+    const glass = c === m.water[0] || c === m.water[2] || c === r('lamp', 2, 1)[0];
+    if (!glass) continue;
+    const band = Math.floor((y + (x >> 3)) / 5);
+    px.set(x, y, (y + (x >> 3)) % 5 === 0 ? m.plank[0] : rp(m.plank, 1.4 + (band % 3) * 0.4, x, y));
+  }
+  const dx = X + 1 * T + 2, dh = 2 * T + 6;
+  for (const [a, b] of [[0, 1], [1, 0]]) for (let i = 0; i < T; i++) {
+    const y = wallBot - dh + 4 + Math.round((a ? i : T - 1 - i) * (dh - 8) / T);
+    px.rect(dx + i, y, 1, 4, m.plank[b ? 3 : 2]);
+  }
+  // ivy climbing from the ground on the left, and weeds at the foot of the wall
+  for (let y = eave + 10; y < wallBot; y++) {
+    const reach = 18 * ((y - eave - 10) / (wallBot - eave - 10)) ** 0.7;
+    for (let x = X + 1; x < X + 1 + reach + 6; x++) if (h2(x >> 1, y >> 1, 39) < 0.55 - (x - X) / 60) px.set(x, y, m.leaf[h2(x, y, 40) < 0.4 ? 1 : h2(x, y, 40) < 0.8 ? 2 : 4]);
+  }
+  for (let x = X; x < X + Wd; x += 3) { const h = Math.floor(h2(x, 1, 41) * 7); for (let y = 0; y < h; y++) px.set(x + (y & 1), wallBot + 2 - y, m.leaf[y > 3 ? 4 : 3]); }
+  // rubble spilling into the street: stones, broken tiles, weeds in the cracks
+  for (let k = 0; k < 70; k++) {
+    const x = X - 8 + Math.floor(h2(k, 4, 42) * (Wd + 16)), y = wallBot + 3 + Math.floor(h2(k, 5, 42) ** 2 * 26);
+    const kind = h2(k, 6, 42);
+    if (kind < 0.45) { px.rect(x, y, 4, 3, m.stone[2]); px.hline(x, y, 4, m.stone[4]); px.hline(x, y + 3, 4, m.stone[0]); }
+    else if (kind < 0.8) { px.rect(x, y, 5, 2, m.tile[3]); px.hline(x, y + 2, 5, m.tile[0]); }
+    else { px.set(x, y, m.leaf[3]); px.set(x + 1, y - 1, m.leaf[4]); px.set(x - 1, y - 1, m.leaf[2]); }
+  }
+  void quay;
 }
 
 for (const [name, hour, night] of [['street-day', 12, false], ['street-dusk', 21.5, true], ['street-night', 23, true]] as const) {
