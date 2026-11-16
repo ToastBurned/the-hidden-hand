@@ -11,8 +11,9 @@
  *   on one screen. Closest to a fortress-sim map.
  */
 import { hex, ramp, type Col } from './px';
+import { compile, PALETTES, type Palette } from './palette';
 
-export type StyleId = 'hearth' | 'plan' | 'ledger' | 'ledgerFront' | 'ledgerFront12';
+export type StyleId = 'hearth' | 'plan' | 'ledger' | 'ledgerFront' | 'ledgerFront12' | 'palWeathered' | 'palSunlit' | 'palGrey';
 
 export interface Style {
   id: StyleId;
@@ -39,12 +40,17 @@ export interface Style {
   glow: Col;
   night: Col;
   dusk: Col;
+  /** Set for palette styles: every colour comes from one master palette, and light is a lookup table. */
+  pal?: Palette;
+  /** Palette styles give each district its own mix of building materials. */
+  districtLooks?: boolean;
 }
 
 export type Material =
   | 'grass' | 'grassSpring' | 'grassAutumn' | 'snow' | 'dirt' | 'cobble' | 'flag' | 'paving' | 'sand' | 'water' | 'deep'
   | 'marsh' | 'stone' | 'plaster' | 'brick' | 'timber' | 'tile' | 'slate' | 'thatch' | 'lead' | 'leaf' | 'leafAutumn'
-  | 'bark' | 'plank' | 'floorStone' | 'earth' | 'rug' | 'rugLodge' | 'cloth' | 'gold' | 'paper' | 'iron' | 'hedge';
+  | 'bark' | 'plank' | 'floorStone' | 'earth' | 'rug' | 'rugLodge' | 'cloth' | 'gold' | 'paper' | 'iron' | 'hedge'
+  | 'limewash' | 'ochreWash' | 'roseWash' | 'tar' | 'mud';
 
 type Bases = Record<Material, string>;
 
@@ -68,6 +74,7 @@ const HEARTH: Bases = {
   plaster: '#e2d2b0', brick: '#b0603c', timber: '#6a4428', tile: '#b4553a', slate: '#5a6478', thatch: '#c09a52', lead: '#6c8c84',
   leaf: '#4c8436', leafAutumn: '#c0782c', bark: '#5c3c24', plank: '#a87848', floorStone: '#8e8678', earth: '#7a6048', rug: '#9a3a34',
   rugLodge: '#6a2430', cloth: '#7a5a3a', gold: '#d8a838', paper: '#eadcb8', iron: '#4a4a52', hedge: '#3e7030',
+  limewash: '#d8d0bc', ochreWash: '#c8a058', roseWash: '#c89a82', tar: '#2a2224', mud: '#6e5a44',
 };
 const PLAN: Bases = {
   grass: '#7c9460', grassSpring: '#86a064', grassAutumn: '#9c9058', snow: '#e8ecee', dirt: '#a08868', cobble: '#9c968c',
@@ -75,6 +82,7 @@ const PLAN: Bases = {
   plaster: '#d8ccb4', brick: '#a46a50', timber: '#6c5038', tile: '#a8604a', slate: '#66707e', thatch: '#b8a066', lead: '#78908a',
   leaf: '#5a804a', leafAutumn: '#b08040', bark: '#5c4434', plank: '#a8865c', floorStone: '#9a948a', earth: '#86705a', rug: '#8c4a44',
   rugLodge: '#6a3038', cloth: '#7c6448', gold: '#c8a048', paper: '#e6dcc4', iron: '#55555c', hedge: '#4c7040',
+  limewash: '#d8d0bc', ochreWash: '#c8a058', roseWash: '#c89a82', tar: '#2a2224', mud: '#6e5a44',
 };
 const LEDGER: Bases = {
   grass: '#4e6a34', grassSpring: '#587838', grassAutumn: '#7a6a30', snow: '#c8d0d6', dirt: '#6e5434', cobble: '#6a645a',
@@ -82,6 +90,7 @@ const LEDGER: Bases = {
   plaster: '#b8a684', brick: '#8a4a30', timber: '#4c3220', tile: '#924630', slate: '#464e5e', thatch: '#9c7c40', lead: '#506c66',
   leaf: '#3a6028', leafAutumn: '#9a5c24', bark: '#3e2a1a', plank: '#86603a', floorStone: '#6c665c', earth: '#5c4834', rug: '#7a2c28',
   rugLodge: '#561c26', cloth: '#5c4430', gold: '#c09030', paper: '#c8b890', iron: '#38383e', hedge: '#30522a',
+  limewash: '#d8d0bc', ochreWash: '#c8a058', roseWash: '#c89a82', tar: '#2a2224', mud: '#6e5a44',
 };
 
 /** Ledger's palette and texture with the three-quarter view, at a given cell size. */
@@ -114,8 +123,34 @@ export const STYLES: Record<StyleId, Style> = {
     glow: '#ffb84a', night: '#2c3660', dusk: '#dcac90',
   }),
   ledgerFront: make('ledgerFront', 'Ledger + fronts', "Ledger's dense, earthy palette with Hearth's three-quarter view at 10 px: every house shows its street wall.", LF(10)),
+  palWeathered: paletteStyle('palWeathered', 'weathered'),
+  palSunlit: paletteStyle('palSunlit', 'sunlit'),
+  palGrey: paletteStyle('palGrey', 'grey'),
   ledgerFront12: make('ledgerFront12', 'Ledger + fronts', "Ledger's dense, earthy palette with Hearth's three-quarter view at 12 px: a little more room for windows and doors.", LF(12)),
 };
+
+/** A Ledger + fronts style whose every ramp is taken from a master palette (src/ui/pixel/palette.ts). */
+export function paletteStyle(id: StyleId, palId: string, cell = 10): Style {
+  const pal = compile(PALETTES[palId]);
+  const r = pal.ramp;
+  const m: Record<Material, Col[]> = {
+    grass: r('green', 2), grassSpring: r('green', 3), grassAutumn: [...r('green', 2, 2), ...r('straw', 2, 3)], snow: r('snow'),
+    dirt: r('wood', 1), cobble: r('neutral', 2), flag: r('neutral', 3), paving: r('neutral', 4), sand: [...r('straw', 2, 4), r('neutral', 8, 1)[0]],
+    water: r('sea', 2), deep: r('sea', 0), marsh: [...r('green', 1, 4), r('lead', 3, 1)[0]], stone: r('neutral', 3), plaster: r('neutral', 4),
+    brick: r('brick'), timber: r('wood', 0), tile: r('clay', 1), slate: r('slate', 1), thatch: r('straw', 1), lead: r('lead'),
+    leaf: r('green', 1), leafAutumn: r('autumn', 1), bark: [r('neutral', 0, 1)[0], ...r('wood', 0, 4)], plank: r('wood', 2), floorStone: r('neutral', 2),
+    earth: [r('neutral', 2, 1)[0], ...r('wood', 1, 4)], rug: r('madder'), rugLodge: r('order'), cloth: r('wood', 1), gold: r('gold'),
+    paper: [...r('neutral', 5, 4), hex('#f7efd8')].slice(0, 5), iron: [hex('#0e0c10'), ...r('neutral', 0, 4)], hedge: r('green', 0),
+    limewash: r('limewash'), ochreWash: r('ochre'), roseWash: r('rose'), tar: r('tar'), mud: r('mud'),
+  };
+  const def = pal.def;
+  return {
+    id, name: def.name, blurb: def.blurb, cell, tile: 12, threeQuarter: true, texture: 0.8, outline: 'self', ink: r('neutral', 0, 1)[0], m,
+    crops: [r('straw', 2), r('green', 3), r('green', 2), r('wood', 2), r('weld', 0)],
+    cloth: [...r('madder', 2, 1), ...r('woad', 2, 1), ...r('verdigris', 2, 1), ...r('wood', 3, 1), ...r('murrey', 2, 1), ...r('neutral', 5, 1), ...r('tar', 1, 1)],
+    robe: r('order'), glow: r('lamp', 2, 1)[0], night: r('night', 3, 1)[0], dusk: hex('#dcac90'), pal, districtLooks: true,
+  };
+}
 
 export type Season = 0 | 1 | 2 | 3; // spring, summer, autumn, winter
 export type TimeOfDay = 'day' | 'dusk' | 'night';

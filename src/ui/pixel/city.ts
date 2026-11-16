@@ -13,12 +13,15 @@ import {
 } from '../../city/types';
 import { Px, bayer, h2, mix, vnoise, type Col } from './px';
 import type { Season, Style, TimeOfDay } from './styles';
+import { lightFrame } from './palette';
 
 export interface CityRenderOpts {
   season: Season;
   time: TimeOfDay;
   /** Buildings to ring in gold (the lodge, a selection). */
   highlight?: number[];
+  /** Clock hour (palette styles): the light follows it, dithering between phases. */
+  hour?: number;
 }
 
 /** Pick from a 5-step ramp by a fractional index, dithering between neighbours. */
@@ -278,6 +281,12 @@ export function renderCity(c: City, st: Style, o: CityRenderOpts): Px {
   }
 
   // -------------------------------------------------------------- light of day
+  if (st.pal) {
+    const hour = o.hour ?? (o.time === 'night' ? 22.5 : o.time === 'dusk' ? [21, 21.9, 19.4, 17.4][o.season] : 12);
+    if (isDark(hour, o.season)) addStreetLamps(map, S, lights);
+    lightFrame(px, st.pal, o.season, hour, lights);
+    return px;
+  }
   if (o.time !== 'day') {
     px.tint(o.time === 'night' ? st.night : st.dusk);
     // lanterns at the gates and in the squares, then every lit window and door
@@ -290,6 +299,20 @@ export function renderCity(c: City, st: Style, o: CityRenderOpts): Px {
     for (const l of lights) glow(px, l.x, l.y, l.r, l.a * strength, st.glow);
   }
   return px;
+}
+
+/** After sunset by the season's clock (windows are lit and lanterns burn). */
+export function isDark(hour: number, season: Season) {
+  const set = [20.5, 21.5, 19, 17][season], rise = [6, 5.5, 6.5, 7.5][season];
+  return hour >= set - 0.5 || hour < rise;
+}
+
+function addStreetLamps(map: City['map'], S: number, lights: Light[]) {
+  for (let cy = 0; cy < map.h; cy++) for (let cx = 0; cx < map.w; cx++) {
+    const u = map.use[cy * map.w + cx];
+    if ((u === U_GATE && h2(cx, cy, 70) < 0.5) || (u === U_SQUARE && h2(cx, cy, 71) < 0.05) || (u === U_MAIN && h2(cx, cy, 72) < 0.04))
+      lights.push({ x: cx * S + S / 2, y: cy * S + S / 2, r: S * 2.2, a: 0.55 });
+  }
 }
 
 /** A gold selection ring. */
@@ -426,15 +449,51 @@ function materialOf(st: Style, c: City, b: Building): Mat {
   const brick = !stone && (k === B.warehouse || k === B.brewery || k === B.countingHouse || h2(b.id, 1, 91) < 0.22);
   const wallKind: Mat['wallKind'] = stone ? 'stone' : brick ? 'brick' : 'plaster';
   const wall = stone ? st.m.stone : brick ? st.m.brick : st.m.plaster;
+  let wallOut: Col[] = wall, kindOut: Mat['wallKind'] = wallKind, roofOut = roof, texOut = roofTex;
+  if (st.districtLooks && d) ({ wall: wallOut, wallKind: kindOut, roof: roofOut, roofTex: texOut } = districtLook(st, d.kind, b, { wall, wallKind, roof, roofTex }, stone));
   const shape: RoofKind = k === B.gatehouse ? 'flat' : g > 0.6 || k === B.marketHall || k === B.granary || k === B.farmstead || roofTex === 'thatch' ? 'hip' : 'gable';
-  return { roof, wall, wallKind, roofTex, shape, timbered: wallKind === 'plaster' && h2(b.id, 2, 92) < 0.7 };
+  const timbered = kindOut === 'plaster' && h2(b.id, 2, 92) < (st.districtLooks && d?.kind === 'hill' ? 0.25 : 0.7);
+  return { roof: roofOut, wall: wallOut, wallKind: kindOut, roofTex: texOut, shape: texOut === 'thatch' && shape === 'gable' ? 'hip' : shape, timbered };
+}
+
+type Look = { wall: Col[]; wallKind: Mat['wallKind']; roof: Col[]; roofTex: Mat['roofTex'] };
+
+/**
+ * Each district wears its own mix of materials, all from the one palette, so you can
+ * tell where you are from the rooftops: the hill in slate and limewash, the market in
+ * painted fronts and bright clay, the crafts in brick and soot, the harbour in tar and
+ * lead, the temple quarter in pale stone, the poor quarter in mud and patched thatch.
+ */
+function districtLook(st: Style, kind: string, b: Building, l: Look, stone: boolean): Look {
+  const m = st.m;
+  const r = (n: number) => h2(b.id, n, 120);
+  if (stone) return l;
+  switch (kind) {
+    case 'hill':
+      return { wall: r(1) < 0.6 ? m.limewash : m.stone, wallKind: r(1) < 0.6 ? 'plaster' : 'stone', roof: r(2) < 0.75 ? m.slate : m.tile, roofTex: r(2) < 0.75 ? 'slate' : 'tile' };
+    case 'market': {
+      const paint = [m.ochreWash, m.roseWash, m.limewash, m.plaster][Math.floor(r(1) * 4)];
+      return { ...l, wall: l.wallKind === 'plaster' ? paint : l.wall, roof: l.roofTex === 'tile' ? m.tile : l.roof };
+    }
+    case 'crafts':
+      return r(1) < 0.55 ? { ...l, wall: m.brick, wallKind: 'brick' } : { ...l, wall: l.wallKind === 'plaster' ? m.mud : l.wall };
+    case 'harbour':
+      return { wall: r(1) < 0.45 ? m.tar : l.wall, wallKind: r(1) < 0.45 ? 'plaster' : l.wallKind, roof: r(2) < 0.35 ? m.slate : r(2) < 0.5 ? m.lead : l.roof, roofTex: r(2) < 0.35 ? 'slate' : r(2) < 0.5 ? 'lead' : l.roofTex };
+    case 'temple':
+      return { ...l, wall: r(1) < 0.5 ? m.limewash : m.stone, wallKind: r(1) < 0.5 ? 'plaster' : 'stone' };
+    case 'poor':
+      return { wall: l.wallKind === 'plaster' ? m.mud : l.wall, wallKind: l.wallKind, roof: r(2) < 0.55 ? m.thatch : l.roof, roofTex: r(2) < 0.55 ? 'thatch' : l.roofTex };
+    case 'suburb':
+      return { ...l, roof: r(2) < 0.45 ? m.thatch : l.roof, roofTex: r(2) < 0.45 ? 'thatch' : l.roofTex };
+  }
+  return l;
 }
 
 function drawBuilding(px: Px, st: Style, c: City, b: Building, o: CityRenderOpts, lights: Light[]) {
   const S = st.cell;
   const X = b.x * S, Y = b.y * S, W = b.w * S, H = b.h * S;
   const mat = materialOf(st, c, b);
-  const night = o.time !== 'day';
+  const night = st.pal && o.hour !== undefined ? isDark(o.hour, o.season) : o.time !== 'day';
   const lit = (p: number) => night && (b.homes.length > 0 || b.kind === B.tavern || b.kind === B.coffeehouse || b.kind === B.watchhouse || b.kind === B.cathedral) && h2(b.id, p, 93) < 0.55;
   const k = b.kind;
   const ix = 0, iy = 0;
