@@ -130,7 +130,7 @@ export function drawWorld(g: CanvasRenderingContext2D, kit: Kit, ground: GroundC
 /** The light of the hour: a wash over the frame, and lamp pools after dusk. */
 export function drawLight(g: CanvasRenderingContext2D, minute: number, season: number, lamps: { x: number; y: number }[], camX: number, camY: number, vw: number, vh: number) {
   const h = minute / 60;
-  const dusk = [21.5, 20.5, 19, 17][season] ?? 20;
+  const dusk = [20, 21.5, 19, 17][season] ?? 20; // spring, summer, autumn, winter
   const dawn = [6, 5, 6.5, 7.5][season] ?? 6;
   let dark = 0, warm = 0;
   if (h < dawn) dark = Math.min(1, (dawn - h) / 1.5);
