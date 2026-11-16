@@ -7,6 +7,7 @@
  * no residents. populate.ts fills it with families.
  */
 import { fbm } from '../base/noise';
+import { doorCell, walkField } from '../walk';
 import type { Rng } from '../base/rng';
 import { townName as placeName } from '../names';
 import { B, type DistrictKind } from '../constants';
@@ -28,7 +29,19 @@ export interface MapResult {
 const DX = [0, 1, 0, -1];
 const DY = [-1, 0, 1, 0];
 
-export function generateMap(r: Rng, seed: number, phon: number, population: number, nextId: () => number): MapResult {
+export interface MapOptions {
+  /**
+   * 'ring' (the default): suburbs are ribbons along every country road and the shore outside
+   * the walls. 'gate': one compact suburb outside a single gate, about `suburbRadius` cells from
+   * its middle, sized so it can be crossed on foot in half a game hour (docs/WALK.md).
+   */
+  suburb?: 'ring' | 'gate';
+  suburbRadius?: number;
+  /** Gate suburb: the furthest walk, in cells, from its middle to any house door. */
+  suburbReach?: number;
+}
+
+export function generateMap(r: Rng, seed: number, phon: number, population: number, nextId: () => number, opts: MapOptions = {}): MapResult {
   const Rx = Math.round(Math.sqrt(population) * 0.95);
   const Ry = Math.round(Rx * 0.72);
   const W = Math.max(150, Rx * 2 + 70);
@@ -305,6 +318,37 @@ export function generateMap(r: Rng, seed: number, phon: number, population: numb
     const f = insideF(x, y);
     if (f < 1.9 && sd[i] <= 4 && map.ground[i] !== G_MARSH) suburb[i] = 1;
   }
+  let subCentre = -1;
+  if (opts.suburb === 'gate') {
+    // One compact settlement where a country road leaves a gate: pick the road with the most
+    // open land near the gate, centre the suburb a little way out along it, and keep only the
+    // land within the radius.
+    const R = opts.suburbRadius ?? 11;
+    let best: { score: number; x: number; y: number } | null = null;
+    for (const st of streets) {
+      if (st.kind !== 'road' || st.cells.length < R) continue;
+      const k = Math.min(st.cells.length - 1, Math.round(R * 0.85));
+      const ci = st.cells[k];
+      const ccx = ci % W, ccy = Math.floor(ci / W);
+      let score = 0;
+      for (let y = ccy - R; y <= ccy + R; y++) for (let x = ccx - R; x <= ccx + R; x++) {
+        if (!inb(x, y) || Math.hypot(x - ccx, y - ccy) > R) continue;
+        const i = idx(x, y);
+        if (!map.inside[i] && isLand(i) && map.ground[i] !== G_MARSH && map.use[i] !== U_WALL) score++;
+      }
+      score += r.next();
+      if (!best || score > best.score) best = { score, x: ccx, y: ccy };
+    }
+    if (best) {
+      subCentre = idx(best.x, best.y);
+      suburb.fill(0);
+      for (let y = best.y - R; y <= best.y + R; y++) for (let x = best.x - R; x <= best.x + R; x++) {
+        if (!inb(x, y) || Math.hypot(x - best.x, y - best.y) > R) continue;
+        const i = idx(x, y);
+        if (!map.inside[i] && isLand(i) && map.ground[i] !== G_MARSH) suburb[i] = 1;
+      }
+    }
+  }
   const buildable = (i: number) => (map.inside[i] || suburb[i]) && map.use[i] === U_NONE && isLand(i);
   const laneNames = laneNamer(r, phon);
   // ---------------------------------------------------------------- districts
@@ -360,6 +404,32 @@ export function generateMap(r: Rng, seed: number, phon: number, population: numb
     if (best >= 0) { map.district[i] = districts[best].id; districts[best].cells++; }
   }
   const distAt = (i: number) => districts.find((d) => d.id === map.district[i]);
+  // the compact suburb gets a loose grid of lanes, so its lots pack closely and every door is a
+  // short, straight walk from the road
+  if (opts.suburb === 'gate' && subCentre >= 0) {
+    const scx = subCentre % W, scy = Math.floor(subCentre / W);
+    const R = opts.suburbRadius ?? 11;
+    const lane = (cells: number[]) => {
+      // split into runs of buildable suburb cells, each its own lane
+      let run: number[] = [];
+      const flush = () => { if (run.length >= 4) { const st = newStreet('lane', laneNames()); for (const j of run) markStreet(st, j, U_STREET); relax(run); } run = []; };
+      for (const j of cells) { if (suburb[j] && (map.use[j] === U_NONE || isStreetUse(map.use[j])) && isLand(j)) { if (map.use[j] === U_NONE) run.push(j); else flush(); } else flush(); }
+      flush();
+    };
+    for (let dy = -R; dy <= R; dy++) {
+      if ((dy + 100) % 5 !== 0) continue;
+      const cells: number[] = [];
+      for (let x = scx - R; x <= scx + R; x++) if (inb(x, scy + dy)) cells.push(idx(x, scy + dy));
+      lane(cells);
+    }
+    for (let dx = -R; dx <= R; dx++) {
+      if ((dx + 100) % 9 !== 4) continue;
+      const cells: number[] = [];
+      for (let y = scy - R; y <= scy + R; y++) if (inb(scx + dx, y)) cells.push(idx(scx + dx, y));
+      lane(cells);
+    }
+  }
+
   // ---------------------------------------------------------------- landmark lots
   const buildings: Building[] = [];
   const free = (x: number, y: number, w: number, h: number) => {
@@ -584,6 +654,32 @@ export function generateMap(r: Rng, seed: number, phon: number, population: numb
         }
       }
     }
+  }
+  // the compact suburb: houses whose door is more than a walk of `suburbReach` cells from its
+  // middle are left as open ground, so no two doors are more than twice that apart on foot
+  if (opts.suburb === 'gate' && subCentre >= 0) {
+    const reach = opts.suburbReach ?? 11.5;
+    const subId = districts.find((d) => d.kind === 'suburb')?.id ?? -1;
+    for (let pass = 0; pass < 3; pass++) {
+      const field = walkField(map, subCentre);
+      const drop = buildings.filter((b) => b.district === subId && (b.kind === B.house || b.kind === B.ropewalk) && !(field[doorCell(map, b)] <= reach));
+      if (!drop.length) break;
+      for (const b of drop) {
+        for (let yy = b.y; yy < b.y + b.h; yy++) for (let xx = b.x; xx < b.x + b.w; xx++) { const i = idx(xx, yy); map.use[i] = U_NONE; map.building[i] = -1; }
+        buildings.splice(buildings.indexOf(b), 1);
+        const dd = districts.find((d) => d.id === b.district);
+        if (dd) dd.buildings = dd.buildings.filter((x) => x !== b.id);
+      }
+    }
+    // the suburb's middle is where its road meets the lanes, not where its seed fell
+    const subD = districts.find((d) => d.id === subId);
+    if (subD) { subD.cx = subCentre % W; subD.cy = Math.floor(subCentre / W); }
+    // a suburb needs its tavern and its smithy by the road: the two houses nearest the middle
+    const field = walkField(map, subCentre);
+    const near = buildings.filter((b) => b.district === subId && b.kind === B.house && b.w * b.h >= 6)
+      .sort((a, b) => field[doorCell(map, a)] - field[doorCell(map, b)] || a.id - b.id);
+    const want = [B.tavern, B.smithy].filter((k) => !buildings.some((b) => b.district === subId && b.kind === k));
+    for (const k of want) { const b = near.shift(); if (b) { b.kind = k; if (k === B.tavern) b.name = ''; } }
   }
   // leftover open ground: gardens inside, fields outside
   for (let i = 0; i < N; i++) {

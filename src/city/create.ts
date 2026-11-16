@@ -35,7 +35,7 @@ export function createCity(cfg: Partial<CityConfig> & { seed: number }): City {
   const rr = rngOf(c);
   c.name = placeName(rr, phon);
   c.epithet = rr.pick(['city of bells', 'the salt city', 'the grey port', 'city of the hundred masts', 'the lantern city', 'the walled port']);
-  const m = generateMap(rr, config.seed, phon, config.population, () => c.nextId++);
+  const m = generateMap(rr, config.seed, phon, config.population, () => c.nextId++, { suburb: config.suburb });
   c.map = m.map;
   c.streets = m.streets;
   c.districts = m.districts;

@@ -49,8 +49,8 @@ export function lifeWeek(c: City): void {
       if (p.notable) obituary(c, p, cause);
       continue;
     }
-    // births
-    if (p.sex === 0 && age >= 15 && age < 49) {
+    // births (none once the founder has arrived: the town is played flat, nobody born or ageing)
+    if (!c.play && p.sex === 0 && age >= 15 && age < 49) {
       if (c.day - p.lastBirth < DAYS_PER_YEAR * 1.6) continue;
       const sched = FERT[Math.floor(age / 5)] ?? 0;
       const married = p.spouse >= 0 && c.people.has(p.spouse);
