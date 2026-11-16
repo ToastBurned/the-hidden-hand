@@ -74,6 +74,8 @@ export interface District {
   cx: number;
   cy: number;
   cells: number;
+  /** The hand-made suburb: its layout's top-left map cell (gen/suburb.ts). */
+  made?: { x: number; y: number };
   buildings: number[];
   /** Rolling indicators, refreshed every four weeks. */
   pop: number;
@@ -119,6 +121,8 @@ export interface Building {
   rent: number;
   /** Set when a fire or demolition removed the building; kept so old events still resolve. */
   gone?: number;
+  /** A building of the hand-made suburb: its letter in gen/suburb.ts. It never burns down. */
+  made?: string;
   /** For a ruin: the building put up on the same ground. */
   replacedBy?: number;
   /**

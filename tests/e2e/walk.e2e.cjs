@@ -1,7 +1,7 @@
 /**
  * Browser walk test (docs/WALK.md). Starts a new first season on seed 1 in the real game page,
  * walks the founder across the suburb's longest door-to-door route with real key presses at
- * normal speed, and checks the clock moved 25 to 35 game minutes in 15 to 19 real seconds. Then it
+ * normal speed, and checks the clock moved 25 to 35 game minutes in 11 to 16 real seconds (at 2.25 game minutes a real second). Then it
  * walks a straight stretch with the CPU slowed fourfold (a lower frame rate) and checks the pace
  * stays 6 tiles a second within 5 per cent.
  *
@@ -65,7 +65,7 @@ async function steer(page, waypoints, timeoutMs) {
     const gameMin = t1.m - t0.m, realS = (t1.t - t0.t) / 1000;
     check(done, 'reached the far door');
     check(gameMin >= 25 && gameMin <= 35, `crossing took ${gameMin.toFixed(1)} game minutes (25 to 35)`);
-    check(realS >= 15 && realS <= 19, `crossing took ${realS.toFixed(1)} real seconds (15 to 19)`);
+    check(realS >= 11 && realS <= 16, `crossing took ${realS.toFixed(1)} real seconds (11 to 16)`);
 
     // pace at a lower frame rate: a straight stretch along the longest open run near the start
     const cdp = await page.context().newCDPSession(page);

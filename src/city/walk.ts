@@ -44,8 +44,12 @@ const DX = [1, -1, 0, 0, 1, 1, -1, -1];
 const DY = [0, 0, 1, -1, 1, -1, 1, -1];
 const SQ2 = Math.SQRT2;
 
-/** Walking distance in cells from `from` to every cell (Infinity where unreachable). */
-export function walkField(map: CityMap, from: number, limit = Infinity): Float32Array {
+/**
+ * Walking distance in cells from `from` to every cell (Infinity where unreachable). `cost`, if
+ * given, weights each step by the cell stepped onto (1 = a plain step), so townsfolk can keep to
+ * the streets.
+ */
+export function walkField(map: CityMap, from: number, limit = Infinity, cost?: (i: number) => number): Float32Array {
   const W = map.w, H = map.h, N = W * H;
   const d = new Float32Array(N).fill(Infinity);
   if (from < 0 || !walkable(map, from)) return d;
@@ -83,7 +87,7 @@ export function walkField(map: CityMap, from: number, limit = Infinity): Float32
       const j = ny * W + nx;
       if (done[j] || !walkable(map, j)) continue;
       if (k >= 4 && (!walkable(map, y * W + nx) || !walkable(map, ny * W + x))) continue;
-      const nd = d[i] + (k >= 4 ? SQ2 : 1);
+      const nd = d[i] + (k >= 4 ? SQ2 : 1) * (cost ? cost(j) : 1);
       if (nd < d[j]) { d[j] = nd; push(j); }
     }
   }
