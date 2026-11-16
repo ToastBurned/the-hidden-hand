@@ -19,7 +19,7 @@ export function placeBuilding(c: City, kind: number, district: number, w: number
   // the first season's compact suburb stays the size it was made (docs/WALK.md): new building goes inside the walls
   const gate = c.config.suburb === 'gate';
   const sub = gate ? c.districts.find((x) => x.kind === 'suburb') : undefined;
-  const inReach = (i: number) => m.inside[i] === 1 || (!!sub && m.district[i] === sub.id && Math.hypot((i % m.w) - sub.cx, Math.floor(i / m.w) - sub.cy) <= 8.5);
+  const inReach = (i: number) => m.inside[i] === 1 || (!!sub && m.district[i] === sub.id && Math.hypot((i % m.w) - sub.cx, Math.floor(i / m.w) - sub.cy) <= 8);
   const ok = (i: number) => (!gate || inReach(i)) && (m.use[i] === U_NONE || m.use[i] === U_GARDEN || m.use[i] === U_FIELD) && (m.ground[i] === G_LAND || m.ground[i] === G_SHORE);
   let best: [number, number, number, number, number] | null = null;
   let bd = Infinity;
