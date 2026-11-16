@@ -14,6 +14,7 @@ import type { Season } from '../../city/hand/season';
 import { exposureWord, relOf, stageWord, trustWord, type Fact } from '../../city/hand/state';
 import { knownPeople } from '../../city/hand/talk';
 import { PersonFace } from '../hand/common';
+import { playCue } from '../audio';
 
 export const SECTIONS = ['Names', 'Houses', 'Town', 'Almanac', 'Ledger', 'Order', 'Letters'] as const;
 export type Section = (typeof SECTIONS)[number];
@@ -56,6 +57,7 @@ export function Book({ s, start = 'Names', onClose }: { s: Season; start?: Secti
   // what was unread when the section opened stays bold while you look at it
   const [bold, setBold] = useState<Set<number>>(new Set());
   useEffect(() => {
+    playCue('page');
     const now = new Set<number>();
     for (const f of facts) if (!f.read && SECTION_OF[f.kind] === sec) { now.add(f.id); f.read = true; }
     setBold(now);
@@ -215,7 +217,7 @@ export function Book({ s, start = 'Names', onClose }: { s: Season; start?: Secti
         return (
           <>
             <p className="small muted">The in-tray. Unread letters are in bold.</p>
-            <ul className="letters">{ls.map((l) => <li key={l.id}><button type="button" className={l.read ? '' : 'unread'} onClick={() => { l.read = true; setLetter(l.id); }}><b>{l.title}</b><small>day {l.day - (c.play?.since ?? 0) + 1}</small></button></li>)}</ul>
+            <ul className="letters">{ls.map((l) => <li key={l.id}><button type="button" className={l.read ? '' : 'unread'} onClick={() => { l.read = true; playCue('page'); setLetter(l.id); }}><b>{l.title}</b><small>day {l.day - (c.play?.since ?? 0) + 1}</small></button></li>)}</ul>
           </>
         );
       }

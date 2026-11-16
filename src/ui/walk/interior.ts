@@ -79,7 +79,16 @@ export function roomOf(s: Season, b: Building): Room {
     for (let x = fx0; x <= fx1; x++) solid.add(k(x, fy));
   }
   const spots: { x: number; y: number }[] = [];
-  for (let y = 4; y < h - 1; y++) for (let x = 1; x < w - 1; x++) if (!solid.has(k(x, y)) && !solid.has(k(x, y - 1)) && (x + y * 3) % 4 === 0) spots.push({ x: x + 0.5, y: y + 0.6 });
+  // a standing spot is clear of furniture footprints, and nothing drawn in front of it covers the
+  // person (Ed, 17 Nov: a lodger stood behind the junk pile and could not be talked to)
+  const covered = (x: number, y: number) => furn.some((f) => f.y > y - 0.2 && f.y < y + 2.4 && Math.abs(f.x - x) < 1.5);
+  for (let y = 4; y < h - 1; y++) for (let x = 1; x < w - 1; x++) {
+    const sx = x + 0.5, sy = y + 0.6;
+    if (solid.has(k(x, y)) || solid.has(k(x, y - 1)) || (x + y) % 2 !== 0 || covered(sx, sy)) continue;
+    if (Math.abs(sx - (cx + 0.5)) < 1 && sy > h - 2) continue; // keep the doorway clear
+    spots.push({ x: sx, y: sy });
+  }
+  if (!spots.length) spots.push({ x: cx + 2.5, y: h - 1.4 });
   return { w, h, wall, floor, furn, spots, door: { x: cx + 0.5, y: h - 0.2 }, solid };
 }
 

@@ -105,6 +105,35 @@ export function playCue(o: Out, cue: Cue, at: number): void {
       tone(o, v, { freq: 1500, to: 1100, at, attack: 0.001, release: 0.03, gain: 0.03 });
       break;
     }
+    case 'door': {
+      // a latch, a short creak of hinges, the door settling
+      const v = voiceBus(o, 1, 0.15);
+      noise(o, v, { at, attack: 0.001, release: 0.03, gain: 0.18, type: 'bandpass', freq: 2400, q: 4 });
+      tone(o, v, { type: 'sawtooth', freq: 210, to: 330, at: at + 0.05, attack: 0.04, hold: 0.12, release: 0.12, gain: 0.018 });
+      noise(o, v, { at: at + 0.05, attack: 0.05, release: 0.25, gain: 0.05, type: 'bandpass', freq: 900, to: 1400, q: 6 });
+      thud(o, v, at + 0.34, 0.22, 70);
+      break;
+    }
+    case 'coin': {
+      // two coins on a counter
+      const v = voiceBus(o, 1, 0.1);
+      bell(o, v, 2350, at, 0.25, 0.05);
+      bell(o, v, 2790, at + 0.07, 0.3, 0.04);
+      noise(o, v, { at, attack: 0.001, release: 0.02, gain: 0.08, type: 'highpass', freq: 5000 });
+      break;
+    }
+    case 'page': {
+      // a page turned
+      const v = voiceBus(o, 1, 0.05);
+      noise(o, v, { at, attack: 0.03, release: 0.18, gain: 0.07, type: 'bandpass', freq: 3000, to: 1800, q: 0.8 });
+      break;
+    }
+    case 'dig': {
+      // iron on stone, twice
+      const v = voiceBus(o, 1, 0.2);
+      for (const d of [0, 0.32]) { noise(o, v, { at: at + d, attack: 0.001, release: 0.06, gain: 0.2, type: 'bandpass', freq: 1800, q: 3 }); bell(o, v, 1120 + d * 300, at + d, 0.15, 0.03); thud(o, v, at + d, 0.12, 110); }
+      break;
+    }
     case 'notice': {
       const v = voiceBus(o, 1, 0.25);
       pluck(o, v, n(74), at, 0.6, 0.12);

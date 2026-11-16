@@ -74,8 +74,8 @@ export function TalkPanel({ s, pid, dev, onClose, onCount }: { s: Season; pid: n
             <div className="shop">
               <p className="small">The smith sells iron to anyone with coin.</p>
               <div className="actions">
-                <button type="button" disabled={s.hand.items.prybar} onClick={() => { setMsg(buy(s, 'prybar')); re((n) => n + 1); }}>{s.hand.items.prybar ? 'Pry bar (yours)' : `Pry bar, ${PRYBAR_COST} ducats`}</button>
-                <button type="button" disabled={s.hand.items.lock} onClick={() => { setMsg(buy(s, 'lock')); re((n) => n + 1); }}>{s.hand.items.lock ? 'Lock (yours)' : `Lock, ${LOCK_COST} ducats`}</button>
+                <button type="button" disabled={s.hand.items.prybar} onClick={() => { setMsg(buy(s, 'prybar')); playCue('coin'); re((n) => n + 1); }}>{s.hand.items.prybar ? 'Pry bar (yours)' : `Pry bar, ${PRYBAR_COST} ducats`}</button>
+                <button type="button" disabled={s.hand.items.lock} onClick={() => { setMsg(buy(s, 'lock')); playCue('coin'); re((n) => n + 1); }}>{s.hand.items.lock ? 'Lock (yours)' : `Lock, ${LOCK_COST} ducats`}</button>
               </div>
               {msg && <p className="small note">{msg}</p>}
             </div>
@@ -147,7 +147,7 @@ export function CellarPanel({ s, onClose, onSworn }: { s: Season; onClose: () =>
   const job = nextJob(s);
   const loud = noisy(s);
   const hoverWhy = placing && hover ? canPlace(s, placing, hover[0], hover[1]) : '';
-  const doWork = (n: number) => { const out = work(s, n); if (out.length) playCue('work'); setLines(out); re((x) => x + 1); };
+  const doWork = (n: number) => { const out = work(s, n); if (out.length) playCue('dig'); setLines(out); re((x) => x + 1); };
   const ready = oathReady(s);
   if (!h.cellar.open) {
     return (
@@ -180,7 +180,7 @@ export function CellarPanel({ s, onClose, onSworn }: { s: Season; onClose: () =>
               onClick={() => {
                 if (!placing) return;
                 const why = placeRoom(s, placing, x, y);
-                if (why) setLines([why]); else { setLines([`Marked out ${ROOM_NAME[placing]}. It needs ${ROOMS[placing].hours} hours of digging.`]); setPlacing(null); }
+                if (why) setLines([why]); else { playCue('coin'); setLines([`Marked out ${ROOM_NAME[placing]}. It needs ${ROOMS[placing].hours} hours of digging.`]); setPlacing(null); }
                 re((n) => n + 1);
               }}>{r && r.x === x && r.y === y ? <span>{ROOM_NAME[r.kind].replace(/^(a|the) /, '')}{!roomDone(r) && <i> {r.done}/{r.need}</i>}</span> : null}</button>;
           })}

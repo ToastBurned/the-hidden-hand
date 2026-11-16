@@ -6,14 +6,18 @@
 export type Cue =
   | 'click' | 'founding' | 'conclave' | 'op-success' | 'op-fail' | 'exposed' | 'recruit'
   | 'arrest' | 'betrayal' | 'inquiry' | 'death' | 'seat' | 'work' | 'work-falters'
-  | 'victory' | 'defeat' | 'notice';
+  | 'victory' | 'defeat' | 'notice'
+  // action sounds (first season): short, never duck the music
+  | 'door' | 'coin' | 'page' | 'dig';
 
-export const CUES: Cue[] = ['click', 'founding', 'conclave', 'op-success', 'op-fail', 'exposed', 'recruit', 'arrest', 'betrayal', 'inquiry', 'death', 'seat', 'work', 'work-falters', 'victory', 'defeat', 'notice'];
+export const CUES: Cue[] = ['click', 'door', 'coin', 'page', 'dig', 'founding', 'conclave', 'op-success', 'op-fail', 'exposed', 'recruit', 'arrest', 'betrayal', 'inquiry', 'death', 'seat', 'work', 'work-falters', 'victory', 'defeat', 'notice'];
+/** Action sounds: played as they happen, not as stingers. */
+export const ACTIONS: Cue[] = ['click', 'door', 'coin', 'page', 'dig'];
 
 /** Higher wins when several things happen in the same frame: only one stinger plays at a time. */
 const PRIORITY: Record<Cue, number> = {
   victory: 100, defeat: 100, founding: 90, arrest: 80, betrayal: 78, exposed: 75, death: 70, inquiry: 65,
-  'work-falters': 60, conclave: 55, work: 50, recruit: 45, seat: 40, 'op-success': 35, 'op-fail': 34, notice: 10, click: 0,
+  'work-falters': 60, conclave: 55, work: 50, recruit: 45, seat: 40, 'op-success': 35, 'op-fail': 34, notice: 10, click: 0, door: 1, coin: 1, page: 1, dig: 1,
 };
 export const cuePriority = (c: Cue) => PRIORITY[c];
 

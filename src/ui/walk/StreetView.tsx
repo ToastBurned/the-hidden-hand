@@ -25,7 +25,8 @@ import { dirOf } from './gait';
 import { Townsfolk, walkerAt, type Walker } from './people';
 import { loadKit } from './assets';
 import { GroundCache, drawLight, drawWorld, type Figure } from './draw';
-import { TILE, buildScene, type Scene } from './scene';
+import { TILE, blockedAt, buildScene, type Scene } from './scene';
+import { G_DEEP, G_WATER, U_LOT } from '../../city/types';
 import { drawRoom, freeIn, presentIn, roomOf, spriteOfPerson, type Furn, type Room } from './interior';
 import { Book, unreadIn, type Section } from './Book';
 import { CellarPanel, EndPanel, MeetingPanel, MorningPage, NightPanel, RepairsPanel, TalkPanel } from './panels';
@@ -118,6 +119,7 @@ export function StreetView({ s, onSave, onQuit }: Props) {
     const enter = (bid: number) => {
       const b = c.buildings.get(bid)!;
       s.inside = bid;
+      playCue('door');
       room = roomOf(s, b); roomId = bid;
       ix = room.door.x; iy = room.door.y - 0.5;
       s.facing = 'north';
@@ -130,6 +132,7 @@ export function StreetView({ s, onSave, onQuit }: Props) {
       const b = c.buildings.get(s.inside);
       if (!b) { s.inside = -1; return; }
       const d = scene?.doors.get(b.id);
+      playCue('door');
       standAtDoor(s, b);
       if (d && openAt(c, d.x / TILE, d.y / TILE + 0.6)) { s.x = d.x / TILE; s.y = d.y / TILE + 0.6; }
       s.facing = 'south';
@@ -295,7 +298,15 @@ export function StreetView({ s, onSave, onQuit }: Props) {
             const step = WALK_TILES_PER_S * dt;
             const ox = s.x, oy = s.y;
             const tx = s.x + dx * step, ty = s.y + dy * step;
-            const free = (x: number, y: number) => openAt(c, x - 0.3, y) && openAt(c, x + 0.3, y) && openAt(c, x - 0.3, y - 0.25) && openAt(c, x + 0.3, y - 0.25);
+            // lot cells are open ground except under a building's drawn walls
+            const pt = (x: number, y: number) => {
+              const cx = Math.floor(x / TILES_PER_CELL), cy = Math.floor(y / TILES_PER_CELL);
+              if (cx < 0 || cy < 0 || cx >= c.map.w || cy >= c.map.h) return false;
+              const i = cy * c.map.w + cx;
+              if (c.map.use[i] === U_LOT && c.map.ground[i] !== G_DEEP && c.map.ground[i] !== G_WATER) return !scene || !blockedAt(scene, i, x * TILE, y * TILE);
+              return openAt(c, x, y) && !(scene && blockedAt(scene, i, x * TILE, y * TILE));
+            };
+            const free = (x: number, y: number) => pt(x - 0.3, y) && pt(x + 0.3, y) && pt(x - 0.3, y - 0.25) && pt(x + 0.3, y - 0.25);
             if (free(tx, s.y)) s.x = tx;
             if (free(s.x, ty)) s.y = ty;
             const moved = Math.hypot(s.x - ox, s.y - oy);
@@ -329,10 +340,17 @@ export function StreetView({ s, onSave, onQuit }: Props) {
             presentAt = q;
             const b = c.buildings.get(roomId)!;
             const ids = presentIn(s, b);
-            present = ids.map((pid, i) => { const sp = room!.spots[(i * 5 + pid) % room!.spots.length]; return { pid, x: sp.x, y: sp.y }; });
-            // de-duplicate spots
-            const used = new Set<string>();
-            present = present.filter((p) => { const k = `${p.x},${p.y}`; if (used.has(k)) return false; used.add(k); return true; });
+            // each person gets their own spot: their usual one, or the next free one
+            const used = new Set<number>();
+            const n = room.spots.length;
+            present = [];
+            for (const pid of ids) {
+              if (used.size >= n) break;
+              let k = (pid * 7) % n;
+              while (used.has(k)) k = (k + 1) % n;
+              used.add(k);
+              present.push({ pid, x: room.spots[k].x, y: room.spots[k].y });
+            }
             for (const p of present) sighted(s, p.pid, roomId);
           }
           const tmp: Figure[] = present.map((p) => ({ x: 0, y: 0, sprite: spriteOfPerson(c, p.pid), facing: 'south', moving: false, t: 0, _p: p } as Figure & { _p: typeof p }));
@@ -525,7 +543,7 @@ export function StreetView({ s, onSave, onQuit }: Props) {
         <section className="street-menu">
           <h3>Menu</h3>
           <div className="sound">
-            {(['music', 'ambience', 'effects'] as const).map((k) => (
+            {(['music', 'effects'] as const).map((k) => (
               <label key={k}>{k[0].toUpperCase() + k.slice(1)} <input type="range" min={0} max={1} step={0.05} value={sound[k]} onChange={(e) => { setAudioSettings((x) => ({ ...x, [k]: Number(e.target.value) })); audio.setSettings({ ...sound, [k]: Number(e.target.value) }); }} /></label>
             ))}
             <label><input type="checkbox" checked={sound.muted} onChange={() => { setAudioSettings((x) => ({ ...x, muted: !x.muted })); audio.setSettings({ ...sound, muted: !sound.muted }); }} /> Mute</label>

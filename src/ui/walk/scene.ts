@@ -37,6 +37,20 @@ export interface Scene {
   doors: Map<number, { x: number; y: number; open: boolean }>;
   /** Spots that glow at night (lit lanterns, tavern doors), in world pixels. */
   lamps: { x: number; y: number }[];
+  /**
+   * What a building's drawn walls take up on the ground, in world pixels: the lower part of each
+   * house sprite. Lot cells outside these are walkable, so you can walk right up to a wall and
+   * round the back of a house (Ed, 17 Nov: no invisible walls).
+   */
+  blocks: Map<number, { x0: number; y0: number; x1: number; y1: number }[]>;
+}
+
+/** Is this world-pixel point inside a building's walls? Lot cells only; `blocks` is keyed by map cell. */
+export function blockedAt(scene: Scene, cell: number, px: number, py: number): boolean {
+  const list = scene.blocks.get(cell);
+  if (!list) return false;
+  for (const r of list) if (px >= r.x0 && px <= r.x1 && py >= r.y0 && py <= r.y1) return true;
+  return false;
 }
 
 const h2 = (a: number, b: number, s = 0) => {
@@ -179,5 +193,20 @@ export function buildScene(c: City, kit: Kit, house: number): Scene {
     const d = doors.get(hb.id);
     if (d && !hb.made) sprites.push({ id: 'props/rubble', x: d.x + 46, y: d.y });
   }
-  return { sprites, doors, lamps };
+  // ground footprints of the building sprites, indexed by the map cells they touch
+  const blocks = new Map<number, { x0: number; y0: number; x1: number; y1: number }[]>();
+  for (const sp of sprites) {
+    if (sp.building === undefined) continue;
+    const a = kit.get(sp.id);
+    const [bx0, by0, bx1, by1] = a.bbox ?? [0, 0, a.w, a.h];
+    const left = sp.x - a.w / 2, top = sp.y - (a.base ?? a.h);
+    const r = { x0: left + bx0 + 2, x1: left + bx1 - 2, y0: Math.max(top + by0, top + by1 - (by1 - by0) * 0.45), y1: Math.min(top + by1, sp.y) - 1 };
+    for (let cy = Math.floor(r.y0 / CELL_PX); cy <= Math.floor(r.y1 / CELL_PX); cy++)
+      for (let cx = Math.floor(r.x0 / CELL_PX); cx <= Math.floor(r.x1 / CELL_PX); cx++) {
+        const k = cy * W + cx;
+        const l = blocks.get(k);
+        if (l) l.push(r); else blocks.set(k, [r]);
+      }
+  }
+  return { sprites, doors, lamps, blocks };
 }

@@ -14,7 +14,10 @@
  * created until `unlock()` (called on the first click or key). When muted, at zero volume or
  * with the window hidden, the context is suspended so the sound costs no CPU at all.
  */
-import type { Cue, Season } from './cues';
+import { ACTIONS, type Cue, type Season } from './cues';
+
+/** Ed, 17 Nov 2026: the ambient bed is off; the music plays alone. */
+export const AMBIENCE_OFF = true;
 import type { AudioSettings } from './settings';
 import { bell, makeImpulse, makeNoise, midi, noise, playCue, pluck, thud, tone, type Out } from './synth';
 
@@ -165,7 +168,7 @@ export class AudioEngine {
     const ctx = this.ctx, o = this.out;
     if (!ctx || !o || !this.audible()) return;
     const now = ctx.currentTime;
-    if (c === 'click') { if (now - this.lastClickAt < 0.04) return; this.lastClickAt = now; }
+    if (ACTIONS.includes(c)) { if (now - this.lastClickAt < 0.04) return; this.lastClickAt = now; }
     else { if (now - this.lastCueAt < 0.6) return; this.lastCueAt = now; this.duckFor(c === 'victory' || c === 'defeat' ? 5 : c === 'notice' ? 0 : 2.5); }
     this.voices++;
     playCue(o, c, now + 0.02);
@@ -194,6 +197,8 @@ export class AudioEngine {
 
   private sceneLevels(): { music: number; amb: number } {
     const p = this.mood.paused;
+    // Ed, 17 Nov 2026: no ambient bed (wind, birds, rain) over the music for now
+    if (AMBIENCE_OFF) return { music: this.scene === 'play' ? (p ? 0.5 : 1) : 0.9, amb: 0 };
     switch (this.scene) {
       case 'title': return { music: 0.9, amb: 0.45 };
       case 'setup': return { music: 0.75, amb: 0.35 };
