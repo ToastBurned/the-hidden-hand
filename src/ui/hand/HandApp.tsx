@@ -10,7 +10,7 @@ import { ST } from './common';
 import { Play } from './Play';
 import { Setup } from './Setup';
 import { HandGame, citySaves, loadCitySave } from './store';
-import type { Season } from '../../city/hand/season';
+import { SLICE_SEED, type Season } from '../../city/hand/season';
 import { NewSeason, SeasonPlay, loadSeason, seasonSaves } from '../walk/SeasonApp';
 import './hand.css';
 
@@ -44,9 +44,10 @@ function Title({ onNew, onOld, onLoad, onSeason }: { onNew: (seed: number) => vo
   const [saves, setSaves] = useState<SaveMeta[] | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
-  const [seed, setSeed] = useState(() => {
-    try { const q = new URLSearchParams(location.search).get('seed'); if (q) return Number(q) || 1; } catch { /* fine */ }
-    return 1 + Math.floor(Math.random() * 9999);
+  // one town and one history for the slice (Ed, 16 Nov): ?seed= in the address still picks another, for testing
+  const [seed] = useState(() => {
+    try { const q = new URLSearchParams(location.search).get('seed'); if (q) return Number(q) || SLICE_SEED; } catch { /* fine */ }
+    return SLICE_SEED;
   });
   useEffect(() => { void Promise.all([seasonSaves(), citySaves()]).then(([a, b]) => setSaves([...a, ...b].sort((x, y) => y.savedAt - x.savedAt))); }, []);
   const load = async (s: SaveMeta) => {
@@ -64,7 +65,6 @@ function Title({ onNew, onOld, onLoad, onSeason }: { onNew: (seed: number) => vo
         <p>You have just been sworn into an old secret Order and sent to a Renaissance port to take it. You have a run-down house in the suburb, a sealed cellar, and nobody who knows your name.</p>
         <div className="actions">
           <button type="button" className="primary big" onClick={() => onNew(seed)}>New game</button>
-          <label className="muted small">Town <input className="seed" type="number" value={seed} onChange={(e) => setSeed(Number(e.target.value) || 1)} /></label>
         </div>
         {saves && saves.length > 0 && (
           <section className="saves">
@@ -77,7 +77,7 @@ function Title({ onNew, onOld, onLoad, onSeason }: { onNew: (seed: number) => vo
           </section>
         )}
         {err && <p className="problem">{err}</p>}
-        <p className="muted small">Milestone 1 of the first season: walking the suburb. <button type="button" className="small" onClick={onOld}>Play the older slice</button></p>
+        <p className="muted small">The first season: one spring in one town. <button type="button" className="small" onClick={onOld}>Play the older slice</button></p>
       </div>
     </div>
   );

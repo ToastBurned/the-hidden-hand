@@ -70,12 +70,10 @@ export function spriteFor(c: City, b: Building, house: number): string {
   return h2(b.id, 2) < 0.5 ? 'buildings/house-inn' : 'buildings/house-rose';
 }
 
-/** Buildings the founder may walk into in the first season: the house, and the suburb's public places. */
+/** Buildings the founder may walk into: every building with a door (Ed, 16 Nov: "I should be able to enter the houses"). Night bars are checked when you try the door. */
 export function enterable(c: City, b: Building, house: number): boolean {
-  if (b.id === house) return true;
-  const d = c.districts.find((x) => x.id === b.district);
-  if (d?.kind !== 'suburb') return false;
-  return b.kind === B.tavern || b.kind === B.chapel || b.kind === B.smithy;
+  void c; void house;
+  return b.gone === undefined;
 }
 
 export function buildScene(c: City, kit: Kit, house: number): Scene {

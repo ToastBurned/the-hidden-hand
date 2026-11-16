@@ -2,47 +2,90 @@
  * The first season on foot: the founder walks the live town, front-on, at 16 px tiles, with the
  * day clock running (docs/WALK.md, docs/SEASON.md).
  *
- * WASD or the arrow keys walk; a click walks there along the streets. E (or walking into it) goes
- * through a door you can use. P or Esc pauses. The clock stops while a menu is open. Sleep is in
- * your own house from 18:00; Wait passes time where you stand.
+ * WASD or the arrow keys walk; a click walks there along the streets. E goes through a door,
+ * talks to the nearest person, or uses the furniture you stand at. Inside a building the room is
+ * drawn instead of the street; walk out through the door at the bottom. B opens the Book of the
+ * Hand. P or Esc pauses. The clock stops while any screen is open. Sleep is in your own bed from
+ * 18:00; Wait passes time where you stand.
  */
 import { useEffect, useRef, useState } from 'react';
 import { dateLabel, seasonAt } from '../../city/core';
 import { B, BUILDING_NAMES, DAY_NAMES } from '../../city/constants';
 import { BED_FROM, DAY_END, GAME_MIN_PER_REAL_S, GATES_OPEN, GATES_SHUT, WALK_TILES_PER_S, clockLabel } from '../../city/hand/clock';
-import { canSleep, openAt, pass, sleep, standAtDoor, suburbCrossing, waitUntil, weekdayOf, type Facing, type Season } from '../../city/hand/season';
+import { sighted } from '../../city/hand/day';
+import { oddJob } from '../../city/hand/house';
+import { MEETING_AT, meetingDue } from '../../city/hand/lodge';
+import { canSleep, openAt, pass, seasonDay, sleep, standAtDoor, suburbCrossing, waitUntil, weekdayOf, type Facing, type Season } from '../../city/hand/season';
+import { MINUTES_PER_EXCHANGE, specialOf } from '../../city/hand/talk';
 import type { Building } from '../../city/types';
 import { doorCell, TILES_PER_CELL, walkPath } from '../../city/walk';
+import { audio, playCue, wireAudio } from '../audio';
+import { setAudioSettings, useAudioSettings } from '../audio/settings';
 import { dirOf } from './gait';
 import { Townsfolk, walkerAt, type Walker } from './people';
 import { loadKit } from './assets';
 import { GroundCache, drawLight, drawWorld, type Figure } from './draw';
 import { TILE, buildScene, type Scene } from './scene';
+import { drawRoom, freeIn, presentIn, roomOf, spriteOfPerson, type Furn, type Room } from './interior';
+import { Book, unreadIn, type Section } from './Book';
+import { CellarPanel, EndPanel, MeetingPanel, MorningPage, NightPanel, RepairsPanel, TalkPanel } from './panels';
 
 interface WalkStat { tiles: number; gameMin: number; realS: number }
 
 interface Props { s: Season; onSave: () => Promise<void>; onQuit: () => void }
 
+type Panel =
+  | { kind: 'talk'; pid: number }
+  | { kind: 'book'; start: Section }
+  | { kind: 'cellar' }
+  | { kind: 'meeting' }
+  | { kind: 'night' }
+  | { kind: 'repairs' }
+  | { kind: 'morning' }
+  | { kind: 'end' };
+
 const KEYS: Record<string, [number, number]> = {
   ArrowUp: [0, -1], KeyW: [0, -1], ArrowDown: [0, 1], KeyS: [0, 1], ArrowLeft: [-1, 0], KeyA: [-1, 0], ArrowRight: [1, 0], KeyD: [1, 0],
 };
+
+const seasonName = (i: number) => (['spring', 'summer', 'autumn', 'winter'] as const)[((i % 4) + 4) % 4];
+
+/** What the founder's tutorial step asks of them, in a line for the HUD. */
+function goal(s: Season): string {
+  const h = s.hand;
+  if (h.ended) return 'The spring is over. Read the Order’s letter.';
+  if (h.tutorial === 0) return h.items.prybar ? 'Open the bricked cellar door in your house.' : 'Buy a pry bar from the smith, then open the cellar.';
+  if (h.tutorial === 1) {
+    if (!h.cellar.rooms.some((r) => r.kind === 'meeting')) return 'Clear the old hall and dig a meeting room. Find one you can trust.';
+    return h.members.length ? 'Wait for the Order’s next letter.' : 'Find one you can trust, sound them out, invite them, swear them in.';
+  }
+  if (h.tutorial === 2) return `Learn the council: ${h.facts.filter((f) => f.kind === 'council' && !f.pending).length} of 8 names.`;
+  return `Grow the lodge until the season ends (day ${Math.min(28, seasonDay(s) + 1)} of 28).`;
+}
 
 export function StreetView({ s, onSave, onQuit }: Props) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const [, setTick] = useState(0);
   const [paused, setPaused] = useState(false);
   const [menu, setMenu] = useState<'wait' | 'quit' | null>(null);
+  const [panel, setPanel] = useState<Panel | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [hint, setHint] = useState<string>('');
   const [dev, setDev] = useState(() => { try { return new URLSearchParams(location.search).has('dev') || localStorage.getItem('hiddenhand.dev') === '1'; } catch { return false; } });
   const [walk, setWalk] = useState<WalkStat | null>(null);
-  const live = useRef({ paused: false, menu: false, inside: s.inside });
+  const live = useRef({ paused: false, menu: false, endSeen: false, reminded: -1, panelKind: '' as string });
+  const api = useRef<{ use: () => void; exit: () => void } | null>(null);
   const sceneRef = useRef<Scene | null>(null);
+  const sound = useAudioSettings();
   live.current.paused = paused;
-  live.current.menu = menu !== null;
+  live.current.menu = menu !== null || panel !== null;
+  live.current.panelKind = panel?.kind ?? '';
   const c = s.city;
   const kit = loadKit();
 
-  const say = (t: string) => { setToast(t); window.setTimeout(() => setToast((x) => (x === t ? null : x)), 3500); };
+  const say = (t: string) => { setToast(t); window.setTimeout(() => setToast((x) => (x === t ? null : x)), 4000); };
+
+  useEffect(() => { wireAudio(); audio.setScene('play'); return () => audio.setScene('title'); }, []);
 
   useEffect(() => {
     let raf = 0, last = performance.now(), alive = true;
@@ -54,38 +97,56 @@ export function StreetView({ s, onSave, onQuit }: Props) {
     let t = 0;
     let figs: Figure[] = [];
     let folkNow: Walker[] = [];
-    let atDoor = -1;
+    let atDoor = -1, atPerson = -1;
     let figsAt = -1;
     let seenBuildings = c.buildings.size;
-    // the walk measurer: from first step to standing still for half a second
+    // inside: the room, the founder's place in it (tiles), who is there and where they stand
+    let room: Room | null = null, roomId = -1;
+    let ix = 0, iy = 0;
+    let present: { pid: number; x: number; y: number }[] = [];
+    let presentAt = -1;
+    let target: { x: number; y: number; then?: () => void } | null = null;
+    let origin = { ox: 0, oy: 0 };
     let w: { tiles: number; min0: number; real0: number; still: number } | null = null;
     void kit.ready.then(() => {
       scene = buildScene(c, kit, s.house);
       sceneRef.current = scene;
-      // standing in front of the house (a new arrival, or a load): stand at its door as drawn
       const d = scene.doors.get(s.house);
       if (d && s.inside < 0 && Math.hypot(s.x * TILE - d.x, s.y * TILE - d.y) < 90 && openAt(c, d.x / TILE, d.y / TILE + 0.6)) { s.x = d.x / TILE; s.y = d.y / TILE + 0.6; }
     });
 
-    const down = (e: KeyboardEvent) => {
-      if ((e.target as HTMLElement)?.tagName === 'INPUT') return;
-      if (KEYS[e.code]) { keys.add(e.code); route = []; atDoor = -1; e.preventDefault(); }
-      if (e.code === 'KeyP' || e.code === 'Escape') { setPaused((p) => !p); e.preventDefault(); }
-      if (e.code === 'KeyE') tryDoor(true);
-      if (e.code === 'Backquote') setDev((d) => { const n = !d; try { localStorage.setItem('hiddenhand.dev', n ? '1' : '0'); } catch { /* fine */ } return n; });
+    const enter = (bid: number) => {
+      const b = c.buildings.get(bid)!;
+      s.inside = bid;
+      room = roomOf(s, b); roomId = bid;
+      ix = room.door.x; iy = room.door.y - 0.5;
+      s.facing = 'north';
+      present = []; presentAt = -1; target = null;
+      if (!s.hand.visited.includes(bid)) s.hand.visited.push(bid);
+      keys.clear(); route = [];
+      setTick((n) => n + 1);
     };
-    const up = (e: KeyboardEvent) => { keys.delete(e.code); };
-    window.addEventListener('keydown', down);
-    window.addEventListener('keyup', up);
-    const blur = () => keys.clear();
-    window.addEventListener('blur', blur);
+    const exit = () => {
+      const b = c.buildings.get(s.inside);
+      if (!b) { s.inside = -1; return; }
+      const d = scene?.doors.get(b.id);
+      standAtDoor(s, b);
+      if (d && openAt(c, d.x / TILE, d.y / TILE + 0.6)) { s.x = d.x / TILE; s.y = d.y / TILE + 0.6; }
+      s.facing = 'south';
+      room = null; roomId = -1; present = []; target = null;
+      keys.clear();
+      setTick((n) => n + 1);
+    };
 
-    const cellAt = (tx: number, ty: number) => Math.floor(ty / TILES_PER_CELL) * c.map.w + Math.floor(tx / TILES_PER_CELL);
+    /** Is this door open to the founder now? Their own house always; others by day; the tavern until midnight. */
+    const doorWhy = (b: Building): string => {
+      if (b.id === s.house) return '';
+      if (b.kind === B.tavern) return s.minute < 5 * 60 ? 'The tavern is shut.' : '';
+      const night = s.minute >= 21 * 60 || s.minute < 6 * 60;
+      if (night) return 'The door is barred for the night.';
+      return '';
+    };
 
-    /**
-     * Go through the nearest door within reach (about a tile and a half of where it is drawn).
-     * A door the founder can't use says so; with nothing near, E says there is no door.
-     */
     function tryDoor(explicit: boolean): boolean {
       if (!scene || s.inside >= 0) return false;
       const px = s.x * TILE, py = s.y * TILE;
@@ -96,37 +157,137 @@ export function StreetView({ s, onSave, onQuit }: Props) {
         const dist = dx + Math.abs(dy);
         if (dist < bd) { bd = dist; best = bid; }
       }
-      if (best < 0) { if (explicit) say('There is no door here. Stand at one and press E.'); return false; }
-      const d = scene.doors.get(best)!;
-      if (!d.open) {
-        const b = c.buildings.get(best)!;
-        if (explicit) say(c.districts.find((x) => x.id === b.district)?.kind === 'suburb' ? 'The door stays shut. Nobody here knows you yet.' : 'The door stays shut to a stranger.');
-        return false;
-      }
-      s.inside = best; live.current.inside = best;
-      keys.clear(); route = [];
-      setTick((n) => n + 1);
+      if (best < 0) return false;
+      const b = c.buildings.get(best)!;
+      const why = scene.doors.get(best)!.open ? doorWhy(b) : 'The door stays shut.';
+      if (why) { if (explicit) say(why); return explicit; }
+      enter(best);
       return true;
     }
+
+    /** The nearest person on the street within reach, or -1. */
+    const nearWalker = (reach: number) => {
+      let best = -1, bd = reach;
+      for (const p of folkNow) {
+        if (!walkerAt(p, s.minute)) continue;
+        const d = Math.hypot(p.x * TILES_PER_CELL - s.x, p.y * TILES_PER_CELL - s.y);
+        if (d < bd) { bd = d; best = p.pid; }
+      }
+      return best;
+    };
+    const talk = (pid: number) => { keys.clear(); route = []; setPanel({ kind: 'talk', pid }); };
+
+    /** Use what you stand at inside: a piece of furniture, or the nearest person. */
+    const useInside = (f: Furn) => {
+      const b = c.buildings.get(roomId)!;
+      switch (f.use) {
+        case 'bed':
+          if (!canSleep(s)) { say(s.minute < BED_FROM ? 'Too early to sleep. You can go to bed from 18:00.' : 'Sleep in your own bed.'); return; }
+          doSleepNow(); return;
+        case 'desk': setPanel({ kind: 'book', start: 'Letters' }); return;
+        case 'cellar': setPanel({ kind: 'cellar' }); return;
+        case 'hearth': setPanel({ kind: 'repairs' }); return;
+        case 'shop': {
+          const smith = present.find((x) => specialOf(s, c.people.get(x.pid)!) === 'smith');
+          if (smith) talk(smith.pid); else say('The smith is not at the forge just now.');
+          return;
+        }
+        case 'job': { const m = oddJob(s); say(m); setTick((n) => n + 1); return; }
+        case 'pray': pass(s, 20); say(b.kind === B.chapel ? 'You kneel a while in the candle smoke. Nobody speaks to you.' : 'A quiet moment.'); return;
+      }
+    };
+    const nearInside = (): { pid: number; furn?: undefined } | { furn: Furn; pid?: undefined } | null => {
+      if (!room) return null;
+      let bestF: Furn | null = null, bf = 1.7;
+      for (const f of room.furn) { if (!f.use) continue; const d = Math.hypot(f.x - ix, f.y - 0.3 - iy); if (d < bf) { bf = d; bestF = f; } }
+      let bestP = -1, bp = 1.5;
+      for (const p of present) { const d = Math.hypot(p.x - ix, p.y - iy); if (d < bp) { bp = d; bestP = p.pid; } }
+      if (bestP >= 0 && (!bestF || bp < bf)) return { pid: bestP };
+      return bestF ? { furn: bestF } : null;
+    };
+    const use = () => {
+      if (live.current.menu) return;
+      if (s.inside >= 0) {
+        const n = nearInside();
+        if (!n) { say('Walk up to someone, or to something you can use, and press E.'); return; }
+        if (n.pid !== undefined) talk(n.pid); else useInside(n.furn);
+        return;
+      }
+      if (tryDoor(true)) return;
+      const pid = nearWalker(2.2);
+      if (pid >= 0) talk(pid); else say('Nothing here. Stand at a door or by someone and press E.');
+    };
+    api.current = { use, exit };
+
+    const down = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
+      if (e.code === 'Escape' && live.current.menu) {
+        const k = live.current.panelKind;
+        if (k === 'talk') closeTalkRef.current?.();
+        else if (k !== 'meeting' && k !== 'night' && k !== 'end') { if (k === 'morning') s.hand.morning = null; setPanel(null); }
+        setMenu(null); e.preventDefault(); return;
+      }
+      if (live.current.menu) return;
+      if (KEYS[e.code]) { keys.add(e.code); route = []; target = null; atDoor = -1; atPerson = -1; e.preventDefault(); }
+      if (e.code === 'KeyP' || e.code === 'Escape') { setPaused((p) => !p); e.preventDefault(); }
+      if (e.code === 'KeyE') use();
+      if (e.code === 'KeyB') setPanel({ kind: 'book', start: 'Names' });
+      if (e.code === 'Backquote') setDev((d) => { const n = !d; try { localStorage.setItem('hiddenhand.dev', n ? '1' : '0'); } catch { /* fine */ } return n; });
+    };
+    const up = (e: KeyboardEvent) => { keys.delete(e.code); };
+    window.addEventListener('keydown', down);
+    window.addEventListener('keyup', up);
+    const blur = () => keys.clear();
+    window.addEventListener('blur', blur);
+
+    const cellAt = (tx: number, ty: number) => Math.floor(ty / TILES_PER_CELL) * c.map.w + Math.floor(tx / TILES_PER_CELL);
 
     const frame = (now: number) => {
       if (!alive) return;
       const dt = Math.min(0.1, (now - last) / 1000);
       last = now;
       const running = !live.current.paused && !live.current.menu;
+      if (s.inside >= 0 && roomId !== s.inside) {
+        // inside without a room: a load, or sleep put us at home
+        const b = c.buildings.get(s.inside);
+        if (b) { room = roomOf(s, b); roomId = b.id; ix = room.door.x; iy = room.door.y - 1.2; } else s.inside = -1;
+      }
+      if (s.inside < 0 && room) { room = null; roomId = -1; }
+      let moving = false;
       if (running) {
         t += dt;
-        const before = s.minute;
         if (pass(s, dt * GAME_MIN_PER_REAL_S) === 'midnight') { say('Past midnight. You stumble home and sleep late.'); route = []; ground.invalidate(); }
-        void before;
-        // walking
-        if (s.inside < 0) {
-          let dx = 0, dy = 0;
-          for (const k of keys) { dx += KEYS[k][0]; dy += KEYS[k][1]; }
+        let dx = 0, dy = 0;
+        for (const k of keys) { dx += KEYS[k][0]; dy += KEYS[k][1]; }
+        if (s.inside >= 0 && room) {
+          // walking inside the room
+          if (!dx && !dy && target) {
+            const nx = target.x - ix, ny = target.y - iy, d = Math.hypot(nx, ny);
+            if (d < 0.2) { const then = target.then; target = null; then?.(); } else { dx = nx / d; dy = ny / d; }
+          }
+          const len = Math.hypot(dx, dy);
+          if (len > 0) {
+            dx /= len; dy /= len;
+            const step = WALK_TILES_PER_S * 0.6 * dt;
+            const ox = ix, oy = iy;
+            if (freeIn(room, ix + dx * step, iy)) ix += dx * step;
+            if (freeIn(room, ix, iy + dy * step)) iy += dy * step;
+            if (Math.hypot(ix - ox, iy - oy) < step * 0.2 && target) target = null;
+            s.facing = dirOf(dx, dy) as Facing;
+            moving = true;
+            // out through the door at the front
+            if (dy > 0.5 && iy > room.h - 0.3 && Math.abs(ix - room.door.x) < 1.2) exit();
+          }
+        } else if (s.inside < 0) {
           if (!dx && !dy && route.length) {
             const nx = route[0].x - s.x, ny = route[0].y - s.y;
             const d = Math.hypot(nx, ny);
-            if (d < 0.25) { route.shift(); if (!route.length && atDoor >= 0) { atDoor = -1; tryDoor(true); } } else { dx = nx / d; dy = ny / d; }
+            if (d < 0.25) {
+              route.shift();
+              if (!route.length && atDoor >= 0) { atDoor = -1; tryDoor(true); }
+              if (!route.length && atPerson >= 0) { const pid = atPerson; atPerson = -1; if (nearWalker(4) === pid || nearWalker(4) >= 0) talk(nearWalker(4)); }
+            } else { dx = nx / d; dy = ny / d; }
           }
           const len = Math.hypot(dx, dy);
           if (len > 0) {
@@ -139,7 +300,7 @@ export function StreetView({ s, onSave, onQuit }: Props) {
             if (free(s.x, ty)) s.y = ty;
             const moved = Math.hypot(s.x - ox, s.y - oy);
             s.facing = dirOf(dx, dy) as Facing;
-            // walking up into a door you can use goes in
+            moving = true;
             if (moved < step * 0.2 && dy < -0.5) tryDoor(false);
             if (!w) w = { tiles: 0, min0: s.minute, real0: now, still: 0 };
             w.tiles += moved; w.still = 0;
@@ -153,20 +314,6 @@ export function StreetView({ s, onSave, onQuit }: Props) {
           }
         }
       }
-      // townsfolk: who is about is worked out a few times a second; where each is, every frame
-      const cam = { x: s.x * TILE, y: s.y * TILE };
-      if (now - figsAt > 250) {
-        figsAt = now;
-        const cx = s.x / TILES_PER_CELL, cy = s.y / TILES_PER_CELL;
-        folkNow = folk.visible(weekdayOf(s), s.minute, cx, cy, 16);
-      }
-      figs = [];
-      for (const p of folkNow) {
-        if (!walkerAt(p, s.minute)) continue;
-        figs.push({ x: p.x * TILES_PER_CELL * TILE, y: p.y * TILES_PER_CELL * TILE, sprite: p.sprite, facing: p.facing, moving: !!p.route && running, t: t + p.pid * 0.37 });
-      }
-      if (c.buildings.size !== seenBuildings && scene) { seenBuildings = c.buildings.size; scene = buildScene(c, kit, s.house); sceneRef.current = scene; ground.invalidate(); }
-      // draw
       const cv = canvas.current;
       if (cv && scene) {
         const box = cv.parentElement!.getBoundingClientRect();
@@ -175,12 +322,51 @@ export function StreetView({ s, onSave, onQuit }: Props) {
         if (cv.width !== vw || cv.height !== vh) { cv.width = vw; cv.height = vh; cv.style.width = `${vw * zoom}px`; cv.style.height = `${vh * zoom}px`; }
         const g = cv.getContext('2d')!;
         g.imageSmoothingEnabled = false;
-        g.fillStyle = '#0f0d0c'; g.fillRect(0, 0, vw, vh);
-        const me: Figure = { x: cam.x, y: cam.y, sprite: 'people/player-walk', facing: s.facing, moving: running && (keys.size > 0 || route.length > 0), t };
-        // a soft mark under each door the founder can use
-        const doorsShown = [...scene.doors.values()].filter((d) => d.open);
-        drawWorld(g, kit, ground, scene, s.inside >= 0 ? figs : [...figs, me], cam.x, cam.y, vw, vh, doorsShown);
-        drawLight(g, s.minute, seasonAt(c, c.day), scene.lamps, cam.x, cam.y, vw, vh);
+        if (s.inside >= 0 && room) {
+          // who is here: worked out once a game-quarter-hour, placed on the room's standing spots
+          const q = Math.floor(s.minute / 15) + c.day * 200;
+          if (q !== presentAt) {
+            presentAt = q;
+            const b = c.buildings.get(roomId)!;
+            const ids = presentIn(s, b);
+            present = ids.map((pid, i) => { const sp = room!.spots[(i * 5 + pid) % room!.spots.length]; return { pid, x: sp.x, y: sp.y }; });
+            // de-duplicate spots
+            const used = new Set<string>();
+            present = present.filter((p) => { const k = `${p.x},${p.y}`; if (used.has(k)) return false; used.add(k); return true; });
+            for (const p of present) sighted(s, p.pid, roomId);
+          }
+          const tmp: Figure[] = present.map((p) => ({ x: 0, y: 0, sprite: spriteOfPerson(c, p.pid), facing: 'south', moving: false, t: 0, _p: p } as Figure & { _p: typeof p }));
+          origin = { ox: Math.round((vw - room.w * TILE) / 2), oy: Math.round((vh - room.h * TILE) / 2) };
+          const ifigs: Figure[] = tmp.map((f) => { const p = (f as Figure & { _p: { x: number; y: number } })._p; return { ...f, x: origin.ox + p.x * TILE, y: origin.oy + p.y * TILE }; });
+          ifigs.push({ x: origin.ox + ix * TILE, y: origin.oy + iy * TILE, sprite: 'people/player-walk', facing: s.facing, moving: running && moving, t });
+          origin = drawRoom(g, kit, room, ifigs, vw, vh, s.minute, s.hand.cellar.open);
+          // a label over what you can use, and the way out
+          const n = nearInside();
+          const label = n ? (n.pid !== undefined ? `E: talk to ${c.people.get(n.pid)?.first ?? ''}` : `E: ${n.furn.label}`) : '';
+          if (label !== hintRef.current) { hintRef.current = label; setHint(label); }
+        } else {
+          const cam = { x: s.x * TILE, y: s.y * TILE };
+          if (now - figsAt > 250) {
+            figsAt = now;
+            const cx = s.x / TILES_PER_CELL, cy = s.y / TILES_PER_CELL;
+            folkNow = folk.visible(weekdayOf(s), s.minute, cx, cy, 16);
+            for (const p of folkNow) if (Math.hypot(p.x * TILES_PER_CELL - s.x, p.y * TILES_PER_CELL - s.y) < 10 && walkerAt(p, s.minute)) sighted(s, p.pid, -1);
+            const near = nearWalker(2.2);
+            const label = near >= 0 ? `E: talk to ${c.people.get(near)?.first ?? ''}` : '';
+            if (label !== hintRef.current) { hintRef.current = label; setHint(label); }
+          }
+          figs = [];
+          for (const p of folkNow) {
+            if (!walkerAt(p, s.minute)) continue;
+            figs.push({ x: p.x * TILES_PER_CELL * TILE, y: p.y * TILES_PER_CELL * TILE, sprite: p.sprite, facing: p.facing, moving: !!p.route && running, t: t + p.pid * 0.37 });
+          }
+          if (c.buildings.size !== seenBuildings) { seenBuildings = c.buildings.size; scene = buildScene(c, kit, s.house); sceneRef.current = scene; ground.invalidate(); }
+          g.fillStyle = '#0f0d0c'; g.fillRect(0, 0, vw, vh);
+          const me: Figure = { x: cam.x, y: cam.y, sprite: 'people/player-walk', facing: s.facing, moving: running && moving, t };
+          const doorsShown = [...scene.doors.values()].filter((d) => d.open);
+          drawWorld(g, kit, ground, scene, [...figs, me], cam.x, cam.y, vw, vh, doorsShown);
+          drawLight(g, s.minute, seasonAt(c, c.day), scene.lamps, cam.x, cam.y, vw, vh);
+        }
       }
       if (Math.floor(now / 250) !== Math.floor((now - dt * 1000) / 250)) setTick((n) => n + 1);
       raf = requestAnimationFrame(frame);
@@ -189,13 +375,37 @@ export function StreetView({ s, onSave, onQuit }: Props) {
 
     const click = (e: MouseEvent) => {
       const cv = canvas.current;
-      if (!cv || s.inside >= 0) return;
+      if (!cv || live.current.menu) return;
       const r = cv.getBoundingClientRect();
       const zoom = r.width / cv.width;
-      const wx = s.x * TILE + ((e.clientX - r.left) / zoom - cv.width / 2);
-      const wy = s.y * TILE + ((e.clientY - r.top) / zoom - cv.height / 2);
-      // clicking a house walks to its door, and in if it's one you can use
-      atDoor = -1;
+      const sx = (e.clientX - r.left) / zoom, sy = (e.clientY - r.top) / zoom;
+      if (s.inside >= 0 && room) {
+        // a click inside: on a person or a piece of furniture walks there and uses it
+        const tx = (sx - origin.ox) / TILE, ty = (sy - origin.oy) / TILE;
+        const p = present.find((q) => Math.abs(q.x - tx) < 0.7 && ty < q.y + 0.2 && ty > q.y - 2.4);
+        if (p) { target = { x: p.x, y: Math.min(room.h - 0.3, p.y + 0.9), then: () => talk(p.pid) }; return; }
+        const f = room.furn.find((q) => q.use && Math.abs(q.x - tx) < 1.1 && ty < q.y + 0.3 && ty > q.y - 2.2);
+        if (f) { target = { x: f.x, y: Math.min(room.h - 0.3, f.y + 0.8), then: () => useInside(f) }; return; }
+        if (ty > room.h - 0.6 && Math.abs(tx - room.door.x) < 1.2) { target = { x: room.door.x, y: room.h - 0.2, then: exit }; return; }
+        target = { x: tx, y: ty };
+        return;
+      }
+      const wx = s.x * TILE + (sx - cv.width / 2);
+      const wy = s.y * TILE + (sy - cv.height / 2);
+      atDoor = -1; atPerson = -1;
+      // a click on someone walks up to them and talks
+      for (const p of folkNow) {
+        if (!walkerAt(p, s.minute)) continue;
+        const px = p.x * TILES_PER_CELL * TILE, py = p.y * TILES_PER_CELL * TILE;
+        if (Math.abs(wx - px) < 10 && wy < py + 4 && wy > py - 36) {
+          if (Math.hypot(p.x * TILES_PER_CELL - s.x, p.y * TILES_PER_CELL - s.y) < 3) { talk(p.pid); return; }
+          atPerson = p.pid;
+          const path = walkPath(c.map, cellAt(s.x, s.y), Math.floor(p.y) * c.map.w + Math.floor(p.x));
+          route = path.slice(1).map((i) => ({ x: (i % c.map.w + 0.5) * TILES_PER_CELL, y: (Math.floor(i / c.map.w) + 0.5) * TILES_PER_CELL }));
+          route.push({ x: p.x * TILES_PER_CELL, y: p.y * TILES_PER_CELL + 1 });
+          return;
+        }
+      }
       let gx = wx, gy = wy;
       if (scene) {
         for (const sp of scene.sprites) {
@@ -209,15 +419,15 @@ export function StreetView({ s, onSave, onQuit }: Props) {
           break;
         }
       }
-      const target = Math.floor(gy / TILE / TILES_PER_CELL) * c.map.w + Math.floor(gx / TILE / TILES_PER_CELL);
-      const path = walkPath(c.map, cellAt(s.x, s.y), target);
-      if (path.length < 2) { say('There is no way there on foot.'); return; }
+      const tgt = Math.floor(gy / TILE / TILES_PER_CELL) * c.map.w + Math.floor(gx / TILE / TILES_PER_CELL);
+      const path = walkPath(c.map, cellAt(s.x, s.y), tgt);
+      if (path.length < 2) { if (atDoor >= 0 && Math.hypot(gx / TILE - s.x, gy / TILE - s.y) < 4) { route = [{ x: gx / TILE, y: gy / TILE }]; return; } say('There is no way there on foot.'); return; }
       route = path.slice(1).map((i) => ({ x: (i % c.map.w + 0.5) * TILES_PER_CELL, y: (Math.floor(i / c.map.w) + 0.5) * TILES_PER_CELL }));
       route[route.length - 1] = { x: gx / TILE, y: gy / TILE };
     };
     canvas.current?.addEventListener('click', click);
 
-    // a handle for playtests and the browser walk test
+    // a handle for playtests and the browser tests
     (window as unknown as { hiddenHandSeason?: unknown }).hiddenHandSeason = {
       s,
       scene: () => scene,
@@ -229,53 +439,79 @@ export function StreetView({ s, onSave, onQuit }: Props) {
         return { cells: w0.cells, from: a, to: b, path };
       },
       teleport: (x: number, y: number) => { s.x = x; s.y = y; s.inside = -1; route = []; },
+      enter: (bid: number) => enter(bid),
+      exit,
+      inside: () => ({ room, ix, iy, present }),
+      standAt: (x: number, y: number) => { ix = x; iy = y; },
+      use,
+      talk: (pid: number) => talk(pid),
+      folk: () => folkNow,
     };
     const cv0 = canvas.current;
     return () => { alive = false; cancelAnimationFrame(raf); window.removeEventListener('keydown', down); window.removeEventListener('keyup', up); window.removeEventListener('blur', blur); cv0?.removeEventListener('click', click); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [s]);
 
+  const hintRef = useRef('');
+  const closeTalkRef = useRef<(() => void) | null>(null);
+
+  const doSleepNow = () => {
+    sleep(s); setMenu(null); setPanel(null); setTick((n) => n + 1); void onSave();
+    if (s.hand.morning) setPanel({ kind: 'morning' });
+  };
+
+  // things that open by themselves: the morning page, choosing the lodge night, the meeting, the season's end
+  useEffect(() => {
+    if (panel || menu) return;
+    const h = s.hand;
+    if (h.morning) { setPanel({ kind: 'morning' }); return; }
+    if (h.lodge && h.lodge.night < 0 && h.members.length) { setPanel({ kind: 'night' }); return; }
+    if (h.ended && !live.current.endSeen) { live.current.endSeen = true; setPanel({ kind: 'end' }); return; }
+    if (meetingDue(s) && s.inside === s.house) { playCue('conclave'); setPanel({ kind: 'meeting' }); return; }
+    if (h.lodge && h.lodge.night === weekdayOf(s) && s.minute >= MEETING_AT - 60 && s.minute < MEETING_AT && live.current.reminded !== c.day && s.inside !== s.house && h.lodge.lastMeeting !== c.day) {
+      live.current.reminded = c.day; say('The lodge meets at 20:00 tonight, under your house.');
+    }
+  });
+  // the soundtrack follows the season and the danger
+  useEffect(() => {
+    const e = s.hand.exposure;
+    audio.setMood({ tension: Math.min(1, Math.max(e.suburb, e.house, e.you) * 1.4), season: seasonName(seasonAt(c, c.day)), paused: paused || panel?.kind === 'book' });
+  });
+
   const inside = s.inside >= 0 ? c.buildings.get(s.inside) : undefined;
   const here = c.map.district[Math.floor(s.y / TILES_PER_CELL) * c.map.w + Math.floor(s.x / TILES_PER_CELL)];
   const district = c.districts.find((d) => d.id === here);
   const shut = s.minute >= GATES_SHUT || s.minute < GATES_OPEN;
-  const doSleep = () => { sleep(s); setMenu(null); setTick((n) => n + 1); void onSave(); say(`${dateLabel(c)}. You wake in the damp house.`); };
-  const waits: [string, number][] = [['An hour', Math.min(DAY_END - 1, s.minute + 60)], ['Until noon', 12 * 60], ['Until 18:00', 18 * 60], ['Until 21:00', 21 * 60]];
+  const lodge = s.hand.lodge;
+  const lodgeTonight = !!lodge && lodge.night === weekdayOf(s) && lodge.lastMeeting !== c.day && s.minute < MEETING_AT;
+  const waits: [string, number][] = [['An hour', Math.min(DAY_END - 1, s.minute + 60)], ['Until noon', 12 * 60], ['Until 18:00', 18 * 60], ['Until 19:00', 19 * 60], ['Until 21:00', 21 * 60]];
+  if (lodgeTonight) waits.push(['Until the lodge meets', MEETING_AT]);
+  const unread = unreadIn(s);
+  const unreadLetters = unread.Letters;
+  const unreadFacts = Object.entries(unread).filter(([k]) => k !== 'Letters').reduce((a, [, n]) => a + n, 0);
+  const close = () => setPanel(null);
 
   return (
     <div className="street">
       <div className="street-canvas"><canvas ref={canvas} /></div>
       <header className="street-hud">
         <div>
-          <b>{dateLabel(c)}</b> · {DAY_NAMES[weekdayOf(s)]} · <span className="clock">{clockLabel(s.minute)}</span>
+          <b>{dateLabel(c)}</b> · {DAY_NAMES[weekdayOf(s)]} · <span className="clock">{clockLabel(s.minute)}</span> · {s.hand.ended ? "the spring is over" : `day ${seasonDay(s) + 1} of 28`}
           {paused && <span className="paused"> · paused</span>}
         </div>
-        <div className="muted small">{inside ? `Inside: ${buildingTitle(inside, s.house)}` : district ? district.name : 'Open country'}{shut ? ' · the gates are shut' : ''}</div>
+        <div className="muted small">{inside ? `Inside: ${buildingTitle(inside, s.house)}` : district ? district.name : 'Open country'}{shut ? ' · the gates are shut' : ''} · {Math.round(s.hand.coin)} ducats{unreadLetters ? ` · ${unreadLetters} unread ${unreadLetters === 1 ? 'letter' : 'letters'}` : ''}</div>
+        <div className="goal small">{goal(s)}</div>
       </header>
+      {hint && !panel && <div className="street-hint">{hint}</div>}
       <nav className="street-bar">
         <button type="button" onClick={() => setPaused((p) => !p)}>{paused ? 'Resume' : 'Pause'}</button>
         <button type="button" onClick={() => setMenu(menu === 'wait' ? null : 'wait')}>Wait</button>
-        <button type="button" disabled={!canSleep(s)} title={s.minute < BED_FROM ? 'You can go to bed from 18:00' : s.inside !== s.house ? 'Sleep in your own house' : ''} onClick={doSleep}>Sleep</button>
-        <button type="button" disabled title="The Book of the Hand comes in the next milestone">Book</button>
+        <button type="button" disabled={!canSleep(s)} title={s.minute < BED_FROM ? 'You can go to bed from 18:00' : s.inside !== s.house ? 'Sleep in your own house' : ''} onClick={doSleepNow}>Sleep</button>
+        <button type="button" onClick={() => setPanel({ kind: 'book', start: 'Names' })} title="The Book of the Hand (B)">Book{unreadFacts + unreadLetters > 0 && <i className="badge">{unreadFacts + unreadLetters}</i>}</button>
+        {inside && <button type="button" onClick={() => api.current?.exit()}>Go out</button>}
         <button type="button" onClick={() => void onSave().then(() => say('Saved.'))}>Save</button>
         <button type="button" onClick={() => setMenu('quit')}>Menu</button>
       </nav>
-      {inside && (
-        <section className="street-inside">
-          <h2>{buildingTitle(inside, s.house)}</h2>
-          <p>{insideText(inside, s.house)}</p>
-          <div className="actions">
-            <button type="button" className="primary" onClick={() => {
-              const d = sceneRef.current?.doors.get(inside.id);
-              standAtDoor(s, inside);
-              if (d && openAt(c, d.x / TILE, d.y / TILE + 0.6)) { s.x = d.x / TILE; s.y = d.y / TILE + 0.6; }
-              s.facing = 'south';
-              setTick((n) => n + 1);
-            }}>Go out</button>
-            {inside.id === s.house && <button type="button" disabled={!canSleep(s)} onClick={doSleep}>Sleep{s.minute < BED_FROM ? ' (from 18:00)' : ''}</button>}
-          </div>
-        </section>
-      )}
       {menu === 'wait' && (
         <section className="street-menu">
           <h3>Wait here</h3>
@@ -287,34 +523,49 @@ export function StreetView({ s, onSave, onQuit }: Props) {
       )}
       {menu === 'quit' && (
         <section className="street-menu">
-          <h3>Leave the game?</h3>
+          <h3>Menu</h3>
+          <div className="sound">
+            {(['music', 'ambience', 'effects'] as const).map((k) => (
+              <label key={k}>{k[0].toUpperCase() + k.slice(1)} <input type="range" min={0} max={1} step={0.05} value={sound[k]} onChange={(e) => { setAudioSettings((x) => ({ ...x, [k]: Number(e.target.value) })); audio.setSettings({ ...sound, [k]: Number(e.target.value) }); }} /></label>
+            ))}
+            <label><input type="checkbox" checked={sound.muted} onChange={() => { setAudioSettings((x) => ({ ...x, muted: !x.muted })); audio.setSettings({ ...sound, muted: !sound.muted }); }} /> Mute</label>
+          </div>
+          <p className="small muted">Keys: WASD or arrows walk · E use, talk, go in · B the Book · Esc pause or close · click to walk</p>
           <div className="actions">
             <button type="button" className="primary" onClick={() => void onSave().then(onQuit)}>Save and leave</button>
-            <button type="button" onClick={() => setMenu(null)}>Stay</button>
+            <button type="button" onClick={() => setMenu(null)}>Back to the game</button>
           </div>
         </section>
       )}
+      {panel?.kind === 'talk' && <TalkPanelHost s={s} pid={panel.pid} dev={dev} closeRef={closeTalkRef} onClose={(n) => { setPanel(null); if (n) pass(s, n * MINUTES_PER_EXCHANGE); setTick((x) => x + 1); }} />}
+      {panel?.kind === 'book' && <Book s={s} start={panel.start} onClose={close} />}
+      {panel?.kind === 'cellar' && <CellarPanel s={s} onClose={close} onSworn={() => setTick((n) => n + 1)} />}
+      {panel?.kind === 'meeting' && <MeetingPanel s={s} onClose={() => { close(); void onSave(); }} />}
+      {panel?.kind === 'night' && <NightPanel s={s} onClose={close} />}
+      {panel?.kind === 'repairs' && <RepairsPanel s={s} onClose={close} />}
+      {panel?.kind === 'morning' && <MorningPage s={s} onClose={() => { s.hand.morning = null; close(); }} />}
+      {panel?.kind === 'end' && <EndPanel s={s} onKeep={close} onLeave={() => void onSave().then(onQuit)} />}
       {toast && <div className="street-toast">{toast}</div>}
       {dev && (
         <aside className="street-dev">
-          <div>Dev · {s.x.toFixed(1)}, {s.y.toFixed(1)} tiles</div>
+          <div>Dev · {s.x.toFixed(1)}, {s.y.toFixed(1)} tiles · seed {c.config.seed}</div>
           <div>Last walk: {walk ? `${walk.tiles.toFixed(0)} tiles, ${walk.gameMin.toFixed(1)} game min, ${walk.realS.toFixed(1)} s` : 'none yet'}</div>
-          <div>Suburb crossing target: 25 to 35 game min</div>
+          <div>Exposure: suburb {s.hand.exposure.suburb.toFixed(2)}, house {s.hand.exposure.house.toFixed(2)}, you {s.hand.exposure.you.toFixed(2)}</div>
+          <div>Tutorial step {s.hand.tutorial} · facts {s.hand.facts.length}</div>
         </aside>
       )}
     </div>
   );
 }
 
+/** The talk panel, with Esc wired to "take your leave" (so the time the talk took is still spent). */
+function TalkPanelHost({ s, pid, dev, closeRef, onClose }: { s: Season; pid: number; dev: boolean; closeRef: React.MutableRefObject<(() => void) | null>; onClose: (n: number) => void }) {
+  const n = useRef(0);
+  useEffect(() => { closeRef.current = () => onClose(n.current); return () => { closeRef.current = null; }; });
+  return <TalkPanel s={s} pid={pid} dev={dev} onClose={onClose} onCount={(k) => { n.current = k; }} />;
+}
+
 function buildingTitle(b: Building, house: number): string {
   if (b.id === house) return 'Your house';
   return b.name || BUILDING_NAMES[b.kind] || 'A building';
-}
-
-function insideText(b: Building, house: number): string {
-  if (b.id === house) return 'Damp walls, a cold hearth, and the lodgers moving about upstairs. In the kitchen floor, under rubble, is a door bricked shut. (Clearing the house and the cellar come in milestone 3.)';
-  if (b.kind === B.tavern) return 'Low beams, smoke and talk that stops when a stranger comes in. (Talking to people comes in milestone 2.)';
-  if (b.kind === B.chapel) return 'Cold stone and candle smoke. The suburb comes here on Sunday mornings.';
-  if (b.kind === B.smithy) return 'The forge is hot and the smith is busy. He will sell you a pry bar, once you can talk to him.';
-  return '';
 }
