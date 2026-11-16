@@ -11,6 +11,7 @@ import { G_DEEP, G_MARSH, G_SHORE, G_WATER, U_BRIDGE, U_FIELD, U_GARDEN, U_GATE,
 import type { Building, City } from '../../city/types';
 import { doorCell, TILES_PER_CELL, walkable } from '../../city/walk';
 import type { Kit } from './assets';
+import { SUBURB_BUILDINGS, SUBURB_PROPS, SUBURB_ROWS } from '../../city/gen/suburb';
 
 export const TILE = 16;
 export const CELL_PX = TILE * TILES_PER_CELL;
@@ -59,6 +60,7 @@ export function groundOf(c: City, i: number): Ground {
 /** Which kit building stands in for a town building. */
 export function spriteFor(c: City, b: Building, house: number): string {
   if (b.id === house) return 'buildings/house-ruin';
+  if (b.made && SUBURB_BUILDINGS[b.made]) return SUBURB_BUILDINGS[b.made].sprite;
   if (b.kind === B.tavern || b.kind === B.coffeehouse || b.kind === B.guildhall || b.kind === B.councilHall) return 'buildings/house-inn';
   const d = c.districts.find((x) => x.id === b.district);
   const rich = b.grandeur > 0.55 || d?.kind === 'hill' || b.kind === B.manor || b.kind === B.countingHouse
@@ -89,7 +91,7 @@ export function buildScene(c: City, kit: Kit, house: number): Scene {
     const width = b.w * CELL_PX;
     const baseY = (b.y + b.h) * CELL_PX;
     // one kit house per two cells of frontage, so a long building reads as a row
-    const n = Math.max(1, Math.round(b.w / 2));
+    const n = b.made ? 1 : Math.max(1, Math.round(b.w / 2));
     for (let k = 0; k < n; k++) {
       const cx = b.x * CELL_PX + (width * (k + 0.5)) / n;
       sprites.push({ id: k === 0 ? id : spriteFor(c, { ...b, id: b.id * 31 + k }, -1), x: cx, y: baseY, building: b.id });
@@ -107,12 +109,12 @@ export function buildScene(c: City, kit: Kit, house: number): Scene {
         if (dc >= 0) doors.set(b.id, { x: ((dc % W) + 0.5) * CELL_PX, y: (Math.floor(dc / W) + 0.5) * CELL_PX, open });
       }
     }
-    if (b.kind === B.tavern) {
+    if (b.kind === B.tavern && !b.made) {
       const dc = doorCell(map, b);
       if (dc >= 0) { const lx = (dc % W) * CELL_PX + CELL_PX * 0.8, ly = Math.floor(dc / W) * CELL_PX + CELL_PX * 0.3; sprites.push({ id: 'props/lantern-lit', x: lx, y: ly }); lamps.push({ x: lx, y: ly - 30 }); }
       if (dc >= 0) sprites.push({ id: 'props/barrel', x: (dc % W) * CELL_PX + 14, y: Math.floor(dc / W) * CELL_PX + 20 });
     }
-    if (b.kind === B.smithy) {
+    if (b.kind === B.smithy && !b.made) {
       const dc = doorCell(map, b);
       if (dc >= 0) sprites.push({ id: 'props/handcart', x: (dc % W) * CELL_PX + 60, y: Math.floor(dc / W) * CELL_PX + 30 });
     }
@@ -129,8 +131,12 @@ export function buildScene(c: City, kit: Kit, house: number): Scene {
     for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) if (street(x + dx, y + dy)) return true;
     return false;
   };
+  const sub = c.districts.find((d) => d.kind === 'suburb');
+  const made = sub?.made;
+  const inMade = (x: number, y: number) => !!made && x >= made.x && y >= made.y && x < made.x + SUBURB_ROWS[0].length && y < made.y + SUBURB_ROWS.length;
   for (let i = 0; i < W * map.h; i++) {
     const x = i % W, y = Math.floor(i / W);
+    if (inMade(x, y)) continue;
     const u = map.use[i];
     const px = x * CELL_PX, py = y * CELL_PX;
     if (u === U_FIELD) {
@@ -150,19 +156,22 @@ export function buildScene(c: City, kit: Kit, house: number): Scene {
       if (backs && x % 2 === 0) sprites.push({ id: 'props/market-stall', x: px + 40, y: py + 50 });
     }
   }
-  // the suburb's well at its middle
-  const sub = c.districts.find((d) => d.kind === 'suburb');
-  if (sub) {
+  // the hand-made suburb's props (gen/suburb.ts); otherwise a well at its middle
+  if (made) {
+    for (const p of SUBURB_PROPS) {
+      const x = (made.x + p.x) * CELL_PX, y = (made.y + p.y) * CELL_PX;
+      sprites.push({ id: p.id, x, y });
+      if (p.id === 'props/lantern-lit') lamps.push({ x, y: y - 30 });
+    }
+  } else if (sub) {
     sprites.push({ id: 'props/well', x: sub.cx * CELL_PX + 40, y: sub.cy * CELL_PX + 76 });
-    sprites.push({ id: 'props/lantern-lit', x: sub.cx * CELL_PX + 72, y: sub.cy * CELL_PX + 74 });
-    lamps.push({ x: sub.cx * CELL_PX + 72, y: sub.cy * CELL_PX + 44 });
   }
   // a lamp at each crossing of streets, against its corner
   for (let i = 0; i < W * map.h; i++) {
     const x = i % W, y = Math.floor(i / W);
     if (!street(x, y) || map.use[i] === U_SQUARE) continue;
     const n = (street(x - 1, y) ? 1 : 0) + (street(x + 1, y) ? 1 : 0) + (street(x, y - 1) ? 1 : 0) + (street(x, y + 1) ? 1 : 0);
-    if (n < 3 || h2(x, y, 99) > 0.5) continue;
+    if (n < 3 || h2(x, y, 99) > 0.5 || inMade(x, y)) continue;
     sprites.push({ id: 'props/lantern-lit', x: x * CELL_PX + 8, y: y * CELL_PX + 14 });
     lamps.push({ x: x * CELL_PX + 8, y: y * CELL_PX - 16 });
   }
@@ -170,7 +179,7 @@ export function buildScene(c: City, kit: Kit, house: number): Scene {
   if (hb) {
     // fallen plaster against the front wall, beside the door
     const d = doors.get(hb.id);
-    if (d) sprites.push({ id: 'props/rubble', x: d.x + 46, y: d.y });
+    if (d && !hb.made) sprites.push({ id: 'props/rubble', x: d.x + 46, y: d.y });
   }
   return { sprites, doors, lamps };
 }

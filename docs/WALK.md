@@ -17,13 +17,19 @@ The numbers live in `src/city/hand/clock.ts`.
 
 ## The suburb
 
-New games use `suburb: 'gate'` (`src/city/gen/map.ts`): instead of a ring of houses round the
-walls, the suburb is one compact settlement outside the busiest gate. Lanes are laid on a grid,
-and any house or ropewalk whose door is more than ~8.8 cells' walk from the centre is dropped
-(made 20% smaller after Ed's first walk, 16 Nov).
-The suburb keeps a tavern and a smithy. During the twenty years of pre-history, new building in
-gate mode goes inside the walls or within 5.5 cells of the suburb centre (`systems/growth.ts`),
-so the suburb stays walkable.
+New games use `suburb: 'gate'`: the suburb is **hand-made** (Ed's call, 16 Nov 2026), laid out
+in `src/city/gen/suburb.ts` as a grid of characters, one per map cell, outside the town's
+northernmost gate. Three lanes, a green round the well, twelve houses, a tavern, a smithy, a
+chapel and the founder's inherited house, every front facing south onto a lane as the art is
+drawn. Props are placed by hand in the same file.
+
+The generator still makes the rest of the town, and everything about the people: families,
+history, trades and routines. It keeps the river well away from the north gate, clears whatever
+it put on the suburb's ground, lays the layout there and runs the country road straight on north.
+Hand-made buildings never burn down, and during the pre-history new building goes inside the
+walls only, so the suburb stays as drawn.
+
+To change the suburb, edit the rows and the tables in `gen/suburb.ts`, then run the walk tests.
 
 ## The target
 
@@ -32,8 +38,8 @@ minutes**, which is 67 to 93 tiles, about 13 to 15 real seconds.
 
 - `tests/walk.test.ts` builds seeds 1 to 8 at 2,000 people, runs the pre-history and checks
   the longest walk with the pathfinder in `src/city/walk.ts` (8-neighbour Dijkstra on map cells,
-  diagonals only between two open sides). It prints a table; today seeds 1 to 8 land at
-  28 to 32 game minutes (75 to 84 tiles).
+  diagonals only between two open sides). It prints a table; with the hand-made suburb every
+  seed lands at 33 game minutes (88 tiles).
 - `npm run test:walk` (`tests/e2e/walk.e2e.cjs`) opens the real game in Chromium, walks that
   route with held arrow keys and checks the game clock and real time. It also runs at 4x CPU
   throttle so a slow machine still keeps pace (pace is per real second, not per frame).

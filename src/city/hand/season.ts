@@ -8,6 +8,7 @@
  * The founder is a real person of the town (kept, never removed by emigration). Their position is
  * kept in street tiles (16 px each, 5 to a map cell); `inside` is the building they are in, if any.
  */
+import { SUBURB_BUILDINGS } from '../gen/suburb';
 import { Rng } from '../base/rng';
 import { createCity } from '../create';
 import { createHousehold, createPerson, joinHousehold, rngOf, syncRng } from '../core';
@@ -57,6 +58,8 @@ export function newSeason(seed: number, onYear?: (y: number) => void, years = PR
 
 /** The house the founder inherits: a run-down house in the suburb, near its road, ideally with one household to stay on as lodgers. */
 export function pickHouse(c: City): Building {
+  // the hand-made suburb names it (gen/suburb.ts)
+  for (const b of c.buildings.values()) if (b.made && SUBURB_BUILDINGS[b.made]?.inherited && b.gone === undefined) return b;
   const sub = c.districts.find((d) => d.kind === 'suburb')!;
   const houses = sub.buildings.map((id) => c.buildings.get(id)!).filter((b) => b && b.gone === undefined && b.kind === B.house && doorCell(c.map, b) >= 0);
   const mid = (b: Building) => Math.hypot(b.x + b.w / 2 - sub.cx, b.y + b.h / 2 - sub.cy);

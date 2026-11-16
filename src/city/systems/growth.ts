@@ -16,11 +16,9 @@ export function placeBuilding(c: City, kind: number, district: number, w: number
   const r = rngOf(c);
   const m = c.map;
   const d = c.districts.find((x) => x.id === district) ?? c.districts[0];
-  // the first season's compact suburb stays the size it was made (docs/WALK.md): new building goes inside the walls
+  // the first season's suburb is hand-made (gen/suburb.ts) and stays as made: new building goes inside the walls
   const gate = c.config.suburb === 'gate';
-  const sub = gate ? c.districts.find((x) => x.kind === 'suburb') : undefined;
-  const inReach = (i: number) => m.inside[i] === 1 || (!!sub && m.district[i] === sub.id && Math.hypot((i % m.w) - sub.cx, Math.floor(i / m.w) - sub.cy) <= 5.5);
-  const ok = (i: number) => (!gate || inReach(i)) && (m.use[i] === U_NONE || m.use[i] === U_GARDEN || m.use[i] === U_FIELD) && (m.ground[i] === G_LAND || m.ground[i] === G_SHORE);
+  const ok = (i: number) => (!gate || m.inside[i] === 1) && (m.use[i] === U_NONE || m.use[i] === U_GARDEN || m.use[i] === U_FIELD) && (m.ground[i] === G_LAND || m.ground[i] === G_SHORE);
   let best: [number, number, number, number, number] | null = null;
   let bd = Infinity;
   for (let k = 0; k < 2500; k++) {
@@ -121,7 +119,7 @@ export function fireWeek(c: City): void {
   const r = rngOf(c);
   const winter = Math.floor((c.day % DAYS_PER_YEAR) / 91) === 3 ? 1.6 : 1;
   if (!r.chance(0.009 * winter * (1 + mod(c, 'fire')))) return;
-  const all = [...c.buildings.values()].filter((b) => b.gone === undefined && b.kind !== B.cathedral);
+  const all = [...c.buildings.values()].filter((b) => b.gone === undefined && b.kind !== B.cathedral && b.made === undefined);
   const weight = (b: Building) => (b.kind === B.bakery || b.kind === B.smithy || b.kind === B.brewery ? 4 : b.kind === B.tenement ? 2.5 : 1) * (1.5 - b.condition);
   const start = all[r.weighted(all.map(weight))];
   if (!start) return;
@@ -145,7 +143,7 @@ export function burn(c: City, start: Building, cause = ''): number {
       if (id < 0 || seen.has(id)) continue;
       seen.add(id);
       const n = c.buildings.get(id);
-      if (!n || n.gone !== undefined) continue;
+      if (!n || n.gone !== undefined || n.made !== undefined) continue;
       const pSpread = (engine ? 0.16 : 0.3) * (n.kind === B.tenement ? 1.3 : 1) * (Math.abs(x - b.x) > b.w || Math.abs(y - b.y) > b.h ? 0.5 : 1);
       if (r.chance(pSpread)) queue.push(n);
     }
