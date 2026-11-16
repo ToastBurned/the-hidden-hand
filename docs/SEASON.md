@@ -19,7 +19,7 @@ From arrival (`City.play.since`) the town runs on the play calendar:
 
 ## The day
 
-- The day runs 6:00 to 24:00. Gates shut 22:00 to 5:00.
+- The day runs 6:00 to 24:00, eight real minutes. Gates shut 22:00 to 5:00.
 - Sleep is allowed from 18:00 in your own house and ends the day.
 - Out at midnight, you are walked home and wake at 9:00.
 - There is no fast-forward. Wait passes an hour or until a time.

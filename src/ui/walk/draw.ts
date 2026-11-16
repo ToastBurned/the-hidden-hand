@@ -5,6 +5,7 @@
 import type { City } from '../../city/types';
 import { TILES_PER_CELL } from '../../city/walk';
 import { wangCell, type Kit } from './assets';
+import { DIRS, FRAMES, gaitSheet, type Dir8 } from './gait';
 import { CELL_PX, TILE, groundOf, type Ground, type Scene } from './scene';
 
 const CHUNK = 32; // tiles
@@ -78,22 +79,18 @@ function wall(g: CanvasRenderingContext2D, x: number, y: number, tx: number, ty:
   void tx;
 }
 
-export interface Figure { x: number; y: number; sprite: string; facing: 'south' | 'north' | 'west' | 'east'; moving: boolean; t: number; mark?: boolean }
+export interface Figure { x: number; y: number; sprite: string; facing: Dir8; moving: boolean; t: number; mark?: boolean }
 
-/** One person from a walk sheet: feet at (x, y) in world pixels. */
+/** One person: feet at (x, y) in world pixels; t is seconds of walking, for the step. */
 export function drawFigure(g: CanvasRenderingContext2D, kit: Kit, f: Figure) {
-  const a = kit.get(f.sprite);
-  const im = kit.img(f.sprite);
-  const [fw, fh] = a.frame ?? [32, 40];
-  let col = 1, row = 0;
-  const step = f.moving ? Math.floor(f.t * 6) % 2 : -1;
-  if (f.facing === 'south') { row = 0; col = step < 0 ? 1 : step === 0 ? 0 : 2; }
-  else if (f.facing === 'north') { row = 2; col = step < 0 ? 1 : step === 0 ? 0 : 2; }
-  else { row = 1; col = f.facing === 'west' ? 0 : 2; }
-  const bob = f.moving && step === 1 ? -1 : 0;
+  const [fw, fh] = kit.get(f.sprite).frame ?? [32, 40];
   g.fillStyle = 'rgba(15,13,12,0.35)';
-  g.fillRect(Math.round(f.x - 8), Math.round(f.y - 2), 16, 3);
-  g.drawImage(im, col * fw, row * fh, fw, fh, Math.round(f.x - fw / 2), Math.round(f.y - fh + 2 + bob), fw, fh);
+  g.fillRect(Math.round(f.x - 7), Math.round(f.y - 2), 14, 3);
+  const sheet = gaitSheet(kit, f.sprite);
+  if (!sheet) return;
+  const row = Math.max(0, DIRS.indexOf(f.facing));
+  const col = f.moving ? Math.floor(f.t * 7) % FRAMES : 0;
+  g.drawImage(sheet, col * fw, row * fh, fw, fh, Math.round(f.x - fw / 2), Math.round(f.y - fh + 2), fw, fh);
 }
 
 /** The whole frame for a camera centred on (camX, camY) world pixels. */

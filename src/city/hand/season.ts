@@ -23,7 +23,8 @@ export const SEASON_KIND = 'hidden-hand-season';
 export const PRE_HISTORY_YEARS = 20;
 export const TOWN_POPULATION = 2000;
 
-export type Facing = 'south' | 'north' | 'west' | 'east';
+/** Which way the founder faces: eight directions, as the kit's people sheets have. */
+export type Facing = 'south' | 'southwest' | 'west' | 'northwest' | 'north' | 'northeast' | 'east' | 'southeast';
 
 export interface Season {
   v: 1;

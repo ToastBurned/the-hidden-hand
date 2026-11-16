@@ -323,7 +323,7 @@ export function generateMap(r: Rng, seed: number, phon: number, population: numb
     // One compact settlement where a country road leaves a gate: pick the road with the most
     // open land near the gate, centre the suburb a little way out along it, and keep only the
     // land within the radius.
-    const R = opts.suburbRadius ?? 11;
+    const R = opts.suburbRadius ?? 9;
     let best: { score: number; x: number; y: number } | null = null;
     for (const st of streets) {
       if (st.kind !== 'road' || st.cells.length < R) continue;
@@ -408,7 +408,7 @@ export function generateMap(r: Rng, seed: number, phon: number, population: numb
   // short, straight walk from the road
   if (opts.suburb === 'gate' && subCentre >= 0) {
     const scx = subCentre % W, scy = Math.floor(subCentre / W);
-    const R = opts.suburbRadius ?? 11;
+    const R = opts.suburbRadius ?? 9;
     const lane = (cells: number[]) => {
       // split into runs of buildable suburb cells, each its own lane
       let run: number[] = [];
@@ -658,7 +658,7 @@ export function generateMap(r: Rng, seed: number, phon: number, population: numb
   // the compact suburb: houses whose door is more than a walk of `suburbReach` cells from its
   // middle are left as open ground, so no two doors are more than twice that apart on foot
   if (opts.suburb === 'gate' && subCentre >= 0) {
-    const reach = opts.suburbReach ?? 11.5;
+    const reach = opts.suburbReach ?? 8.8;
     const subId = districts.find((d) => d.kind === 'suburb')?.id ?? -1;
     for (let pass = 0; pass < 3; pass++) {
       const field = walkField(map, subCentre);
