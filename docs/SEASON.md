@@ -37,53 +37,24 @@ Sunday, dissenters' meetings, tavern nights by temperament, market twice a week,
 
 ## Playing the season
 
-Code: `src/city/hand` (rules) and `src/ui/walk` (screens). Every building can be entered by day
-(other people's houses are barred from 21:00 to 6:00; the tavern stays open until midnight).
-Inside, the room is drawn with its furniture and whoever their routine puts there.
+Since 17 Nov 2026 the season is written by hand: see [STORY.md](STORY.md) for the story, cast,
+goals and rules. Code: `src/content/suburb` (everything the player reads), `src/city/hand`
+(rules) and `src/ui/walk` (screens). The suburb's generated residents are replaced by the
+written cast (`authored.ts`), whose days follow written schedules (`routine.ts`). The rest of
+the town is still generated and is only seen as an unnamed crowd.
 
-- **Talk** (`talk.ts`): E by someone, or click them. Up to three exchanges a visit, ten minutes
-  each. Pick a topic (them, someone else, the town, their troubles, the Order) and an approach
-  (ask, charm, gift 1 ducat, offer help, bribe 3, threaten if you know a secret). Rolls are
-  seeded by town, person, day and choice, so the same choices give the same replies.
-  Trust 40 makes someone trusted; a strong known motive lets you skip to the Order. Sounding
-  out, then inviting with an offer that fits what they want (`FITS` in `people.ts`).
-- **The Book** (B, or the desk's in-tray): Names, Houses, Town, Almanac, Ledger, Order,
-  Letters. Facts are marked told, heard, seen or proved; what you learn is written in overnight;
-  unread facts are bold until you open their section; search looks through all of it; pin people.
-- **The house** (`house.ts`): the lodgers pay 3 ducats on Moondays; your keep is 1 on Sundays.
-  Repairs at the hearth (4 ducats, 2 hours each) lower the house's exposure. The bricked cellar
-  door needs a pry bar (2, from the smith) and 3 hours; then the old hall (4 hours), and rooms
-  you place on a 10 x 8 grid: meeting room 4x3 (10 ducats, 12 h), strongroom 3x2 (15, 16 h,
-  needs a lock), hiding place 2x2 (6, 8 h). Digging while the street is awake (before 21:00)
-  or the lodgers are home is heard.
-- **The lodge** (`lodge.ts`): swear an invited person in the cellar from 19:00 once a meeting
-  room is finished. The first oath founds the lodge; pick its night. At 20:00 on that night at
-  home the meeting opens: reports, matters (swear, tithe), errands (watch, ask around, carry a
-  gift, work in the cellar, earn), minutes. A missed lodge night costs each member 4 trust.
-- **The night** (`day.ts`): sightings become seen routines, the day's facts are written in,
-  promises fall due, members dig, the town lives a day, rent and keep, exposure cools, letters.
-  The morning page sums it up.
-- **Letters**: 1 (open the cellar) on arrival, 2 (one you can trust) when the cellar opens,
-  3 (the council: learn 8 of 12 names) after the first oath, a room plan when you have eight,
-  and the season letter on the morning of day 29, which pays 5 + 4 a member + 3 a room + 1 a
-  councillor known (to 12), and ends the slice.
-- **Sound**: the procedural soundtrack and ambience (`src/ui/audio`) play again, by season and
-  by exposure (tension); cues for letters, oaths, the lodge meeting, deaths and work. Volumes
-  in Menu.
+- **Talk** (`story.ts`): E by someone, or click. Topics, asking about someone, gifts, shops.
+  Ten minutes an exchange; the first talk of a day adds a little trust.
+- **Your things** (I): items, clothing, quest items, reading.
+- **The cellar** (`cellar.ts`): down the trapdoor under the hearth rug from the start; your
+  mother's chest (a four-wheel cipher), rubble, furniture you place, the bricked old way.
+- **The Book** (B): Goals, People (by household, hearts), Mysteries, Council, Lodge, Map
+  (engraved, fogged until explored, zoom and pan), Ledger (charts), Letters.
+- **The lodge** (`lodge.ts`): oaths below by candlelight once the hall is furnished, a weekly
+  night, errands. **The night** (`day.ts`): rent, keep, the post, the morning page.
+- **Sound**: written tunes for day, night and cellar (`src/ui/audio/tunes.ts`).
 
-## Tuning (`npx tsx tools/tune-season.ts`)
-
-Scripted players on the slice town, 24 suburb adults each, 3 exchanges a day:
-
-| Habit | Trusted by day 7 | Trusted by day 21 | Median days to trust | Invited by day 28 (fitting offer) |
-| --- | --- | --- | --- | --- |
-| always ask about them | 20 | 21 | 5 | 17 |
-| charm, then troubles + help | 6 | 7 | 5 | 6 |
-| gifts and charm | 24 | 24 | 3 | 18 |
-
-Gifts work fastest but cost about 9 ducats a person; the third gift in a week buys no more
-trust. Buying everything the season offers costs 48 ducats against 35 at the start and +8
-net from rent and keep, so something has to give (odd jobs, earn errands, tithes, the room plan).
+All lines for review: `npx tsx tools/lines.ts > lines.md`.
 
 ## Saves
 

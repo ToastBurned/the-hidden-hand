@@ -154,7 +154,7 @@ export function marriageMonth(c: City): void {
       s += r.normal(0, 0.15) + mod(c, `p${w.id}:match${m.id}`);
       if (s > bs) { bs = s; best = m; }
     }
-    if (best) marry(c, best, w);
+    if (best && !best.authored && !w.authored) marry(c, best, w);
   }
 }
 

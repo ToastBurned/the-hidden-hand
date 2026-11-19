@@ -9,17 +9,16 @@
  * kept in street tiles (16 px each, 5 to a map cell); `inside` is the building they are in, if any.
  */
 import { SUBURB_BUILDINGS } from '../gen/suburb';
-import { Rng } from '../base/rng';
 import { createCity } from '../create';
-import { ageOf, createHousehold, createPerson, joinHousehold, moveHome, rngOf, syncRng } from '../core';
+import { syncRng } from '../core';
 import { overnight } from './day';
-import { letterOne } from './letters';
+import { settleCast } from './authored';
+import { checkGoals, deliverLetter } from './story';
 import { earn, newHand, type Hand } from './state';
-import { B, CLASS_MIDDLING, DAYS_PER_YEAR } from '../constants';
-import { givenName, surname } from '../names';
+import { B, DAYS_PER_YEAR } from '../constants';
 import { deserializeCity, serializeCity } from '../serialize';
 import { stepDay } from '../sim';
-import type { Building, City, Family } from '../types';
+import type { Building, City } from '../types';
 import { doorCell, longestWalk, TILES_PER_CELL, walkable } from '../walk';
 import { BED_FROM, DAY_END, DAY_START, LATE_WAKE } from './clock';
 
@@ -32,9 +31,10 @@ export type Facing = 'south' | 'southwest' | 'west' | 'northwest' | 'north' | 'n
 
 /** The one town and history every new first season is played in (Ed, 16 Nov 2026). */
 export const SLICE_SEED = 1546;
+const FOUNDER_AGE = 26;
 
 export interface Season {
-  v: 1 | 2;
+  v: 3;
   kind: typeof SEASON_KIND;
   city: City;
   founder: number;
@@ -51,6 +51,10 @@ export interface Season {
   late: boolean;
   /** Everything the founder has, knows and owes (state.ts). */
   hand: Hand;
+  /** In the cellar under the house (cellar.ts), at cellar tile bx, by. */
+  below: boolean;
+  bx: number;
+  by: number;
 }
 
 /** Make the town and its pre-history; `onYear` reports progress for a loading screen. */
@@ -75,47 +79,21 @@ export function pickHouse(c: City): Building {
   return houses[0];
 }
 
-/** The founder arrives: the play calendar starts, and they stand at the inherited house's door. */
+/** The founder arrives: the play calendar starts, the written cast is in the suburb, and they stand at the inherited house's door. */
 export function arrive(c: City): Season {
-  const r = new Rng(c.config.seed, 23);
   const house = pickHouse(c);
   house.condition = 0.25;
   house.grandeur = Math.min(house.grandeur, 0.3);
-  // a family name from abroad: the parent belonged to the Order there
-  const fam: Family = { id: c.nextId++, name: surname(r, c.phon + 7), great: false, prestige: 0.02, head: -1, seat: -1, since: c.day, living: 1, epithet: '' };
-  c.families.set(fam.id, fam);
   const est = [...c.faiths.values()].find((f) => f.established)!;
-  const h = createHousehold(c, house.id, CLASS_MIDDLING);
-  h.money = 0; h.stores = 1;
-  house.owner = h.id;
-  const p = createPerson(c, { born: c.day - Math.round(26 * DAYS_PER_YEAR), family: fam.id, hh: h.id, faith: est.id, sex: 1, centre: c.districts[0].values });
-  p.first = givenName(r, c.phon + 7, 1);
-  p.arrived = c.day;
-  p.keep = true;
-  joinHousehold(c, p, h);
-  fam.head = p.id;
+  const { founder, cast } = settleCast(c, c.day - Math.round(FOUNDER_AGE * DAYS_PER_YEAR), est.id);
   c.play = { since: c.day };
-  void rngOf;
-  const s: Season = { v: 2, kind: SEASON_KIND, city: c, founder: p.id, house: house.id, minute: DAY_START, x: 0, y: 0, facing: 'north', inside: -1, late: false, hand: newHand() };
-  // a lodger family upstairs: if nobody else lives in the house, the poorest small household nearby moves in
-  if (!house.homes.some((id) => id !== h.id)) {
-    const sub = c.districts.find((d) => d.kind === 'suburb');
-    const cands = [...c.households.values()].filter((x) => x.id !== h.id && x.home >= 0 && x.members.length >= 2 && x.members.length <= 5 && c.buildings.get(x.home)?.district === sub?.id)
-      .sort((a, b) => a.money - b.money || a.id - b.id);
-    if (cands[0]) moveHome(c, cands[0], house.id);
-  }
-  // the old lodge: two of its members died in the pre-history; one still lives, inside the walls
-  const deadOnes = [...c.dead.values()].filter((d) => !d.left && d.died > c.day - 364 * 12 && c.day - d.born > 364 * 40).sort((a, b) => a.id - b.id);
-  const ol: number[] = [];
-  if (deadOnes.length) { ol.push(deadOnes[r.int(deadOnes.length)].id); const d2 = deadOnes[r.int(deadOnes.length)].id; if (!ol.includes(d2)) ol.push(d2); }
-  const living = [...c.people.values()].filter((q) => q.id !== p.id && !q.notable && ageOf(c, q) >= 50 && ageOf(c, q) <= 66 && (() => { const b = c.buildings.get(c.households.get(q.hh)?.home ?? -1); return !!b && c.map.inside[b.y * c.map.w + b.x] === 1; })()).sort((a, b) => a.id - b.id);
-  const survivor = living.length ? living[r.int(living.length)] : undefined;
-  if (survivor) { survivor.keep = true; ol.push(survivor.id); }
-  s.hand.oldLodge = { members: ol, survivor: survivor?.id ?? -1 };
+  const s: Season = { v: 3, kind: SEASON_KIND, city: c, founder: founder.id, house: house.id, minute: DAY_START, x: 0, y: 0, facing: 'north', inside: -1, late: false, hand: newHand(), below: false, bx: 0, by: 0 };
+  s.hand.cast = cast;
+  s.hand.ledger.push({ day: c.day, amount: s.hand.coin, what: 'What you brought from abroad', cat: 'other' });
   // letter 1 is in your hand, with ten ducats
-  const l1 = letterOne(s);
-  l1.read = false;
-  earn(s.hand, c.day, 10, 'With the first letter');
+  deliverLetter(s, 'l1');
+  checkGoals(s);
+  earn(s.hand, c.day, 10, 'With the first letter', 'order');
   standAtDoor(s, house);
   return s;
 }
@@ -149,13 +127,14 @@ export function pass(s: Season, minutes: number): 'ok' | 'midnight' {
   return 'ok';
 }
 
-export const canSleep = (s: Season) => s.minute >= BED_FROM && s.inside === s.house;
+export const canSleep = (s: Season) => s.minute >= BED_FROM && (s.inside === s.house || s.below);
 
 /** End the day: the town lives through the night, and the founder wakes at home. */
 export function sleep(s: Season, forced = false): void {
   overnight(s, stepDay);
   s.minute = forced || s.late ? LATE_WAKE : DAY_START;
   s.late = false;
+  s.below = false;
   s.inside = s.house;
   const house = s.city.buildings.get(s.house);
   if (house) standAtDoor(s, house);
@@ -174,7 +153,8 @@ export function serializeSeason(s: Season): string {
 export function deserializeSeason(text: string): Season {
   const o = JSON.parse(text);
   if (o.kind !== SEASON_KIND) throw new Error('not a first-season save');
-  return { ...o, v: 2, hand: o.hand ?? newHand(), city: deserializeCity(o.city) };
+  if (o.v !== 3) throw new Error('this save is from before the written first season and cannot be loaded');
+  return { ...o, city: deserializeCity(o.city) };
 }
 
 /** The suburb's longest door-to-door walk, in map cells (the walk target, docs/WALK.md). */

@@ -225,6 +225,8 @@ export interface Person {
   convictions: number;
   /** Reserved for the game layer: never removed by emigration while set. */
   keep?: boolean;
+  /** A written character (src/content): their content key. Never dies, moves, marries or changes trade. */
+  authored?: string;
 }
 
 /** A compact record of someone who died or left the city. */

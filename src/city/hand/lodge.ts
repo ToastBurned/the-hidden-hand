@@ -7,9 +7,10 @@ import { fullName } from '../core';
 import { T } from '../constants';
 import type { Person } from '../types';
 import { blockAt, routineOf } from './routine';
-import { hasMeetingRoom, nextJob, roomDone } from './house';
-import { describe, dayName, motivesOf, MOTIVE_WORDS, partOfDay, placeName, pron } from './people';
-import { factsAbout } from './talk';
+import { hallReady, passageOpen, rubbleCleared } from './cellar';
+import { describe, dayName, partOfDay, placeName, pron } from './people';
+import { CAST, PASSAGE_HOURS, RUBBLE_HOURS } from '../../content/suburb';
+import { G } from './story';
 import type { Season } from './season';
 import { earn, expose, learn, relOf, type Errand, type ErrandKind, type Member } from './state';
 
@@ -33,10 +34,10 @@ export const invited = (s: Season) => Object.entries(s.hand.rels).filter(([id, r
 /** Can the oath happen now: an invited person, a finished meeting room, the evening, the founder home. */
 export function oathReady(s: Season): string {
   if (!invited(s).length) return 'Nobody is waiting to swear.';
-  if (!hasMeetingRoom(s)) return 'The cellar needs a finished meeting room first.';
+  if (!hallReady(s)) return 'The hall needs a table, two benches and a candle stand first.';
   if (s.hand.members.length >= MAX_CELL) return 'The cell is full: four besides you.';
   if (s.minute < 19 * 60) return 'They will come after dark, from 19:00.';
-  if (s.inside !== s.house) return 'Be at home.';
+  if (s.inside !== s.house && !s.below) return 'Be at home.';
   return '';
 }
 
@@ -54,7 +55,7 @@ export function swear(s: Season, pid: number): string[] {
     learn(h, c.day, { about: -1, place: s.house, kind: 'old-lodge', text: `The Lodge of the Hand was founded again under your house, with ${nm(s, pid)} sworn.`, source: 'proved', via: -1, key: 'lodge:founded' }, true);
   }
   // a night visitor is seen
-  expose(h, 0.03 - 0.01 * h.repaired.length, -2, 0.01);
+  expose(h, (0.03 - 0.01 * h.repaired.length) * (passageOpen(s) ? 0.4 : 1), -2, 0.01);
   h.today.events.push(`${nm(s, pid)} swore the oath.`);
   h.minutes.push({ day: c.day, lines: [`${nm(s, pid)} was sworn (${m.bond === 'fear' ? 'under threat' : m.bond === 'gain' ? 'for gain' : 'from conviction'}).`] });
   s.minute = Math.max(s.minute + 60, s.minute);
@@ -120,7 +121,7 @@ export function openMeeting(s: Season): { reports: Report[]; present: number[]; 
     } else absent.push({ pid: m.pid, why: b?.act === 'tavern' ? 'at the tavern instead' : 'kept away' });
   }
   const reports = h.members.filter((m) => present.includes(m.pid)).map((m) => ({ pid: m.pid, lines: resolveErrands(s, m) }));
-  const swearable = hasMeetingRoom(s) ? invited(s).slice(0, MAX_CELL - h.members.length) : [];
+  const swearable = hallReady(s) ? invited(s).slice(0, MAX_CELL - h.members.length) : [];
   return { reports, present, absent, swearable };
 }
 
@@ -147,7 +148,7 @@ function resolveErrands(s: Season, m: Member): string[] {
     const t = e.target >= 0 ? person(s, e.target) : undefined;
     if (e.kind === 'earn') {
       const amt = ok ? 2 : 1;
-      earn(h, c.day, amt, `${p.first}'s extra work`);
+      earn(h, c.day, amt, `${p.first}'s extra work`, 'lodge');
       out.push(`${p.first} brings ${amt} ${amt === 1 ? 'ducat' : 'ducats'} from extra work.`);
       continue;
     }
@@ -165,22 +166,18 @@ function resolveErrands(s: Season, m: Member): string[] {
       }
       out.push(`${p.first} watched ${fullName(c, t)} for a week and wrote down where ${pron.he(t)} goes.`);
     } else if (e.kind === 'ask') {
-      const mo = motivesOf(c, t).find((x) => !h.facts.some((f) => f.key === `motive:${t.id}:${x.kind}`));
       expose(h, 0.04, m.pid, 0.02);
-      if (mo) {
-        learn(h, c.day, { about: t.id, place: -1, kind: 'motive', text: `${pron.He(t)} ${mo.detail}. (${MOTIVE_WORDS[mo.kind]})`, source: 'heard', via: m.pid, key: `motive:${t.id}:${mo.kind}` }, true);
-        const rt = relOf(h, t.id); if (!rt.motives.includes(mo.kind)) rt.motives.push(mo.kind);
-        out.push(`${p.first} asked around: they say ${fullName(c, t)} ${mo.detail}.`);
-      } else {
-        const f = factsAbout(s, t).find((x) => !h.facts.some((y) => y.key === x.key));
-        if (f) learn(h, c.day, { about: t.id, place: -1, kind: f.kind, text: f.text, source: 'heard', via: m.pid, key: f.key }, true);
-        out.push(`${p.first} asked around about ${fullName(c, t)}${f ? `: ${f.text.toLowerCase()}` : ', and heard nothing new'}`);
-      }
+      const g = new G(s);
+      const key = t.authored ?? '';
+      const heard = CAST.map((x) => x.talk.about[key]).find((a) => a?.fact && !g.knows(a.fact));
+      if (heard?.fact) {
+        g.learn(heard.fact, p.authored ?? '', 'heard');
+        out.push(`${p.first} asked around about ${fullName(c, t)}, and has something for the Book.`);
+      } else out.push(`${p.first} asked around about ${fullName(c, t)}, and heard nothing new.`);
     } else if (e.kind === 'carry') {
       const rt = relOf(h, t.id);
       rt.trust = Math.min(100, rt.trust + 6);
       if (rt.stage === 'stranger') rt.stage = 'acquaintance';
-      if (rt.stage === 'acquaintance' && rt.trust >= 40) rt.stage = 'trusted';
       out.push(`${p.first} took your gift to ${fullName(c, t)}, who was pleased.`);
     }
   }
@@ -198,18 +195,18 @@ export function closeMeeting(s: Season, errands: Record<number, Errand[]>, tithe
     if (!p) continue;
     m.errands = (errands[m.pid] ?? []).slice(0, 2).map((e) => ({ ...e, left: e.kind === 'work' ? 2 : undefined }));
     for (const e of m.errands) {
-      if (e.kind === 'carry' && h.coin >= 1) { h.coin -= 1; h.ledger.push({ day: c.day, amount: -1, what: `A gift sent by ${p.first}` }); }
+      if (e.kind === 'carry' && h.coin >= 1) { h.coin -= 1; h.ledger.push({ day: c.day, amount: -1, what: `A gift sent by ${p.first}`, cat: 'lodge' }); }
       lines.push(`${p.first}: ${ERRANDS[e.kind].label.toLowerCase()}${e.target >= 0 ? ` ${e.target === s.house ? 'your house' : nm(s, e.target)}` : ''}.`);
     }
     if (tithe) {
-      earn(h, c.day, 1, `Tithe from ${p.first}`);
+      earn(h, c.day, 1, `Tithe from ${p.first}`, 'lodge');
       relOf(h, m.pid).trust -= m.bond === 'conviction' ? 5 : m.bond === 'gain' ? 2 : 3;
     }
     // each meeting at the house is seen a little; the same night every week is a pattern
     expose(h, 0.015 + (h.lodge?.meetings ?? 0) * 0.004, m.pid);
   }
   if (tithe) lines.push('A tithe of a ducat each was asked, and paid.');
-  expose(h, 0.02 + h.members.length * 0.012 - 0.006 * h.repaired.length, -2, 0.012 * h.members.length);
+  expose(h, (0.02 + h.members.length * 0.012 - 0.006 * h.repaired.length) * (passageOpen(s) ? 0.5 : 1), -2, 0.012 * h.members.length);
   if (h.lodge) { h.lodge.meetings++; h.lodge.lastMeeting = c.day; }
   h.minutes.push({ day: c.day, lines });
   s.minute = Math.max(s.minute, MEETING_END);
@@ -224,13 +221,15 @@ export function memberLabour(s: Season): string[] {
     if (!p) continue;
     for (const e of m.errands) {
       if (e.kind !== 'work' || !e.left) continue;
-      const job = nextJob(s);
-      if (!job || job.door) break;
-      const fast = p.trade === T.mason || p.trade === T.carpenter || p.trade === T.labourer;
-      const hours = fast ? 6 : 3;
-      job.room!.done = Math.min(job.room!.need, job.room!.done + hours);
+      if (passageOpen(s)) break;
+      const fast = p.trade === T.mason || p.trade === T.carpenter || p.trade === T.labourer || p.trade === T.smith;
+      let hours = fast ? 4 : 2;
+      const cel = h.cellar;
+      let what = '';
+      for (let i = 0; i < cel.rubble.length && hours > 0; i++) { const add = Math.min(hours, RUBBLE_HOURS - cel.rubble[i]); if (add > 0) { cel.rubble[i] += add; hours -= add; what = 'the rubble'; } }
+      if (hours > 0 && rubbleCleared(s)) { cel.passage = Math.min(PASSAGE_HOURS, cel.passage + hours); what = what ? 'the rubble and the old arch' : 'the old arch'; }
       e.left--;
-      out.push(`${p.first} worked ${hours} hours on ${job.label.toLowerCase().replace(/^dig /, '').replace(/^clear the rubble from /, '')}${roomDone(job.room!) ? ', and finished it' : ''}.`);
+      out.push(`${p.first} worked an evening in the cellar on ${what || 'odd jobs'}${passageOpen(s) ? ', and broke through to the old way' : ''}.`);
       expose(h, 0.01, m.pid);
     }
   }

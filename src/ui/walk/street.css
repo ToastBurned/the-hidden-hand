@@ -113,3 +113,73 @@
 .hand .book .letter { max-width: 620px; font-family: var(--serif, Georgia, serif); }
 @media (max-width: 640px) { .hand .talk, .hand .cellar { grid-template-columns: 1fr; } }
 .hand .street-hud .clock, .hand .street-hud .paused { display: inline; }
+
+/* ---------- the written season (17 Nov) ---------- */
+.hand .hearts { display: inline-flex; gap: 1px; vertical-align: middle; }
+.hand .hearts i { width: 8px; height: 7px; background: rgba(120, 90, 60, 0.35); clip-path: polygon(50% 100%, 0 40%, 0 15%, 25% 0, 50% 18%, 75% 0, 100% 15%, 100% 40%); }
+.hand .hearts i.on { background: #c0392b; }
+.hand .bar { display: inline-block; width: 70px; height: 5px; background: rgba(120, 90, 60, 0.25); vertical-align: middle; margin-left: 4px; }
+.hand .bar i { display: block; height: 100%; background: #3d5a80; }
+.hand .bar.danger i { background: #8a2c22; }
+.hand .bar.clue i { background: #8a6d1f; }
+.hand .bar.known i { background: #5a7a4a; }
+.hand .talk-log { max-height: 420px; overflow: auto; }
+.hand .talk-log p.you { color: var(--lamp); font-style: italic; margin: 8px 0 2px; }
+.hand .talk-log p.you::before { content: '— '; }
+.hand .talk-log p.line { margin: 4px 0; line-height: 1.45; }
+.hand .talk-log .choices { display: grid; gap: 4px; margin-top: 10px; }
+.hand .talk-log .choices button { text-align: left; }
+.hand .talk-log .choices button.bye { opacity: 0.8; }
+.hand .things { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
+.hand .things li { padding: 6px 0; border-bottom: 1px solid var(--rule); }
+.hand .things p { margin: 2px 0 4px; }
+.hand .cipher { display: flex; gap: 14px; justify-content: center; margin: 14px 0; }
+.hand .cipher .wheel { display: grid; justify-items: center; gap: 2px; padding: 6px 8px; border: 1px solid var(--lamp-dim); background: rgba(80, 60, 30, 0.25); }
+.hand .cipher .glyph { font-size: 30px; line-height: 1.1; color: #e8c36a; min-width: 36px; text-align: center; }
+.hand .chest { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.hand .chest button { display: block; width: 100%; text-align: left; margin: 3px 0; }
+.hand .chest small { float: right; opacity: 0.7; }
+.hand .book .page.map { padding: 0; overflow: hidden; position: relative; }
+.hand .book-map { position: absolute; inset: 0; }
+.hand .book-map canvas { width: 100%; height: 100%; display: block; cursor: grab; }
+.hand .book-map .map-zoom { position: absolute; right: 14px; top: 14px; display: grid; gap: 4px; }
+.hand .book-map .map-zoom button { width: 28px; height: 28px; padding: 0; font-size: 18px; }
+.hand .book-map .map-tip { position: absolute; pointer-events: none; background: #f5ecd7; border: 1px solid #6b5134; padding: 6px 8px; max-width: 280px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3); }
+.hand .book-map .map-note { position: absolute; left: 16px; bottom: 6px; margin: 0; }
+.hand .book .goals { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; }
+.hand .book .goals li { display: grid; padding: 6px 8px; border-left: 3px solid #8a2c22; background: rgba(255, 250, 235, 0.5); }
+.hand .book .goals li.errand-goal { border-left-color: #8a6d1f; }
+.hand .book .goals li span { font-size: 13px; color: #4a3a28; }
+.hand .book .goals li.done { border-left-color: #b7a07a; background: none; color: #7a6650; }
+.hand .book .goals li.done b { text-decoration: line-through; font-weight: normal; }
+.hand .book .household h4 { margin: 14px 0 2px; border-bottom: 1px solid #c8b48f; }
+.hand .book .names small { margin: 1px 0 2px; }
+.hand .book .mystery { padding: 6px 10px 10px; margin: 8px 0; border: 1px solid #c8b48f; background: rgba(255, 250, 235, 0.45); }
+.hand .book .mystery.solved { border-color: #8a2c22; }
+.hand .book .mystery .answer { padding: 8px; background: #f5ecd7; border-left: 3px solid #8a2c22; font-style: italic; }
+.hand .book .council { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 6px; }
+.hand .book .seat { display: grid; padding: 6px 8px; border: 1px dashed #b7a07a; min-height: 64px; align-content: start; }
+.hand .book .seat.known { border-style: solid; background: rgba(255, 250, 235, 0.55); }
+.hand .book .seat small { font-size: 12px; }
+.hand .book .watch { list-style: none; padding: 0; display: grid; gap: 4px; }
+.hand .book .watch li { display: grid; grid-template-columns: 110px 140px 1fr; align-items: center; }
+.hand .book .watch .bar { width: 130px; }
+.hand .book .purse { display: flex; gap: 12px; align-items: center; }
+.hand .book .purse .coins { font: 40px var(--pixel); color: #8a6d1f; }
+.hand .book .purse small { display: block; }
+.hand .book .days-chart { display: flex; gap: 3px; align-items: flex-end; height: 120px; padding: 4px 0; border-bottom: 1px solid #b7a07a; }
+.hand .book .days-chart .day { display: flex; flex-direction: column; align-items: center; justify-content: center; width: 14px; height: 110px; position: relative; }
+.hand .book .days-chart .day i { display: block; width: 10px; }
+.hand .book .days-chart .day i.in { background: #3f6b3a; margin-top: auto; }
+.hand .book .days-chart .day i.out { background: #8a2c22; margin-bottom: auto; }
+.hand .book .days-chart .day small { position: absolute; bottom: -14px; font-size: 10px; color: #7a6650; }
+.hand .book .cats { list-style: none; padding: 0; display: grid; gap: 4px; margin-top: 14px; }
+.hand .book .cats li { display: grid; grid-template-columns: 90px 1fr; align-items: center; gap: 6px; }
+.hand .book .cats .pair { display: grid; gap: 2px; }
+.hand .book .cats i { display: block; font: 11px var(--pixel); font-style: normal; color: #f5ecd7; padding: 1px 4px; min-width: 24px; }
+.hand .book .cats i.in { background: #3f6b3a; }
+.hand .book .cats i.out { background: #8a2c22; }
+.hand .book .office { color: #5a2a18; }
+.hand .book-map .map-key { position: absolute; left: 18px; top: 62px; margin: 0; padding: 6px 8px 6px 26px; background: rgba(245, 236, 215, 0.92); border: 1px solid #6b5134; font: 12px Georgia, serif; color: #2b1f14; max-height: calc(100% - 110px); overflow: auto; }
+.hand .book-map .map-key li { margin: 1px 0; }
+.hand .book-map .map-key li.home { color: #8a2c22; font-weight: bold; }

@@ -12,6 +12,9 @@ import { Rng } from '../base/rng';
 import { ageOf } from '../core';
 import { B, CLASS_POOR, CLASS_WEALTHY, T } from '../constants';
 import type { Building, City, Person } from '../types';
+import { CAST } from '../../content/suburb';
+import type { Character, Slot } from '../../content/types';
+import { GATE_CELL, GATE_SPOTS, layoutCell, madeBuildings, townPlace, WELL_SPOTS } from './authored';
 
 export const SUNDAY = 6;
 
@@ -99,6 +102,7 @@ const nearest = (bs: Building[], x: number, y: number, prefer = -1): Building | 
 
 /** The person's week. Home fills every hour no block covers. */
 export function routineOf(c: City, p: Person): Block[] {
+  if (p.authored) return writtenRoutine(c, p);
   const r = new Rng(c.config.seed * 7919 + p.id, 11);
   const out: Block[] = [];
   const hh = c.households.get(p.hh);
@@ -188,4 +192,43 @@ export function placeAt(c: City, p: Person, blocks: Block[], weekday: number, mi
   if (b) return { place: b.place, act: b.act };
   const hh = c.households.get(p.hh);
   return { place: { b: hh?.home ?? -1 }, act: 'home' };
+}
+
+/* ------------------------------------------------------------------ the written cast */
+
+const BY_KEY = new Map<string, Character>(CAST.map((x) => [x.key, x]));
+const spots = new WeakMap<City, { letters: Map<string, number>; town: number }>();
+const mins = (t: string) => { const [h, m] = t.split(':').map(Number); return h * 60 + (m || 0); };
+const daysOf = (d: Slot['d']) => d === 'all' ? ALL : d === 'wk' ? MON_SAT : d === 'sun' ? 1 << SUNDAY : d.reduce((a, k) => a | (1 << k), 0);
+const keyHash = (k: string) => { let h = 7; for (const ch of k) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return h; };
+
+/** A written character's week, from their schedule in src/content. */
+function writtenRoutine(c: City, p: Person): Block[] {
+  const ch = BY_KEY.get(p.authored!);
+  const hh = c.households.get(p.hh);
+  if (!ch || !hh) return [];
+  let sp = spots.get(c);
+  if (!sp) {
+    const letters = new Map<string, number>();
+    for (const [k, b] of madeBuildings(c)) letters.set(k, b.id);
+    sp = { letters, town: townPlace(c) };
+    spots.set(c, sp);
+  }
+  const h = keyHash(ch.key);
+  const resolve = (at: string): Place | null => {
+    if (at === 'home') return { b: hh.home };
+    if (at === 'work') return ch.work ? resolve(ch.work) : { b: hh.home };
+    if (at === 'well') { const [x, y] = WELL_SPOTS[h % WELL_SPOTS.length]; return { cell: layoutCell(c, x, y) }; }
+    if (at === 'gate') { const [x, y] = ch.key === 'piet' ? [GATE_CELL[0] - 1, GATE_CELL[1]] : GATE_SPOTS[h % GATE_SPOTS.length]; return { cell: layoutCell(c, x, y) }; }
+    if (at === 'town') return sp!.town >= 0 ? { b: sp!.town } : { cell: layoutCell(c, GATE_CELL[0], GATE_CELL[1]) };
+    const b = sp!.letters.get(at);
+    return b !== undefined ? { b } : null;
+  };
+  const out: Block[] = [];
+  for (const s of ch.schedule) {
+    const place = resolve(s.at);
+    if (!place || ('cell' in place && place.cell < 0)) continue;
+    out.push({ days: daysOf(s.d), from: mins(s.from), to: mins(s.to), place, act: s.act });
+  }
+  return out;
 }
