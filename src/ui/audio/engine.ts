@@ -20,9 +20,10 @@ import { ACTIONS, type Cue, type Season } from './cues';
 export const AMBIENCE_OFF = true;
 import type { AudioSettings } from './settings';
 import { bell, makeImpulse, makeNoise, midi, noise, playCue, pluck, thud, tone, type Out } from './synth';
+import { TUNES, eventsOf, type NoteEvent, type TrackName } from './tunes';
 
 export type Scene = 'title' | 'setup' | 'play' | 'ending';
-export interface Mood { tension: number; season: Season; paused: boolean }
+export interface Mood { tension: number; season: Season; paused: boolean; track?: TrackName }
 
 const CALM = [0, 2, 3, 5, 7, 9, 10]; // D Dorian
 const TENSE = [0, 1, 3, 5, 7, 8, 10]; // D Phrygian
@@ -152,6 +153,8 @@ export class AudioEngine {
     this.applyLevels(true);
   }
   private musicOut: Out | null = null;
+  // the written tune now playing: its events, where we are in it, and when its loop began
+  private tune: { name: TrackName; events: NoteEvent[]; beats: number; spb: number; i: number; start: number } | null = null;
 
   setSettings(s: AudioSettings) { this.settings = s; this.applyLevels(); this.refreshRunning(); }
   setScene(s: Scene) { if (s === this.scene) return; this.scene = s; this.applyLevels(); }
@@ -251,34 +254,38 @@ export class AudioEngine {
     const roots = dark ? TENSE_ROOTS : CALM_ROOTS;
     const pick = (deg: number, oct: number) => ROOT + oct * 12 + scale[((deg % 7) + 7) % 7] + 12 * Math.floor(deg / 7);
 
+    const want: TrackName | undefined = this.scene === 'play' ? (dark && this.mood.track !== 'cellar' ? 'night' : this.mood.track) : 'night';
+    if (want) { this.playTune(want, now, until, mo); }
+    else {
     // pad chords: slow swells, a new one every 8 to 14 seconds (slower when tense)
-    while (this.nextChord < until) {
-      const root = roots[this.chordStep++ % roots.length];
-      const len = dark ? 10 + Math.random() * 5 : 8 + Math.random() * 6;
-      for (const [k, oct] of [[0, 0], [2, 0], [4, 0], [0, 1]] as const) {
-        const m = pick(root + k, oct);
-        tone(mo, mo.dry, { type: 'triangle', freq: midi(m), detune: (Math.random() - 0.5) * 10, at: this.nextChord, attack: 3, hold: len - 4, release: 5, gain: 0.028 });
-        tone(mo, mo.wet, { freq: midi(m + 12), at: this.nextChord, attack: 4, hold: len - 5, release: 5, gain: 0.008 });
-      }
-      this.voices += 8;
-      this.nextChord += len;
-    }
-    // melody: sparse bells (calm) or low plucks with a half-step sigh (tense)
-    while (this.nextNote < until) {
-      const gap = dark ? 2.5 + Math.random() * 5 : 1.6 + Math.random() * 4.5;
-      if (Math.random() < (this.mood.paused && this.scene === 'play' ? 0.35 : 0.7)) {
-        const deg = Math.floor(Math.random() * 7);
-        if (dark) {
-          const m = pick(deg, 1);
-          pluck(mo, mo.dry, midi(m), this.nextNote, 2.2, 0.07);
-          if (Math.random() < 0.35) pluck(mo, mo.dry, midi(m - 1), this.nextNote + 0.6, 2.2, 0.05);
-        } else {
-          bell(mo, mo.dry, midi(pick(deg, 2)), this.nextNote, 3.2, 0.045);
-          if (Math.random() < 0.3) bell(mo, mo.dry, midi(pick(deg + 2, 2)), this.nextNote + 0.35, 3, 0.03);
+      while (this.nextChord < until) {
+        const root = roots[this.chordStep++ % roots.length];
+        const len = dark ? 10 + Math.random() * 5 : 8 + Math.random() * 6;
+        for (const [k, oct] of [[0, 0], [2, 0], [4, 0], [0, 1]] as const) {
+          const m = pick(root + k, oct);
+          tone(mo, mo.dry, { type: 'triangle', freq: midi(m), detune: (Math.random() - 0.5) * 10, at: this.nextChord, attack: 3, hold: len - 4, release: 5, gain: 0.028 });
+          tone(mo, mo.wet, { freq: midi(m + 12), at: this.nextChord, attack: 4, hold: len - 5, release: 5, gain: 0.008 });
         }
-        this.voices++;
+        this.voices += 8;
+        this.nextChord += len;
       }
-      this.nextNote += gap;
+      // melody: sparse bells (calm) or low plucks with a half-step sigh (tense)
+      while (this.nextNote < until) {
+        const gap = dark ? 2.5 + Math.random() * 5 : 1.6 + Math.random() * 4.5;
+        if (Math.random() < (this.mood.paused && this.scene === 'play' ? 0.35 : 0.7)) {
+          const deg = Math.floor(Math.random() * 7);
+          if (dark) {
+            const m = pick(deg, 1);
+            pluck(mo, mo.dry, midi(m), this.nextNote, 2.2, 0.07);
+            if (Math.random() < 0.35) pluck(mo, mo.dry, midi(m - 1), this.nextNote + 0.6, 2.2, 0.05);
+          } else {
+            bell(mo, mo.dry, midi(pick(deg, 2)), this.nextNote, 3.2, 0.045);
+            if (Math.random() < 0.3) bell(mo, mo.dry, midi(pick(deg + 2, 2)), this.nextNote + 0.35, 3, 0.03);
+          }
+          this.voices++;
+        }
+        this.nextNote += gap;
+      }
     }
     // heartbeat when hunted
     while (this.nextBeat < until) {
@@ -318,6 +325,40 @@ export class AudioEngine {
       this.rain.gain.cancelScheduledValues(now);
       this.rain.gain.setTargetAtTime(wet ? 0.35 : 0, now, 4);
       if (wet) this.rain.gain.setTargetAtTime(0, this.rainUntil, 5);
+    }
+  }
+
+  /** Schedule the written tune up to `until`; a change of track starts the new one half a second on. */
+  private playTune(name: TrackName, now: number, until: number, mo: Out) {
+    if (!this.tune || this.tune.name !== name) {
+      const t = TUNES[name], ev = eventsOf(t);
+      this.tune = { name, events: ev.events, beats: ev.beats, spb: 60 / t.bpm, i: 0, start: now + 0.5 };
+    }
+    const tn = this.tune, t = TUNES[name];
+    // after a suspend, skip whole loops rather than race through them
+    const loop = tn.beats * tn.spb;
+    if (tn.start + loop < now) { tn.start += Math.floor((now - tn.start) / loop) * loop; tn.i = 0; }
+    const quiet = this.mood.paused && this.scene === 'play' ? 0.6 : 1;
+    let guard = 0;
+    while (guard++ < 200) {
+      if (tn.i >= tn.events.length) { tn.i = 0; tn.start += tn.beats * tn.spb; }
+      const e = tn.events[tn.i];
+      const at = tn.start + e.beat * tn.spb;
+      if (at >= until) break;
+      tn.i++;
+      if (at < now - 0.05) continue;
+      const dur = e.beats * tn.spb;
+      const f = midi(e.midi);
+      if (e.voice === 'lead') {
+        if (t.lead === 'square') {
+          tone(mo, mo.dry, { type: 'square', freq: f, at, attack: 0.012, hold: Math.max(0, dur * 0.7 - 0.02), release: dur * 0.35 + 0.05, gain: 0.018 * quiet });
+          tone(mo, mo.wet, { type: 'triangle', freq: f * 2, at, attack: 0.02, hold: dur * 0.4, release: dur * 0.5, gain: 0.006 * quiet });
+        } else if (t.lead === 'bell') bell(mo, mo.dry, f * 2, at, Math.min(4, dur + 1.2), 0.04 * quiet);
+        else pluck(mo, mo.dry, f, at, Math.min(3, dur + 0.8), 0.07 * quiet);
+      } else if (e.voice === 'lute') pluck(mo, mo.dry, f, at, 0.9, 0.035 * quiet);
+      else if (e.voice === 'bass') tone(mo, mo.dry, { type: 'triangle', freq: f, at, attack: 0.02, hold: dur * 0.5, release: dur * 0.5, gain: 0.05 * quiet });
+      else tone(mo, mo.wet, { type: 'sine', freq: f, at, attack: 0.6, hold: Math.max(0, dur - 1.2), release: 1.2, gain: 0.012 * quiet });
+      this.voices++;
     }
   }
 

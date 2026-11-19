@@ -4,21 +4,21 @@
  * paid, members' labour is done, promises fall due, exposure cools, letters arrive, and the
  * morning summary is put together. The town itself lives the night through `stepDay`.
  */
-import { fullName } from '../core';
+import { removePerson } from '../core';
 import type { City } from '../types';
 import { lodgers, RENT } from './house';
-import { letterThree, letterTwo, seasonLetter, LETTER_FROM } from './letters';
 import { memberLabour } from './lodge';
 import { dayName, partOfDay, placeName } from './people';
 import type { Season } from './season';
-import { coolExposure, exposureWord, learn, relOf, trustWord, type Fact, type Morning } from './state';
+import { checkGoals, deliverLetter, G, morningPost } from './story';
+import { coolExposure, earn, exposureWord, learn, relOf, spend, trustWord, type Fact, type Morning } from './state';
 
 export const SEASON_DAYS = 28;
 export const COUNCIL_NEEDED = 8;
 
+/** The Book tab each kind of fact is written into. */
 export const SECTION_OF: Record<Fact['kind'], string> = {
-  trade: 'Names', family: 'Names', home: 'Names', faith: 'Names', motive: 'Names', secret: 'Names', opinion: 'Names', place: 'Names',
-  routine: 'Almanac', town: 'Town', council: 'Houses', 'old-lodge': 'Order',
+  person: 'People', routine: 'People', clue: 'Mysteries', council: 'Council', town: 'Lodge', 'old-lodge': 'Lodge', place: 'Map',
 };
 
 /** Record that the founder saw someone they know of (called a few times a second from the street). */
@@ -50,14 +50,7 @@ export function overnight(s: Season, step: (c: City) => void): void {
   // the day's facts are written in
   const newFacts: Record<string, number> = {};
   for (const f of h.facts) if (f.pending) { f.pending = false; const sec = SECTION_OF[f.kind]; newFacts[sec] = (newFacts[sec] ?? 0) + 1; }
-  // promises fall due
   const people: string[] = [];
-  for (const q of h.promises) {
-    if (q.kept !== undefined || q.broken || c.day < q.due) continue;
-    q.broken = true;
-    const r = relOf(h, q.pid); r.trust -= 15;
-    people.push(`You broke your promise to ${fullName(c, c.people.get(q.pid) ?? { first: 'someone', family: -1 })}. ${r.trust < 0 ? 'They have not forgotten.' : ''}`.trim());
-  }
   // members' labour in the cellar
   const built = [...new Set(h.today.labour)].map((l) => `You: ${l.toLowerCase()}.`);
   built.push(...memberLabour(s));
@@ -71,6 +64,7 @@ export function overnight(s: Season, step: (c: City) => void): void {
   const knownAlive = Object.keys(h.rels).map(Number).filter((id) => c.people.has(id));
   step(c);
   const town: string[] = [];
+  const day = c.day - (c.play?.since ?? 0);
   for (const id of knownAlive) {
     if (c.people.has(id)) continue;
     const d = c.dead.get(id);
@@ -79,8 +73,18 @@ export function overnight(s: Season, step: (c: City) => void): void {
   }
   // rent on Moonday mornings, keep on Sundays
   const wd = ((c.day - (c.play?.since ?? 0)) % 7 + 7) % 7;
-  if (wd === 0 && lodgers(s) >= 0) { h.coin += RENT; h.ledger.push({ day: c.day, amount: RENT, what: "The lodgers' rent" }); }
-  if (wd === 6) { const keep = Math.min(h.coin, 1); h.coin -= keep; h.ledger.push({ day: c.day, amount: -keep, what: 'Your keep: bread and candles' }); }
+  if (wd === 0 && lodgers(s) >= 0) earn(h, c.day, RENT, 'The Cornstows’ rent', 'rent');
+  if (wd === 6) spend(h, c.day, Math.min(h.coin, 1), 'Your keep: bread and candles', 'keep');
+  // the story's own night: someone leaving, flags falling due
+  const g = new G(s);
+  if (g.flag('rufus-leaving') && day >= g.flag('rufus-leaving') && g.flag('rufus-gone') === 0) {
+    for (const k of ['rufus', 'moll']) { const p = g.person(k); if (p) { p.authored = undefined; p.keep = false; } }
+    g.set('rufus-gone');
+    const hh = c.households.get(g.person('rufus')?.hh ?? -1);
+    for (const id of [...(hh?.members ?? [])]) { const p = c.people.get(id); if (p) removePerson(c, p, 0); }
+    town.push('Rufus and Moll Hale have left the suburb, with a cart and no goodbyes. The Bell stands shut.');
+  }
+  h.flags['noise-today'] = 0;
   coolExposure(h);
   // members in words
   for (const m of h.members) {
@@ -90,21 +94,16 @@ export function overnight(s: Season, step: (c: City) => void): void {
   }
   // letters
   const letters: string[] = [];
-  const day = c.day - (c.play?.since ?? 0);
-  if (h.tutorial === 0 && h.cellar.open) { letters.push(letterTwo(s).title); h.tutorial = 1; }
-  else if (h.tutorial === 1 && h.members.length > 0 && h.members.some((m) => m.sworn < c.day)) { letters.push(letterThree(s).title); h.tutorial = 2; }
-  else if (h.tutorial === 2 && h.facts.filter((f) => f.kind === 'council' && !f.pending).length >= COUNCIL_NEEDED) {
-    h.letters.push({ id: h.nextId++, key: 'l3-reward', day: c.day, from: LETTER_FROM, title: 'A room plan', body: ['Eight names. Good. Keep them, and learn the rest in time.', 'With this letter, a plan for a strongroom that two men can dig in half the time and cost. (Strongrooms now cost half.)'], read: false });
-    letters.push('A room plan'); h.tutorial = 3;
-  }
-  if (day >= SEASON_DAYS && !h.ended) { letters.push(seasonLetter(s).title); h.ended = true; }
+  letters.push(...morningPost(s));
+  if (day >= SEASON_DAYS && !h.ended) { letters.push(deliverLetter(s, 'season')); h.ended = true; }
+  const goals = checkGoals(s);
   // the hunters read these numbers later; now the neighbours only talk
   if (h.exposure.suburb > 0.35) learn(h, c.day, { about: -1, place: s.house, kind: 'town', text: 'There is talk in the suburb of comings and goings at your house after dark.', source: 'heard', via: -1, key: `talk:house:${Math.floor(day / 7)}` }, true);
   const watched: [string, string][] = [['The suburb', exposureWord(h.exposure.suburb)], ['Your house', exposureWord(h.exposure.house)], ['You', exposureWord(h.exposure.you)]];
   for (const m of h.members) { const v = h.exposure.people[m.pid] ?? 0; if (v >= 0.15) watched.push([c.people.get(m.pid)?.first ?? '?', exposureWord(v)]); }
   const morning: Morning = {
     day: c.day, coin: [coin0, h.coin], ledger: h.ledger.slice(ledger0), built, town, people,
-    watched, newFacts, letters,
+    watched, newFacts, letters, goals,
   };
   h.morning = morning;
   h.today = { coin0: h.coin, labour: [], events: [] };

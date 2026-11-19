@@ -360,6 +360,8 @@ export function familyOf(c: City, p: { family: number }): Family | undefined {
 /** Remove a living person: death (cause > 0) or departure from the city (cause 0). */
 export function removePerson(c: City, p: Person, cause: number, causeEvent = -1, heirHousehold?: Household): void {
   if (!c.people.has(p.id)) return;
+  // written characters live through the season (src/content); the story clears `authored` to remove one
+  if (p.authored) return;
   const left = cause === 0;
   if (!left) {
     c.acc.deaths++;
